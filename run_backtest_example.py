@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Enhanced Backtest Runner with CSV Export
+Gauss World Trader - Enhanced Backtest Runner with CSV Export
 Runs momentum strategy backtest and generates transaction log
+Named after Carl Friedrich Gauss, pioneer of mathematical finance
 """
 
 import sys
@@ -11,14 +12,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from examples.momentum_backtest_example import momentum_backtest_example
 
 def main():
-    print("🚀 Enhanced Momentum Strategy Backtest")
-    print("=" * 60)
+    print("🌍 Gauss World Trader - Enhanced Momentum Strategy Backtest")
+    print("=" * 70)
     print("📊 Features:")
     print("  ✅ Full backtest with performance metrics")
     print("  ✅ P&L plot generation and display")
     print("  ✅ Detailed transaction CSV export")
     print("  ✅ Trading summary and position analysis")
-    print("=" * 60)
+    print("=" * 70)
     
     try:
         momentum_backtest_example()

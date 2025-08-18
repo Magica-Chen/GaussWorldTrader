@@ -1,6 +1,15 @@
-# 🚀 Quantitative Financial Trading System
+# 🌍 Gauss World Trader
 
-A high-performance, **Python 3.12+ optimized** quantitative trading system featuring modern async operations, rich CLI interfaces, and advanced financial analysis capabilities.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/Magica-Chen/GaussWorldTrader.svg)](https://github.com/Magica-Chen/GaussWorldTrader/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/Magica-Chen/GaussWorldTrader.svg)](https://github.com/Magica-Chen/GaussWorldTrader/issues)
+
+A high-performance, **Python 3.12+ optimized** quantitative trading system featuring modern async operations, rich CLI interfaces, and advanced financial analysis capabilities. Named after Carl Friedrich Gauss, the mathematical genius who revolutionized statistics and probability theory - foundations of modern quantitative finance.
+
+**🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
+**👤 Author**: Magica Chen  
+**📊 Version**: 1.0.0
 
 ## ✨ Features
 
@@ -31,7 +40,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 ## Project Structure
 
 ```
-trading-system/
+GaussWorldTrader/
 ├── src/
 │   ├── analysis/           # Technical analysis and financial metrics
 │   ├── data/              # Data providers (Alpaca, Crypto, News, Macro)  
@@ -60,8 +69,8 @@ trading-system/
 
 2. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd trading-system
+   git clone https://github.com/Magica-Chen/GaussWorldTrader.git
+   cd GaussWorldTrader
    ```
 
 3. **Install dependencies** (Python 3.12 optimized):
@@ -312,12 +321,21 @@ export LOG_LEVEL=DEBUG
 python main.py --help
 ```
 
-## Contributing
+## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality  
-4. Submit a pull request
+We welcome contributions to Gauss World Trader! Here's how to get started:
+
+1. **Fork the repository**: Visit [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Add tests for new functionality**: Ensure your code is well-tested
+4. **Commit your changes**: `git commit -m 'Add amazing feature'`
+5. **Push to the branch**: `git push origin feature/amazing-feature`
+6. **Submit a pull request**: Open a PR with a clear description
+
+### 📋 Issue Reporting
+- **Bug Reports**: [Report bugs here](https://github.com/Magica-Chen/GaussWorldTrader/issues)
+- **Feature Requests**: [Suggest new features](https://github.com/Magica-Chen/GaussWorldTrader/issues)
+- **Questions**: [Ask questions in Discussions](https://github.com/Magica-Chen/GaussWorldTrader/discussions)
 
 ## License
 

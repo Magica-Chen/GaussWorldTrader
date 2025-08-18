@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0", "wheel>=0.41.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quantitative-trading-system"
+name = "gauss-world-trader"
 version = "1.0.0"
-description = "A comprehensive Python 3.12+ quantitative trading system"
+description = "Gauss World Trader - A comprehensive Python 3.12+ quantitative trading system named after Carl Friedrich Gauss"
 authors = [
-    {name = "Trading System Team", email = "team@tradingsystem.com"}
+    {name = "Magica Chen", email = "magica.chen@gaussworldtrader.com"}
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.12"
-keywords = ["trading", "finance", "quantitative", "backtesting", "alpaca"]
+keywords = ["trading", "finance", "quantitative", "backtesting", "alpaca", "gauss", "world-trader"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Financial and Insurance Industry",
@@ -69,14 +69,14 @@ performance = [
     "cython>=3.0.0"
 ]
 all = [
-    "quantitative-trading-system[dev,docs,performance]"
+    "gauss-world-trader[dev,docs,performance]"
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/quantitative-trading-system"
-Documentation = "https://quantitative-trading-system.readthedocs.io/"
-Repository = "https://github.com/yourusername/quantitative-trading-system.git"
-Issues = "https://github.com/yourusername/quantitative-trading-system/issues"
+Homepage = "https://github.com/Magica-Chen/GaussWorldTrader"
+Documentation = "https://github.com/Magica-Chen/GaussWorldTrader/wiki"
+Repository = "https://github.com/Magica-Chen/GaussWorldTrader.git"
+Issues = "https://github.com/Magica-Chen/GaussWorldTrader/issues"
 
 [project.scripts]
 trading-cli = "main:main"

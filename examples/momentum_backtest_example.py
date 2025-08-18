@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+Gauss World Trader - Momentum Strategy Backtest Example
+Repository: https://github.com/Magica-Chen/GaussWorldTrader
+Author: Magica Chen
+"""
 
 import sys
 import os
@@ -26,7 +31,7 @@ def generate_pnl_plot(results):
         
         # Create the plot
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-        fig.suptitle('Momentum Strategy Backtest Results', fontsize=16, fontweight='bold')
+        fig.suptitle('Gauss World Trader - Momentum Strategy Results', fontsize=16, fontweight='bold')
         
         # Portfolio value over time
         dates = portfolio_df['date']
@@ -246,7 +251,7 @@ def generate_transaction_log(results, symbols):
         return None
 
 def momentum_backtest_example():
-    """Example of running a momentum strategy backtest"""
+    """Gauss World Trader - Example of running a momentum strategy backtest"""
     
     # Initialize components
     try:
@@ -299,9 +304,9 @@ def momentum_backtest_example():
         )
         
         # Display results
-        print("\\n" + "="*60)
-        print("MOMENTUM STRATEGY BACKTEST RESULTS")
-        print("="*60)
+        print("\\n" + "="*70)
+        print("GAUSS WORLD TRADER - MOMENTUM STRATEGY BACKTEST RESULTS")
+        print("="*70)
         print(backtester.get_results_summary())
         
         # Generate P&L plot

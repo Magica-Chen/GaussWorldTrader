@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Dashboard launcher script with custom port
+Gauss World Trader - Dashboard launcher script with custom port
+Named after Carl Friedrich Gauss, pioneer of mathematical finance
 """
 
 import os
@@ -9,7 +10,7 @@ import subprocess
 
 def run_dashboard(port=3721):
     """Run the dashboard on specified port"""
-    print(f"🚀 Starting Trading System Dashboard on port {port}")
+    print(f"🌍 Starting Gauss World Trader Dashboard on port {port}")
     print(f"📱 Open your browser to: http://localhost:{port}")
     print("⏹️  Press Ctrl+C to stop the dashboard")
     

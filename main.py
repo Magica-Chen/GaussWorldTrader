@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Modern Trading System - Python 3.12+ Optimized Entry Point
+Gauss World Trader - Python 3.12+ Optimized Entry Point
 Features async operations, rich CLI, and performance monitoring
+Named after Carl Friedrich Gauss, pioneer of mathematical finance
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ sys.path.insert(0, str(project_root))
 
 # Check Python version
 if sys.version_info < (3, 12):
-    print("🚨 This trading system is optimized for Python 3.12+")
+    print("🚨 Gauss World Trader is optimized for Python 3.12+")
     print(f"📍 Current version: Python {sys.version_info.major}.{sys.version_info.minor}")
     print("💡 Please upgrade to Python 3.12 for optimal performance")
     sys.exit(1)
@@ -53,8 +54,8 @@ def main() -> None:
     # Show startup banner
     if HAS_RICH and console:
         console.print("""
-[bold blue]🚀 Quantitative Trading System[/bold blue]
-[cyan]Python 3.12 Compatible • High Performance Trading[/cyan]
+[bold blue]🌍 Gauss World Trader[/bold blue]
+[cyan]Python 3.12 Compatible • High Performance Trading • Named after Carl Friedrich Gauss[/cyan]
         """)
         
         # Basic config validation
@@ -73,8 +74,9 @@ def main() -> None:
             console.print("[yellow]💡 Please check your .env file and API credentials[/yellow]")
             sys.exit(1)
     else:
-        print("🚀 Quantitative Trading System")
+        print("🌍 Gauss World Trader")
         print("Python 3.12 Compatible • High Performance Trading")
+        print("Named after Carl Friedrich Gauss")
         print("=" * 50)
     
     # Launch CLI

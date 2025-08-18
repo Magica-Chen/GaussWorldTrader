@@ -16,7 +16,7 @@ sys.path.insert(0, '.')
 
 # Page configuration
 st.set_page_config(
-    page_title="🚀 Trading System Dashboard",
+    page_title="🌍 Gauss World Trader Dashboard",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -222,8 +222,8 @@ def main():
     """Main dashboard function"""
     
     # Header
-    st.title("🚀 Quantitative Trading System Dashboard")
-    st.markdown("**Python 3.12 • Real-time Data • Advanced Analytics**")
+    st.title("🌍 Gauss World Trader Dashboard")
+    st.markdown("**Python 3.12 • Real-time Data • Advanced Analytics • Named after Carl Friedrich Gauss**")
     
     # Sidebar
     st.sidebar.title("📊 Controls")
