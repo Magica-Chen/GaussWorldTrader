@@ -250,9 +250,9 @@ class OptimizedTradingEngine:
             'cash': float(account.cash),
             'portfolio_value': float(account.portfolio_value),
             'equity': float(account.equity),
-            'day_trade_count': int(account.day_trade_count),
-            'pattern_day_trader': account.pattern_day_trader,
-            'status': account.status,
+            'day_trade_count': int(getattr(account, 'day_trade_count', 0)),
+            'pattern_day_trader': getattr(account, 'pattern_day_trader', False),
+            'status': getattr(account, 'status', 'UNKNOWN'),
             'fetched_at': datetime.now().isoformat()
         }
         

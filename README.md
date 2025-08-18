@@ -9,7 +9,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 
 **🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
 **👤 Author**: Magica Chen  
-**📊 Version**: 1.0.0
+**📊 Version**: 1.1.0 - Complete CLI with Technical Analysis
 
 ## ✨ Features
 
@@ -115,27 +115,61 @@ The system includes Python 3.12 specific optimizations:
 ```bash
 # 🆕 Rich, beautiful CLI with async operations
 
-# Show account information with caching
-python main.py account info --refresh
+# Account Operations
+python main.py account info --refresh                    # Show account information
+python main.py account performance --days 30             # Performance metrics & analysis
 
-# Fetch market data concurrently for multiple symbols  
-python main.py data fetch AAPL GOOGL MSFT --concurrent --days 30
+# Data Operations  
+python main.py data fetch AAPL GOOGL MSFT --days 30      # Fetch historical market data
+python main.py data stream AAPL GOOGL --interval 5       # Live data streaming
 
-# Execute trades with confirmation prompts
+# Technical Analysis
+python main.py analysis technical AAPL --indicators rsi macd bb sma --days 100
+
+# Trading Operations
 python main.py trade place AAPL buy 100 --type market --dry-run
 
-# Run strategy with live monitoring
+# Strategy Operations
 python main.py strategy run AAPL GOOGL TSLA --strategy momentum --watch
 
-# Technical analysis with rich tables
-python main.py analysis technical AAPL --indicators rsi macd
-
-# Show system performance metrics
-python main.py account performance
-
-# Real-time data streaming (Ctrl+C to stop)
-python main.py data stream AAPL GOOGL --live
+# Get help for any command
+python main.py --help
+python main.py account --help
+python main.py analysis technical --help
 ```
+
+### ⚡ CLI Features
+
+#### 💼 Account Management
+- **Account Info**: Real-time portfolio value, cash, equity, and buying power
+- **Performance Metrics**: Returns, volatility, Sharpe ratio, and risk analysis
+- **Trading Activity**: Recent orders and transaction history
+- **Position Tracking**: Current holdings and allocation analysis
+
+#### 📊 Data Operations
+- **Historical Data**: Fetch OHLCV data for any timeframe
+- **Live Streaming**: Real-time price monitoring with change tracking
+- **Multiple Symbols**: Concurrent data fetching for portfolio analysis
+- **Export Options**: Save data to CSV for external analysis
+
+#### 📈 Technical Analysis
+- **RSI**: Relative Strength Index for overbought/oversold signals
+- **MACD**: Moving Average Convergence Divergence with crossover detection
+- **Bollinger Bands**: Volatility bands for support/resistance analysis
+- **Moving Averages**: SMA trends for momentum identification
+- **Visual Signals**: Color-coded BUY/SELL/HOLD recommendations
+
+#### 💰 Trading Operations
+- **Order Placement**: Market and limit orders with confirmation
+- **Risk Management**: Dry-run mode for testing strategies
+- **Position Sizing**: Automated position calculation based on risk
+- **Order Validation**: Pre-trade validation and error checking
+
+#### 🧠 Strategy Framework
+- **Momentum Strategy**: Built-in momentum-based trading algorithm
+- **Strategy Runner**: Live execution with monitoring and alerts
+- **Backtesting**: Historical performance testing and metrics
+- **Watch Mode**: Continuous monitoring with real-time updates
 
 ### ⚡ Performance Features
 - **Concurrent Operations**: Fetch multiple symbols simultaneously

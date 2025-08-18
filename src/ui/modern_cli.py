@@ -61,10 +61,14 @@ app.add_typer(strategy_app, name="strategy")
 app.add_typer(analysis_app, name="analysis")
 
 @account_app.command("info")
-async def account_info(
+def account_info(
     refresh: Annotated[bool, typer.Option("--refresh", "-r", help="Force refresh cache")] = False
 ) -> None:
     """💼 Display account information"""
+    asyncio.run(_account_info_async(refresh))
+
+async def _account_info_async(refresh: bool) -> None:
+    """Async implementation of account info"""
     
     with console.status("[bold blue]Fetching account information...", spinner="dots"):
         try:
@@ -104,8 +108,145 @@ async def account_info(
             console.print(f"[red]❌ Error: {e}[/red]")
             raise typer.Exit(1)
 
+@account_app.command("performance")
+def account_performance(
+    days: Annotated[int, typer.Option("--days", "-d", help="Days of performance history")] = 30
+) -> None:
+    """📊 Show account performance metrics"""
+    asyncio.run(_account_performance_async(days))
+
+async def _account_performance_async(days: int) -> None:
+    """Async implementation of account performance"""
+    
+    with console.status("[bold blue]Calculating performance metrics...", spinner="dots"):
+        try:
+            from src.trade.optimized_trading_engine import OptimizedTradingEngine
+            from datetime import datetime, timedelta
+            
+            engine = OptimizedTradingEngine()
+            
+            # Get account data
+            account_data, error = await safe_execute_async(
+                engine.get_account_info_cached,
+                max_age_seconds=60
+            )
+            
+            if error:
+                console.print(f"[red]❌ Error getting account data: {error}[/red]")
+                return
+            
+            # Get portfolio history (if available)
+            try:
+                portfolio_history = await engine.get_portfolio_history(days)
+            except:
+                portfolio_history = None
+            
+            # Create performance table
+            perf_table = Table(title="📊 Account Performance")
+            perf_table.add_column("Metric", style="cyan")
+            perf_table.add_column("Value", style="yellow")
+            perf_table.add_column("Description", style="white")
+            
+            current_value = account_data.get('portfolio_value', 0)
+            cash = account_data.get('cash', 0)
+            equity = account_data.get('equity', 0)
+            buying_power = account_data.get('buying_power', 0)
+            
+            # Basic metrics
+            perf_table.add_row(
+                "Portfolio Value",
+                f"${current_value:,.2f}",
+                "Total account value"
+            )
+            
+            perf_table.add_row(
+                "Cash Position",
+                f"${cash:,.2f}",
+                f"{(cash/current_value)*100:.1f}% of portfolio"
+            )
+            
+            perf_table.add_row(
+                "Equity Position",
+                f"${equity:,.2f}",
+                f"{((equity-cash)/current_value)*100:.1f}% invested"
+            )
+            
+            perf_table.add_row(
+                "Buying Power",
+                f"${buying_power:,.2f}",
+                "Available for trading"
+            )
+            
+            # Performance calculations (simplified)
+            if portfolio_history and len(portfolio_history) > 1:
+                initial_value = portfolio_history[0].get('equity', current_value)
+                total_return = ((current_value - initial_value) / initial_value) * 100
+                
+                perf_table.add_row(
+                    f"Return ({days}d)",
+                    f"{total_return:+.2f}%",
+                    "Total return percentage"
+                )
+                
+                # Calculate daily returns for volatility
+                daily_returns = []
+                for i in range(1, len(portfolio_history)):
+                    prev_val = portfolio_history[i-1].get('equity', 0)
+                    curr_val = portfolio_history[i].get('equity', 0)
+                    if prev_val > 0:
+                        daily_ret = (curr_val - prev_val) / prev_val
+                        daily_returns.append(daily_ret)
+                
+                if daily_returns:
+                    import numpy as np
+                    volatility = np.std(daily_returns) * np.sqrt(252) * 100  # Annualized
+                    
+                    perf_table.add_row(
+                        "Volatility (Ann.)",
+                        f"{volatility:.2f}%",
+                        "Risk measure"
+                    )
+                    
+                    # Simple Sharpe ratio (assuming 2% risk-free rate)
+                    if volatility > 0:
+                        annual_return = total_return * (365 / days)
+                        sharpe = (annual_return - 2) / volatility
+                        
+                        perf_table.add_row(
+                            "Sharpe Ratio",
+                            f"{sharpe:.2f}",
+                            "Risk-adjusted return"
+                        )
+            
+            console.print(perf_table)
+            
+            # Trading activity summary
+            try:
+                # Get recent orders/trades
+                activities = await engine.get_activities()
+                if activities:
+                    console.print(f"\n[bold cyan]📈 Recent Activity:[/bold cyan]")
+                    console.print(f"• Total activities in period: {len(activities)}")
+                    
+                    # Count order types
+                    order_types = {}
+                    for activity in activities[:10]:  # Last 10 activities
+                        activity_type = activity.get('activity_type', 'unknown')
+                        order_types[activity_type] = order_types.get(activity_type, 0) + 1
+                    
+                    for activity_type, count in order_types.items():
+                        console.print(f"• {activity_type.title()}: {count}")
+                        
+            except Exception as e:
+                console.print(f"[yellow]⚠️ Could not fetch trading activity: {e}[/yellow]")
+            
+            console.print(f"\n[dim]Performance calculated over {days} days[/dim]")
+            
+        except Exception as e:
+            console.print(f"[red]❌ Error calculating performance: {e}[/red]")
+
 @data_app.command("fetch")
-async def fetch_data(
+def fetch_data(
     symbols: Annotated[list[str], typer.Argument(help="Stock symbols to fetch")],
     timeframe: Annotated[str, typer.Option("--timeframe", "-t", help="Data timeframe")] = "1Day",
     days: Annotated[int, typer.Option("--days", "-d", help="Days of historical data")] = 30,
@@ -113,6 +254,10 @@ async def fetch_data(
     concurrent: Annotated[bool, typer.Option("--concurrent", "-c", help="Fetch concurrently")] = True
 ) -> None:
     """📊 Fetch market data for symbols"""
+    asyncio.run(_fetch_data_async(symbols, timeframe, days, output, concurrent))
+
+async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, output: Path | None, concurrent: bool) -> None:
+    """Async implementation of fetch data"""
     
     # Validate symbols
     symbols = [s.upper().strip() for s in symbols]
@@ -184,8 +329,136 @@ async def fetch_data(
         except Exception as e:
             console.print(f"[red]❌ Failed to save data: {e}[/red]")
 
+@data_app.command("stream")
+def stream_data(
+    symbols: Annotated[list[str], typer.Argument(help="Stock symbols to stream")],
+    live: Annotated[bool, typer.Option("--live", help="Enable live streaming")] = False,
+    interval: Annotated[int, typer.Option("--interval", "-i", help="Update interval in seconds")] = 5
+) -> None:
+    """📡 Stream real-time market data"""
+    asyncio.run(_stream_data_async(symbols, live, interval))
+
+async def _stream_data_async(symbols: list[str], live: bool, interval: int) -> None:
+    """Async implementation of data streaming"""
+    
+    symbols = [s.upper().strip() for s in symbols]
+    
+    console.print(f"[bold cyan]📡 Streaming data for: {', '.join(symbols)}[/bold cyan]")
+    if not live:
+        console.print("[yellow]ℹ️ Using simulated streaming (--live not enabled)[/yellow]")
+    console.print(f"[dim]Update interval: {interval} seconds • Press Ctrl+C to stop[/dim]\n")
+    
+    try:
+        from src.data.alpaca_provider import AlpacaDataProvider
+        from datetime import datetime, timedelta
+        import time
+        
+        provider = AlpacaDataProvider()
+        
+        # Create a live display layout
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="data", ratio=1)
+        )
+        
+        # Header
+        header_table = Table.grid()
+        header_table.add_column(style="bold cyan")
+        header_table.add_row(f"🌍 Gauss World Trader - Live Data Stream")
+        header_table.add_row(f"📊 Symbols: {', '.join(symbols)} • Interval: {interval}s")
+        
+        layout["header"].update(Panel(header_table, title="📡 Streaming"))
+        
+        # Main data table
+        data_table = Table()
+        data_table.add_column("Symbol", style="bold cyan")
+        data_table.add_column("Price", style="yellow")
+        data_table.add_column("Change", style="green")
+        data_table.add_column("Volume", style="blue")
+        data_table.add_column("Time", style="dim")
+        
+        # Store previous prices for change calculation
+        prev_prices = {}
+        
+        with Live(layout, refresh_per_second=1, screen=True) as live_display:
+            try:
+                while True:
+                    # Clear the table for new data
+                    data_table = Table()
+                    data_table.add_column("Symbol", style="bold cyan")
+                    data_table.add_column("Price", style="yellow") 
+                    data_table.add_column("Change", style="green")
+                    data_table.add_column("Volume", style="blue")
+                    data_table.add_column("Time", style="dim")
+                    
+                    current_time = datetime.now()
+                    
+                    for symbol in symbols:
+                        try:
+                            # Get latest data (using delayed data for free tier)
+                            end_date = current_time - timedelta(days=2)
+                            start_date = end_date - timedelta(days=1)
+                            
+                            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+                            
+                            if not data.empty:
+                                latest = data.iloc[-1]
+                                current_price = latest['close']
+                                volume = latest['volume']
+                                
+                                # Calculate change
+                                if symbol in prev_prices:
+                                    change = current_price - prev_prices[symbol]
+                                    change_pct = (change / prev_prices[symbol]) * 100
+                                    change_str = f"{change:+.2f} ({change_pct:+.1f}%)"
+                                    change_style = "green" if change >= 0 else "red"
+                                else:
+                                    change_str = "N/A"
+                                    change_style = "white"
+                                
+                                prev_prices[symbol] = current_price
+                                
+                                data_table.add_row(
+                                    symbol,
+                                    f"${current_price:.2f}",
+                                    f"[{change_style}]{change_str}[/{change_style}]",
+                                    f"{volume:,.0f}",
+                                    current_time.strftime("%H:%M:%S")
+                                )
+                            else:
+                                data_table.add_row(
+                                    symbol,
+                                    "N/A",
+                                    "N/A", 
+                                    "N/A",
+                                    current_time.strftime("%H:%M:%S")
+                                )
+                                
+                        except Exception as e:
+                            data_table.add_row(
+                                symbol,
+                                "ERROR",
+                                f"[red]{str(e)[:20]}...[/red]",
+                                "N/A",
+                                current_time.strftime("%H:%M:%S")
+                            )
+                    
+                    layout["data"].update(Panel(data_table, title="📊 Market Data"))
+                    
+                    # Wait for next update
+                    await asyncio.sleep(interval)
+                    
+            except KeyboardInterrupt:
+                console.print("\n[yellow]📡 Streaming stopped by user[/yellow]")
+                
+    except ImportError as e:
+        console.print(f"[red]❌ Required modules not available: {e}[/red]")
+    except Exception as e:
+        console.print(f"[red]❌ Error in data streaming: {e}[/red]")
+
 @trade_app.command("place")
-async def place_order(
+def place_order(
     symbol: Annotated[str, typer.Argument(help="Stock symbol")],
     side: Annotated[str, typer.Argument(help="buy or sell")],
     quantity: Annotated[int, typer.Argument(help="Number of shares")],
@@ -194,6 +467,10 @@ async def place_order(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Simulate without executing")] = False
 ) -> None:
     """💰 Place a trading order"""
+    asyncio.run(_place_order_async(symbol, side, quantity, order_type, price, dry_run))
+
+async def _place_order_async(symbol: str, side: str, quantity: int, order_type: str, price: float | None, dry_run: bool) -> None:
+    """Async implementation of place order"""
     
     symbol = symbol.upper().strip()
     
@@ -277,13 +554,17 @@ Mode: [red]DRY RUN[/red] if dry_run else [green]LIVE[/green]
             raise typer.Exit(1)
 
 @strategy_app.command("run")
-async def run_strategy(
+def run_strategy(
     symbols: Annotated[list[str], typer.Argument(help="Symbols to trade")],
     strategy_name: Annotated[str, typer.Option("--strategy", "-s", help="Strategy to run")] = "momentum",
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Simulate without trading")] = True,
     watch: Annotated[bool, typer.Option("--watch", "-w", help="Continuous monitoring")] = False
 ) -> None:
     """🧠 Run a trading strategy"""
+    asyncio.run(_run_strategy_async(symbols, strategy_name, dry_run, watch))
+
+async def _run_strategy_async(symbols: list[str], strategy_name: str, dry_run: bool, watch: bool) -> None:
+    """Async implementation of run strategy"""
     
     symbols = [s.upper().strip() for s in symbols]
     
@@ -384,6 +665,163 @@ async def _run_strategy_iteration(strategy, symbols: list[str], dry_run: bool) -
     
     else:
         console.print("[yellow]📭 No signals generated[/yellow]")
+
+@analysis_app.command("technical")
+def technical_analysis(
+    symbol: Annotated[str, typer.Argument(help="Stock symbol to analyze")],
+    indicators: Annotated[list[str], typer.Option("--indicators", "-i", help="Technical indicators")] = ["rsi", "macd"],
+    days: Annotated[int, typer.Option("--days", "-d", help="Days of historical data")] = 100
+) -> None:
+    """📈 Perform technical analysis on a symbol"""
+    asyncio.run(_technical_analysis_async(symbol, indicators, days))
+
+async def _technical_analysis_async(symbol: str, indicators: list[str], days: int) -> None:
+    """Async implementation of technical analysis"""
+    
+    symbol = symbol.upper().strip()
+    indicators = [ind.lower().strip() for ind in indicators]
+    
+    with console.status(f"[bold blue]Analyzing {symbol}...", spinner="dots"):
+        try:
+            # Import technical analysis module
+            from src.analysis.technical_analysis import TechnicalAnalysis
+            from src.data.alpaca_provider import AlpacaDataProvider
+            from datetime import datetime, timedelta
+            
+            # Fetch data
+            provider = AlpacaDataProvider()
+            # Use older data to avoid free tier limitations
+            end_date = datetime.now() - timedelta(days=5)
+            start_date = end_date - timedelta(days=days)
+            
+            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+            
+            if data.empty:
+                console.print(f"[red]❌ No data found for {symbol}[/red]")
+                return
+            
+            # Initialize analyzer
+            analyzer = TechnicalAnalysis()
+            
+            # Create results table
+            results_table = Table(title=f"📈 Technical Analysis: {symbol}")
+            results_table.add_column("Indicator", style="cyan")
+            results_table.add_column("Current Value", style="yellow")
+            results_table.add_column("Signal", style="green")
+            results_table.add_column("Interpretation", style="white")
+            
+            current_price = data['close'].iloc[-1]
+            
+            # Calculate and display requested indicators
+            for indicator in indicators:
+                match indicator:
+                    case "rsi":
+                        rsi_values = analyzer.rsi(data['close'])
+                        if not rsi_values.empty:
+                            current_rsi = rsi_values.iloc[-1]
+                            if current_rsi < 30:
+                                signal = "🟢 BUY"
+                                interpretation = "Oversold condition"
+                            elif current_rsi > 70:
+                                signal = "🔴 SELL" 
+                                interpretation = "Overbought condition"
+                            else:
+                                signal = "🟡 HOLD"
+                                interpretation = "Neutral zone"
+                            
+                            results_table.add_row(
+                                "RSI (14)",
+                                f"{current_rsi:.2f}",
+                                signal,
+                                interpretation
+                            )
+                    
+                    case "macd":
+                        macd_line, signal_line, histogram = analyzer.macd(data['close'])
+                        if not macd_line.empty:
+                            current_macd = macd_line.iloc[-1]
+                            current_signal = signal_line.iloc[-1]
+                            current_histogram = histogram.iloc[-1]
+                            
+                            if current_macd > current_signal and current_histogram > 0:
+                                signal = "🟢 BUY"
+                                interpretation = "Bullish crossover"
+                            elif current_macd < current_signal and current_histogram < 0:
+                                signal = "🔴 SELL"
+                                interpretation = "Bearish crossover"
+                            else:
+                                signal = "🟡 HOLD"
+                                interpretation = "No clear signal"
+                            
+                            results_table.add_row(
+                                "MACD",
+                                f"{current_macd:.4f}",
+                                signal,
+                                interpretation
+                            )
+                    
+                    case "bb" | "bollinger":
+                        upper_band, middle_band, lower_band = analyzer.bollinger_bands(data['close'])
+                        if not upper_band.empty:
+                            upper_val = upper_band.iloc[-1]
+                            lower_val = lower_band.iloc[-1]
+                            middle_val = middle_band.iloc[-1]
+                            
+                            if current_price <= lower_val:
+                                signal = "🟢 BUY"
+                                interpretation = "Price at lower band"
+                            elif current_price >= upper_val:
+                                signal = "🔴 SELL"
+                                interpretation = "Price at upper band"
+                            else:
+                                signal = "🟡 HOLD"
+                                interpretation = "Price within bands"
+                            
+                            results_table.add_row(
+                                "Bollinger Bands",
+                                f"${current_price:.2f}",
+                                signal,
+                                f"Range: ${lower_val:.2f} - ${upper_val:.2f}"
+                            )
+                    
+                    case "sma" | "ma":
+                        sma_20 = analyzer.sma(data['close'], 20)
+                        sma_50 = analyzer.sma(data['close'], 50)
+                        
+                        if not sma_20.empty and not sma_50.empty:
+                            current_sma20 = sma_20.iloc[-1]
+                            current_sma50 = sma_50.iloc[-1]
+                            
+                            if current_price > current_sma20 > current_sma50:
+                                signal = "🟢 BUY"
+                                interpretation = "Price above moving averages"
+                            elif current_price < current_sma20 < current_sma50:
+                                signal = "🔴 SELL"
+                                interpretation = "Price below moving averages"
+                            else:
+                                signal = "🟡 HOLD"
+                                interpretation = "Mixed signals"
+                            
+                            results_table.add_row(
+                                "SMA (20/50)",
+                                f"${current_sma20:.2f} / ${current_sma50:.2f}",
+                                signal,
+                                interpretation
+                            )
+                    
+                    case _:
+                        console.print(f"[yellow]⚠️ Unknown indicator: {indicator}[/yellow]")
+            
+            console.print(results_table)
+            
+            # Add price summary
+            console.print(f"\n[bold cyan]💰 Current Price: ${current_price:.2f}[/bold cyan]")
+            console.print(f"[dim]Data period: {data.index[0].date()} to {data.index[-1].date()} ({len(data)} trading days)[/dim]")
+            
+        except ImportError as e:
+            console.print(f"[red]❌ Technical analysis module not available: {e}[/red]")
+        except Exception as e:
+            console.print(f"[red]❌ Error performing technical analysis: {e}[/red]")
 
 @app.callback()
 def main(
