@@ -225,6 +225,14 @@ def main():
     st.title("🌍 Gauss World Trader Dashboard")
     st.markdown("**Python 3.12 • Real-time Data • Advanced Analytics • Named after Carl Friedrich Gauss**")
     
+    # Time information
+    current_time = datetime.now()
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown(f"**📅 Dashboard Time:** {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    with col2:
+        st.warning("⏰ Alpaca free tier: 15-min delay")
+    
     # Sidebar
     st.sidebar.title("📊 Controls")
     
@@ -297,6 +305,12 @@ def main_analysis_tab(symbol, days_back):
         
         # Recent data table
         st.subheader("📋 Recent Data")
+        
+        # Show data period information
+        data_start = data.index[0].strftime('%Y-%m-%d')
+        data_end = data.index[-1].strftime('%Y-%m-%d')
+        st.info(f"📅 Data Period: {data_start} to {data_end} ({len(data)} trading days)")
+        
         recent_data = data.tail(10).copy()
         recent_data.index = recent_data.index.strftime('%Y-%m-%d')
         st.dataframe(recent_data, use_container_width=True)

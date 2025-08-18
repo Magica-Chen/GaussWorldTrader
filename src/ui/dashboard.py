@@ -19,7 +19,7 @@ class Dashboard:
     
     def setup_page_config(self):
         st.set_page_config(
-            page_title="Quantitative Trading System",
+            page_title="🌍 Gauss World Trader Dashboard",
             page_icon="📈",
             layout="wide",
             initial_sidebar_state="expanded"
@@ -332,7 +332,13 @@ class Dashboard:
             st.error(f"Error fetching crypto data: {e}")
     
     def run(self):
-        st.title("📈 Quantitative Trading System Dashboard")
+        st.title("🌍 Gauss World Trader Dashboard")
+        st.markdown("**Real-time Trading System • Python 3.12 Optimized • Named after Carl Friedrich Gauss**")
+        
+        # Time information
+        current_time = datetime.now()
+        st.markdown(f"**📅 Dashboard Time:** {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.warning("⏰ **Note:** Alpaca free tier has 15-minute delayed data")
         
         # Sidebar controls
         symbol, timeframe, days_back = self.sidebar_controls()

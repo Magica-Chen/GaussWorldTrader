@@ -220,12 +220,21 @@ async def _account_performance_async(days: int) -> None:
             
             console.print(perf_table)
             
+            # Time period information
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            console.print(f"\n[bold cyan]📅 Analysis Period:[/bold cyan]")
+            console.print(f"• Start: {start_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            console.print(f"• End: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            console.print(f"• Duration: {days} days")
+            console.print(f"[yellow]⏰ Note: Alpaca free tier has 15-minute delayed data[/yellow]")
+            
             # Trading activity summary
             try:
                 # Get recent orders/trades
                 activities = await engine.get_activities()
                 if activities:
-                    console.print(f"\n[bold cyan]📈 Recent Activity:[/bold cyan]")
+                    console.print(f"\n[bold cyan]📈 Recent Trading Activity:[/bold cyan]")
                     console.print(f"• Total activities in period: {len(activities)}")
                     
                     # Count order types
@@ -239,8 +248,6 @@ async def _account_performance_async(days: int) -> None:
                         
             except Exception as e:
                 console.print(f"[yellow]⚠️ Could not fetch trading activity: {e}[/yellow]")
-            
-            console.print(f"\n[dim]Performance calculated over {days} days[/dim]")
             
         except Exception as e:
             console.print(f"[red]❌ Error calculating performance: {e}[/red]")
@@ -262,6 +269,16 @@ async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, outpu
     # Validate symbols
     symbols = [s.upper().strip() for s in symbols]
     
+    # Calculate time period
+    end_date = datetime.now() - timedelta(days=2)  # Account for free tier delay
+    start_date = end_date - timedelta(days=days)
+    
+    console.print(f"[bold cyan]📅 Data Period:[/bold cyan]")
+    console.print(f"• Start: {start_date.strftime('%Y-%m-%d')}")
+    console.print(f"• End: {end_date.strftime('%Y-%m-%d')}")
+    console.print(f"• Duration: {days} days")
+    console.print(f"[yellow]⏰ Note: Using 2-day delayed data (Alpaca free tier: 15-min delay)[/yellow]\n")
+    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -269,32 +286,40 @@ async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, outpu
     ) as progress:
         
         if concurrent:
-            # Fetch all symbols concurrently (Python 3.12 optimized)
+            # Fetch all symbols concurrently (Python 3.12 optimized)  
             task = progress.add_task(f"Fetching data for {len(symbols)} symbols...", total=None)
             
-            async with AsyncDataProvider() as provider:
-                data_dict, error = await safe_execute_async(
-                    provider.fetch_multiple_symbols,
-                    symbols, timeframe, days
-                )
+            from src.data.alpaca_provider import AlpacaDataProvider
+            provider = AlpacaDataProvider()
+            data_dict = {}
+            error = None
+            
+            try:
+                for symbol in symbols:
+                    data = provider.get_bars(symbol, timeframe, start_date, end_date)
+                    if not data.empty:
+                        data_dict[symbol] = data
+            except Exception as e:
+                error = str(e)
                 
-                if not handle_trading_operation_result(data_dict, error):
-                    console.print("[red]❌ Failed to fetch data[/red]")
-                    raise typer.Exit(1)
+            if error:
+                console.print(f"[red]❌ Failed to fetch data: {error}[/red]")
+                raise typer.Exit(1)
         else:
             # Fetch symbols sequentially with progress
             data_dict = {}
-            async with AsyncDataProvider() as provider:
-                for symbol in symbols:
-                    task = progress.add_task(f"Fetching {symbol}...", total=None)
-                    data, error = await safe_execute_async(
-                        provider._fetch_symbol_data,
-                        symbol, timeframe, days
-                    )
-                    
-                    if handle_trading_operation_result(data, error):
+            from src.data.alpaca_provider import AlpacaDataProvider
+            provider = AlpacaDataProvider()
+            
+            for symbol in symbols:
+                task = progress.add_task(f"Fetching {symbol}...", total=None)
+                try:
+                    data = provider.get_bars(symbol, timeframe, start_date, end_date)
+                    if not data.empty:
                         data_dict[symbol] = data
-                    progress.remove_task(task)
+                except Exception as e:
+                    console.print(f"[yellow]⚠️ Failed to fetch {symbol}: {e}[/yellow]")
+                progress.remove_task(task)
     
     # Display results
     results_table = Table(title="📊 Data Fetch Results", show_header=True)
@@ -344,8 +369,10 @@ async def _stream_data_async(symbols: list[str], live: bool, interval: int) -> N
     symbols = [s.upper().strip() for s in symbols]
     
     console.print(f"[bold cyan]📡 Streaming data for: {', '.join(symbols)}[/bold cyan]")
+    console.print(f"[bold cyan]📅 Stream Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/bold cyan]")
     if not live:
         console.print("[yellow]ℹ️ Using simulated streaming (--live not enabled)[/yellow]")
+    console.print(f"[yellow]⏰ Note: Alpaca free tier has 15-minute delayed data[/yellow]")
     console.print(f"[dim]Update interval: {interval} seconds • Press Ctrl+C to stop[/dim]\n")
     
     try:
@@ -814,9 +841,14 @@ async def _technical_analysis_async(symbol: str, indicators: list[str], days: in
             
             console.print(results_table)
             
-            # Add price summary
+            # Add price summary and time information
             console.print(f"\n[bold cyan]💰 Current Price: ${current_price:.2f}[/bold cyan]")
-            console.print(f"[dim]Data period: {data.index[0].date()} to {data.index[-1].date()} ({len(data)} trading days)[/dim]")
+            console.print(f"\n[bold cyan]📅 Analysis Period:[/bold cyan]")
+            console.print(f"• Data Start: {data.index[0].strftime('%Y-%m-%d')}")
+            console.print(f"• Data End: {data.index[-1].strftime('%Y-%m-%d')}")
+            console.print(f"• Trading Days: {len(data)} days")
+            console.print(f"• Requested Period: {days} days")
+            console.print(f"[yellow]⏰ Note: Using historical data (Alpaca free tier: 15-min delay)[/yellow]")
             
         except ImportError as e:
             console.print(f"[red]❌ Technical analysis module not available: {e}[/red]")
