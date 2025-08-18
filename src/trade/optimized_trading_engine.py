@@ -319,6 +319,103 @@ class OptimizedTradingEngine:
             'engine_type': 'paper' if self._paper_trading else 'live'
         }
     
+    async def get_activities(self, activity_type: str | None = None, page_size: int = 50) -> list[dict[str, Any]]:
+        """
+        Get account activities (orders, fills, etc.) from Alpaca API
+        
+        Args:
+            activity_type: Filter by activity type ('FILL', 'TRANS', etc.) or None for all
+            page_size: Number of activities to fetch (max 100)
+            
+        Returns:
+            List of activity dictionaries
+        """
+        try:
+            # Alpaca API call - use basic call first
+            activities = self._api.get_activities()
+            
+            # Convert activities to dictionaries for easier handling
+            activity_list = []
+            for activity in activities:
+                activity_dict = {
+                    'id': getattr(activity, 'id', None),
+                    'activity_type': getattr(activity, 'activity_type', 'unknown'),
+                    'date': getattr(activity, 'date', None),
+                    'symbol': getattr(activity, 'symbol', None),
+                    'qty': getattr(activity, 'qty', None),
+                    'price': getattr(activity, 'price', None),
+                    'side': getattr(activity, 'side', None),
+                    'net_amount': getattr(activity, 'net_amount', None),
+                }
+                activity_list.append(activity_dict)
+            
+            return activity_list
+            
+        except Exception as e:
+            self._logger.error(f"Error fetching activities: {e}")
+            # Return local order history as fallback
+            return [
+                {
+                    'id': order.order_id,
+                    'activity_type': 'ORDER',
+                    'date': order.timestamp if hasattr(order, 'timestamp') else datetime.now(),
+                    'symbol': getattr(order, 'symbol', 'UNKNOWN'),
+                    'qty': getattr(order, 'filled_qty', 0),
+                    'price': getattr(order, 'filled_price', None),
+                    'side': getattr(order, 'side', 'unknown'),
+                    'net_amount': None,
+                }
+                for order in list(self._order_history)[-page_size:]
+            ]
+    
+    async def get_portfolio_history(self, days: int = 30) -> list[dict[str, Any]] | None:
+        """
+        Get portfolio history for performance calculations
+        
+        Args:
+            days: Number of days of history to fetch
+            
+        Returns:
+            List of portfolio history data or None if not available
+        """
+        try:
+            from datetime import timedelta
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            
+            # Alpaca API call with correct parameters
+            portfolio_history = self._api.get_portfolio_history(
+                period='1D',
+                timeframe='1D',
+                extended_hours=True
+            )
+            
+            if not portfolio_history or not portfolio_history.equity:
+                return None
+            
+            # Convert to list of dictionaries
+            history_data = []
+            timestamps = portfolio_history.timestamp
+            equity_values = portfolio_history.equity
+            
+            for i, timestamp in enumerate(timestamps):
+                if i < len(equity_values):
+                    date = datetime.fromtimestamp(timestamp)
+                    equity = equity_values[i]
+                    
+                    history_data.append({
+                        'date': date,
+                        'equity': equity,
+                        'timestamp': timestamp
+                    })
+            
+            return history_data
+            
+        except Exception as e:
+            self._logger.error(f"Error fetching portfolio history: {e}")
+            return None
+    
     @override  # Python 3.12 improved override decorator
     def __repr__(self) -> str:
         mode = "paper" if self._paper_trading else "live"
