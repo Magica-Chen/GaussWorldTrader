@@ -1,0 +1,77 @@
+# Optimized for Python 3.12+
+# Core Dependencies
+pandas>=2.1.0
+numpy>=1.26.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Trading API
+alpaca-trade-api>=3.1.1
+
+# Technical Analysis
+ta-lib>=0.4.28
+TA-Lib>=0.4.28
+
+# Data Analysis and Visualization
+matplotlib>=3.8.0
+plotly>=5.17.0
+seaborn>=0.13.0
+
+# Web Interface
+streamlit>=1.28.0
+dash>=2.14.0
+dash-bootstrap-components>=1.5.0
+
+# Financial Data
+yfinance>=0.2.20
+fredapi>=0.5.1
+
+# Statistical Analysis
+scipy>=1.11.0
+scikit-learn>=1.3.0
+statsmodels>=0.14.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Logging and Configuration
+loguru>=0.7.0
+
+# CLI Interface
+click>=8.1.0
+rich>=13.6.0
+typer>=0.9.0
+
+# Async Support (optimized for Python 3.12)
+aiohttp>=3.9.0
+websockets>=9.0
+aiofiles>=23.0.0
+asyncpg>=0.29.0
+
+# Performance (Python 3.12 optimized)
+numba>=0.58.0
+cython>=3.0.0
+
+# Type Checking (Python 3.12 features)
+mypy>=1.6.0
+typing-extensions>=4.8.0
+
+# Development Tools (Python 3.12 compatible)
+black>=23.9.0
+ruff>=0.1.0
+pre-commit>=3.5.0
+
+# Documentation
+sphinx>=7.2.0
+sphinx-rtd-theme>=1.3.0
+
+# Additional Python 3.12 optimizations
+tomli>=2.0.1; python_version < "3.11"
+tomli-w>=1.0.0
+pydantic>=2.4.0
+httpx>=0.25.0

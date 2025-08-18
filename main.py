@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""
+Modern Trading System - Python 3.12+ Optimized Entry Point
+Features async operations, rich CLI, and performance monitoring
+"""
+from __future__ import annotations
+
+import sys
+import os
+import asyncio
+from pathlib import Path
+
+# Add the project root to the Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+# Check Python version
+if sys.version_info < (3, 12):
+    print("🚨 This trading system is optimized for Python 3.12+")
+    print(f"📍 Current version: Python {sys.version_info.major}.{sys.version_info.minor}")
+    print("💡 Please upgrade to Python 3.12 for optimal performance")
+    sys.exit(1)
+
+try:
+    from src.ui.modern_cli import app
+    from config.optimized_config import get_config
+    MODERN_CLI = True
+except ImportError:
+    # Fallback to simple CLI with existing components
+    from src.ui.simple_cli import app
+    from config import Config
+    MODERN_CLI = False
+    
+    def get_config():
+        return Config()
+
+try:
+    from rich.console import Console
+    console = Console()
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
+    console = None
+
+def main() -> None:
+    """
+    Main entry point with Python 3.12 optimizations
+    - Validates configuration
+    - Shows system status
+    - Launches modern CLI
+    """
+    
+    # Show startup banner
+    if HAS_RICH and console:
+        console.print("""
+[bold blue]🚀 Quantitative Trading System[/bold blue]
+[cyan]Python 3.12 Compatible • High Performance Trading[/cyan]
+        """)
+        
+        # Basic config validation
+        try:
+            config = get_config()
+            if MODERN_CLI and hasattr(config, 'get_validation_summary'):
+                console.print(config.get_validation_summary())
+            else:
+                # Basic validation for legacy config
+                console.print("🔧 Configuration Status:")
+                console.print(f"• Alpaca: {'✅ Valid' if Config.validate_alpaca_config() else '❌ Missing'}")
+                console.print(f"• System: [green]Ready[/green]")
+                
+        except Exception as e:
+            console.print(f"[red]❌ Configuration Error: {e}[/red]")
+            console.print("[yellow]💡 Please check your .env file and API credentials[/yellow]")
+            sys.exit(1)
+    else:
+        print("🚀 Quantitative Trading System")
+        print("Python 3.12 Compatible • High Performance Trading")
+        print("=" * 50)
+    
+    # Launch CLI
+    try:
+        app()
+    except KeyboardInterrupt:
+        if HAS_RICH and console:
+            console.print("\n[yellow]👋 Trading system shutdown complete[/yellow]")
+        else:
+            print("\n👋 Trading system shutdown complete")
+    except Exception as e:
+        if HAS_RICH and console:
+            console.print(f"\n[red]💥 Unexpected error: {e}[/red]")
+        else:
+            print(f"\n💥 Unexpected error: {e}")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    # Use Python 3.12's improved startup performance
+    main()
