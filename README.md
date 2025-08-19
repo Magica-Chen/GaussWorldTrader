@@ -66,14 +66,18 @@ GaussWorldTrader/
    ```bash
    python --version  # Should show 3.12+
    ```
-
 2. **Clone the repository**:
    ```bash
    git clone https://github.com/Magica-Chen/GaussWorldTrader.git
    cd GaussWorldTrader
    ```
+3. **Create a virtual environment**:
+   ```bash
+   conda create -n gaussworldtrader python=3.12
+   conda activate gaussworldtrader
+   ```
 
-3. **Install dependencies** (Python 3.12 optimized):
+4. **Install dependencies** (Python 3.12 optimized):
    ```bash
    # Option 1: Using pip
    pip install -r requirements.txt
@@ -85,13 +89,13 @@ GaussWorldTrader/
    pip install -e ".[dev,performance,all]"
    ```
 
-4. **Configure environment variables**:
+5. **Configure environment variables**:
    ```bash
    cp .env.template .env
    # Edit .env with your API keys
    ```
 
-5. **Generate configuration template** (optional):
+6. **Generate configuration template** (optional):
    ```bash
    python -c "from config.optimized_config import get_config; get_config().export_template(Path('config.toml'))"
    ```
