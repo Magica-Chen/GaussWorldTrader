@@ -21,7 +21,7 @@ def main():
         # Run streamlit with custom port
         subprocess.run([
             sys.executable, "-m", "streamlit", "run", 
-            "simple_dashboard.py",  # Use simple_dashboard as it's more complete
+            "src/ui/simple_dashboard.py",  # Updated path to ui directory
             "--server.port", "3721",
             "--server.address", "localhost",
             "--server.headless", "true",
@@ -31,7 +31,7 @@ def main():
         print("\n👋 Dashboard stopped")
     except Exception as e:
         print(f"❌ Error running dashboard: {e}")
-        print("💡 Make sure simple_dashboard.py exists and Streamlit is installed")
+        print("💡 Make sure src/ui/simple_dashboard.py exists and Streamlit is installed")
 
 if __name__ == '__main__':
     main()

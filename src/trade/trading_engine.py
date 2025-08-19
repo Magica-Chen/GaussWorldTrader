@@ -175,12 +175,12 @@ class TradingEngine:
                 'cash': float(account.cash),
                 'portfolio_value': float(account.portfolio_value),
                 'equity': float(account.equity),
-                'day_trade_count': int(account.day_trade_count),
-                'pattern_day_trader': account.pattern_day_trader,
-                'trading_blocked': account.trading_blocked,
-                'transfers_blocked': account.transfers_blocked,
-                'account_blocked': account.account_blocked,
-                'status': account.status
+                'day_trade_count': int(getattr(account, 'day_trade_count', 0)),
+                'pattern_day_trader': getattr(account, 'pattern_day_trader', False),
+                'trading_blocked': getattr(account, 'trading_blocked', False),
+                'transfers_blocked': getattr(account, 'transfers_blocked', False),
+                'account_blocked': getattr(account, 'account_blocked', False),
+                'status': getattr(account, 'status', 'UNKNOWN')
             }
         except Exception as e:
             self.logger.error(f"Failed to get account info: {e}")

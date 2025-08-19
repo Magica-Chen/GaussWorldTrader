@@ -12,7 +12,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # Add project to path
-sys.path.insert(0, '.')
+sys.path.insert(0, '../..')  # Go up two levels to project root
 
 # Page configuration
 st.set_page_config(
@@ -24,20 +24,93 @@ st.set_page_config(
 
 @st.cache_data(ttl=900)  # Cache for 15 minutes (free tier limitation)
 def load_data(symbol, days=30):
-    """Load market data with caching - adjusted for Alpaca free tier"""
+    """Load market data with smart market close detection and free tier compliance"""
     try:
         from src.data import AlpacaDataProvider
         provider = AlpacaDataProvider()
         
-        # Alpaca free tier: data is delayed by 15 minutes
-        # Use previous trading day to avoid real-time data issues
-        end_date = datetime.now() - timedelta(days=1)
+        current_time = datetime.now()
+        
+        # Smart Market Close Detection
+        # Market hours: 9:30 AM - 4:00 PM EST, Monday-Friday
+        # Pre-market: 4:00 AM - 9:30 AM
+        # After hours: 4:00 PM - 8:00 PM  
+        # Overnight: 8:00 PM - 4:00 AM (next day)
+        is_weekend = current_time.weekday() >= 5  # Saturday=5, Sunday=6
+        is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
+        is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
+        is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
+        is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+        
+        # Determine the most recent market close with 1-day buffer for SIP compliance
+        if is_weekend:
+            # Weekend: Show data through Friday's close
+            days_to_friday = current_time.weekday() - 4  # Go back to Friday
+            market_close_date = current_time - timedelta(days=days_to_friday)
+            market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
+            # Apply 1-day buffer for free tier compliance
+            end_date = market_close_date - timedelta(days=1)
+            data_context = "Weekend - showing data through Friday's close (1-day delayed)"
+            
+        elif is_after_hours:
+            # After hours: Show data through today's close
+            market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
+            # Apply 1-day buffer for free tier compliance
+            end_date = market_close_date - timedelta(days=1)
+            data_context = "After hours - showing data through previous day's close"
+            
+        elif is_overnight:
+            # Overnight: Show data through today's close (if late night) or previous day's close (if early morning)
+            if current_time.hour >= 20:  # Late night (8 PM - midnight)
+                market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
+            else:  # Early morning (midnight - 4 AM)
+                market_close_date = (current_time - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
+            # Apply 1-day buffer for free tier compliance
+            end_date = market_close_date - timedelta(days=1)
+            data_context = "Overnight - showing data through previous day's close"
+            
+        elif is_pre_market:
+            # Pre-market: Show data through previous trading day's close
+            if current_time.weekday() == 0:  # Monday
+                market_close_date = current_time - timedelta(days=3)  # Go back to Friday
+            else:
+                market_close_date = current_time - timedelta(days=1)  # Previous day
+            market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
+            # Apply 1-day buffer for free tier compliance
+            end_date = market_close_date - timedelta(days=1)
+            data_context = "Pre-market - showing data through previous trading day's close"
+            
+        else:
+            # During market hours: Show delayed data with SIP compliance
+            # Use data from previous day to avoid SIP restrictions
+            end_date = current_time - timedelta(days=1)
+            data_context = "Market open - showing delayed data (previous day)"
+        
         start_date = end_date - timedelta(days=days)
         
+        # Fetch data with fallback strategy
+        try:
+            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+            if data is not None and not data.empty:
+                return data, data_context
+        except Exception:
+            pass  # Fall through to fallback
+        
+        # Fallback: Use older data if primary strategy fails
+        end_date = current_time - timedelta(days=2)
+        start_date = end_date - timedelta(days=days)
         data = provider.get_bars(symbol, '1Day', start_date, end_date)
-        return data, None
+        
+        if data is not None and not data.empty:
+            return data, "Using older historical data due to free tier limitations"
+        else:
+            return None, "No data available"
+            
     except Exception as e:
-        return None, str(e)
+        error_msg = str(e)
+        if "subscription does not permit" in error_msg.lower():
+            error_msg = "Free tier limitation: Cannot access recent SIP data. Showing historical data."
+        return None, error_msg
 
 @st.cache_data(ttl=300)
 def get_account_info():
@@ -87,8 +160,8 @@ def generate_signals(symbol, data):
         return [], str(e)
 
 @st.cache_data(ttl=1800)  # Cache for 30 minutes
-def run_backtest(symbols, days_back=365, initial_cash=100000):
-    """Run backtest with caching"""
+def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Momentum"):
+    """Run backtest with caching and strategy selection"""
     try:
         from src.trade import Backtester
         from src.strategy import MomentumStrategy
@@ -106,8 +179,44 @@ def run_backtest(symbols, days_back=365, initial_cash=100000):
             if not data.empty:
                 backtester.add_data(symbol, data)
         
-        # Create strategy
-        strategy = MomentumStrategy()
+        # Create strategy based on selection
+        if strategy_type == "Momentum":
+            strategy = MomentumStrategy()
+        elif strategy_type == "Mean Reversion":
+            # Use MomentumStrategy with modified parameters for mean reversion
+            strategy = MomentumStrategy({
+                'lookback_period': 10,
+                'rsi_period': 14,
+                'rsi_oversold': 30,
+                'rsi_overbought': 70,
+                'position_size_pct': 0.1,
+                'stop_loss_pct': 0.05,
+                'take_profit_pct': 0.15
+            })
+        elif strategy_type == "Trend Following":
+            # Trend following with longer lookback
+            strategy = MomentumStrategy({
+                'lookback_period': 50,
+                'rsi_period': 21,
+                'rsi_oversold': 40,
+                'rsi_overbought': 60,
+                'position_size_pct': 0.15,
+                'stop_loss_pct': 0.08,
+                'take_profit_pct': 0.25
+            })
+        elif strategy_type == "RSI Oversold/Overbought":
+            # Pure RSI-based strategy
+            strategy = MomentumStrategy({
+                'lookback_period': 5,
+                'rsi_period': 14,
+                'rsi_oversold': 25,
+                'rsi_overbought': 75,
+                'position_size_pct': 0.12,
+                'stop_loss_pct': 0.06,
+                'take_profit_pct': 0.18
+            })
+        else:
+            strategy = MomentumStrategy()  # Default fallback
         
         def strategy_func(current_date, current_prices, current_data, historical_data, portfolio):
             return strategy.generate_signals(
@@ -225,13 +334,34 @@ def main():
     st.title("🌍 Gauss World Trader Dashboard")
     st.markdown("**Python 3.12 • Real-time Data • Advanced Analytics • Named after Carl Friedrich Gauss**")
     
-    # Time information
+    # Time information and enhanced market status
     current_time = datetime.now()
-    col1, col2 = st.columns([2, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
     with col1:
         st.markdown(f"**📅 Dashboard Time:** {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
     with col2:
         st.warning("⏰ Alpaca free tier: 15-min delay")
+    
+    with col3:
+        # Enhanced Market Status Indicator
+        is_weekend = current_time.weekday() >= 5  # Saturday=5, Sunday=6
+        is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
+        is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
+        is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
+        is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+        
+        if is_weekend:
+            st.error("🔴 Market: Closed (Weekend)")
+        elif is_overnight:
+            st.info("🔵 Market: Overnight")
+        elif is_pre_market:
+            st.warning("🟡 Market: Pre-Market")
+        elif is_after_hours:
+            st.warning("🟡 Market: After Hours")
+        else:
+            st.success("🟢 Market: Open")
     
     # Sidebar
     st.sidebar.title("📊 Controls")
@@ -248,7 +378,7 @@ def main():
         st.rerun()
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["📈 Live Analysis", "🔄 Backtesting", "💼 Account"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Live Analysis", "🔄 Backtesting", "💼 Account", "🔄 Trading"])
     
     with tab1:
         # Live Analysis Tab
@@ -261,6 +391,10 @@ def main():
     with tab3:
         # Account Tab
         account_tab()
+    
+    with tab4:
+        # Trading Tab
+        trading_tab(symbol)
 
 def main_analysis_tab(symbol, days_back):
     """Main analysis tab content"""
@@ -275,9 +409,17 @@ def main_analysis_tab(symbol, days_back):
             data, error = load_data(symbol, days_back)
         
         if error:
-            st.error(f"❌ Data Error: {error}")
-            st.info("💡 Make sure your Alpaca API keys are configured in .env file")
-            return
+            if "Using" in error or "showing data through" in error or "delayed" in error:
+                # This is contextual information or a warning about using fallback data
+                st.info(f"ℹ️ {error}")
+            elif "previous day" in error or "older historical" in error:
+                # This is a warning about using fallback data
+                st.warning(f"⚠️ {error}")
+            else:
+                # This is a real error
+                st.error(f"❌ Data Error: {error}")
+                st.info("💡 Make sure your Alpaca API keys are configured in .env file")
+                return
         
         if data is None or data.empty:
             st.warning(f"⚠️ No data found for {symbol}")
@@ -306,10 +448,31 @@ def main_analysis_tab(symbol, days_back):
         # Recent data table
         st.subheader("📋 Recent Data")
         
-        # Show data period information
+        # Show data period information with contextual messaging
         data_start = data.index[0].strftime('%Y-%m-%d')
         data_end = data.index[-1].strftime('%Y-%m-%d')
-        st.info(f"📅 Data Period: {data_start} to {data_end} ({len(data)} trading days)")
+        
+        # Add contextual information based on current market state
+        current_time = datetime.now()
+        is_weekend = current_time.weekday() >= 5
+        is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
+        is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
+        is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
+        is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+        
+        # Generate contextual message
+        if is_weekend:
+            context_msg = "Weekend - showing data through Friday's close (1-day delayed for free tier)"
+        elif is_overnight:
+            context_msg = "Overnight - showing data through previous day's close (free tier compliance)"
+        elif is_after_hours:
+            context_msg = "After hours - showing data through previous day's close (free tier compliance)"
+        elif is_pre_market:
+            context_msg = "Pre-market - showing data through previous trading day's close"
+        else:
+            context_msg = "Market open - showing delayed data (previous day for SIP compliance)"
+        
+        st.info(f"📅 Data Period: {data_start} to {data_end} ({len(data)} trading days) | {context_msg}")
         
         recent_data = data.tail(10).copy()
         recent_data.index = recent_data.index.strftime('%Y-%m-%d')
@@ -388,27 +551,44 @@ def main_analysis_tab(symbol, days_back):
 def backtesting_tab():
     """Backtesting functionality tab"""
     st.subheader("🔄 Strategy Backtesting")
-    st.markdown("**Test your momentum strategy on historical data**")
+    st.markdown("**Test your quantitative trading strategies on historical data**")
     
-    # Backtest parameters
-    col1, col2, col3 = st.columns(3)
+    # Strategy selection and backtest parameters
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        strategy_type = st.selectbox(
+            "Select Strategy",
+            ["Momentum", "Mean Reversion", "Trend Following", "RSI Oversold/Overbought"],
+            index=0,
+            help="Choose the trading strategy to backtest"
+        )
+    
+    with col2:
         backtest_symbols = st.multiselect(
             "Select Symbols",
             ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA", "AMZN", "META", "SPY"],
             default=["AAPL", "GOOGL", "MSFT"]
         )
     
-    with col2:
+    with col3:
         backtest_days = st.slider("Days to Test", 90, 730, 365)
         
-    with col3:
+    with col4:
         initial_cash = st.number_input("Initial Cash ($)", value=100000, step=10000)
     
+    # Strategy description
+    strategy_descriptions = {
+        "Momentum": "🚀 Buys stocks with strong upward price momentum and high RSI confirmation",
+        "Mean Reversion": "🔄 Buys oversold stocks (RSI < 30) expecting price reversal",
+        "Trend Following": "📈 Follows long-term trends using moving average crossovers",
+        "RSI Oversold/Overbought": "⚖️ Trades based on RSI overbought (>70) and oversold (<30) signals"
+    }
+    st.info(f"**Strategy:** {strategy_descriptions.get(strategy_type, 'Custom strategy')}")
+    
     if st.button("🚀 Run Backtest", type="primary", disabled=len(backtest_symbols) == 0):
-        with st.spinner("Running backtest... This may take a moment"):
-            results, error = run_backtest(backtest_symbols, backtest_days, initial_cash)
+        with st.spinner(f"Running {strategy_type} strategy backtest... This may take a moment"):
+            results, error = run_backtest(backtest_symbols, backtest_days, initial_cash, strategy_type)
         
         if error:
             st.error(f"❌ Backtest Error: {error}")
@@ -492,7 +672,7 @@ def backtesting_tab():
                         st.success(f"✅ Transaction log generated: {csv_filename}")
     
     st.markdown("---")
-    st.info("💡 **Tip**: Backtesting shows how the momentum strategy would have performed on historical data. Past performance doesn't guarantee future results.")
+    st.info("💡 **Tip**: Backtesting shows how the selected strategy would have performed on historical data. Past performance doesn't guarantee future results.")
 
 def account_tab():
     """Account information tab"""
@@ -523,9 +703,118 @@ def account_tab():
             else:
                 st.warning(f"Status: ⚠️ {status}")
     
-    # Data limitations notice
+    # Data limitations notice with market context
     st.markdown("---")
-    st.info("📊 **Data Notice**: Free tier accounts have 15-minute delayed data. Consider upgrading for real-time data access.")
+    current_time = datetime.now()
+    is_weekend = current_time.weekday() >= 5
+    is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
+    is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
+    is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
+    is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+    
+    if is_weekend:
+        st.info("📊 **Data Notice**: Weekend - Historical data available through Friday's close. Free tier includes 1-day buffer for SIP compliance.")
+    elif is_overnight:
+        st.info("📊 **Data Notice**: Overnight period - Historical data available through previous day's close. Markets are closed for extended trading.")
+    elif is_after_hours:
+        st.info("📊 **Data Notice**: After hours - Historical data available through previous day's close. Consider upgrading for real-time after-hours data.")
+    elif is_pre_market:
+        st.info("📊 **Data Notice**: Pre-market - Historical data available through previous trading day's close. Consider upgrading for real-time pre-market data.")
+    else:
+        st.info("📊 **Data Notice**: Market open - Data delayed by 1 day for free tier SIP compliance. Consider upgrading for real-time data access.")
+
+def trading_tab(symbol):
+    """Trading panel functionality"""
+    st.subheader("🔄 Trading Panel")
+    st.markdown("**Execute trades directly from the dashboard**")
+    
+    # Trading form
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        trade_symbol = st.text_input("Symbol", value=symbol, key="trade_symbol").upper()
+        action = st.selectbox("Action", ["BUY", "SELL"], key="trade_action")
+        
+    with col2:
+        quantity = st.number_input("Quantity", min_value=1, value=100, step=1, key="trade_quantity")
+        order_type = st.selectbox("Order Type", ["Market", "Limit"], key="trade_order_type")
+        
+    with col3:
+        if order_type == "Limit":
+            limit_price = st.number_input("Limit Price ($)", min_value=0.01, value=100.0, step=0.01, key="trade_limit_price")
+        else:
+            limit_price = None
+        
+        time_in_force = st.selectbox("Time in Force", ["GTC", "DAY", "IOC", "FOK"], key="trade_tif")
+    
+    # Order preview
+    if trade_symbol and quantity:
+        st.subheader("📋 Order Preview")
+        estimated_value = quantity * (limit_price if limit_price else 0)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Symbol", trade_symbol)
+        with col2:
+            st.metric("Action", f"{action} {quantity} shares")
+        with col3:
+            if order_type == "Market":
+                st.metric("Order Type", "Market Order")
+            else:
+                st.metric("Limit Price", f"${limit_price:.2f}")
+        
+        if order_type == "Limit":
+            st.info(f"💰 Estimated Value: ${estimated_value:,.2f}")
+    
+    # Execute trade button
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        execute_trade = st.button("🚀 Execute Trade", type="primary", disabled=not trade_symbol or quantity <= 0)
+    
+    if execute_trade:
+        with st.spinner("Executing trade..."):
+            try:
+                from src.trade import TradingEngine
+                engine = TradingEngine()
+                
+                if order_type == "Market":
+                    result = engine.place_market_order(trade_symbol, quantity, action.lower())
+                else:
+                    result = engine.place_limit_order(trade_symbol, quantity, limit_price, action.lower())
+                
+                if result and 'id' in result:
+                    st.success(f"✅ Order placed successfully! Order ID: {result['id']}")
+                    st.json(result)
+                else:
+                    st.error("❌ Failed to place order")
+                    
+            except Exception as e:
+                st.error(f"❌ Trading Error: {str(e)}")
+                st.info("💡 Make sure your Alpaca API keys are configured and account is active")
+    
+    # Recent orders section
+    st.markdown("---")
+    st.subheader("📊 Recent Orders")
+    
+    try:
+        from src.trade import TradingEngine
+        engine = TradingEngine()
+        orders = engine.get_open_orders()
+        
+        if orders:
+            orders_df = pd.DataFrame(orders)
+            orders_df = orders_df[['symbol', 'side', 'qty', 'order_type', 'status', 'submitted_at']]
+            st.dataframe(orders_df, use_container_width=True)
+        else:
+            st.info("📭 No recent orders")
+            
+    except Exception as e:
+        st.error(f"Error fetching orders: {str(e)}")
+    
+    # Trading warnings
+    st.markdown("---")
+    st.warning("⚠️ **Risk Warning**: Trading involves risk. Only trade with money you can afford to lose.")
+    st.info("📈 **Paper Trading**: Make sure you're in paper trading mode for testing")
 
 if __name__ == "__main__":
     main()
