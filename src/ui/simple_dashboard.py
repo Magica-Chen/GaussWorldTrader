@@ -10,9 +10,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
+import pytz
 
 # Add project to path
 sys.path.insert(0, '../..')  # Go up two levels to project root
+
+def get_eastern_time():
+    """Get current time in Eastern timezone (handles EST/EDT automatically)"""
+    eastern = pytz.timezone('US/Eastern')
+    return datetime.now(eastern)
 
 # Page configuration
 st.set_page_config(
@@ -29,13 +35,13 @@ def load_data(symbol, days=30):
         from src.data import AlpacaDataProvider
         provider = AlpacaDataProvider()
         
-        current_time = datetime.now()
+        current_time = get_eastern_time()
         
-        # Smart Market Close Detection
-        # Market hours: 9:30 AM - 4:00 PM EST, Monday-Friday
-        # Pre-market: 4:00 AM - 9:30 AM
-        # After hours: 4:00 PM - 8:00 PM  
-        # Overnight: 8:00 PM - 4:00 AM (next day)
+        # Smart Market Close Detection (all times in Eastern Time)
+        # Market hours: 9:30 AM - 4:00 PM ET, Monday-Friday
+        # Pre-market: 4:00 AM - 9:30 AM ET
+        # After hours: 4:00 PM - 8:00 PM ET  
+        # Overnight: 8:00 PM - 4:00 AM ET (next day)
         is_weekend = current_time.weekday() >= 5  # Saturday=5, Sunday=6
         is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
         is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
@@ -56,7 +62,7 @@ def load_data(symbol, days=30):
             # After hours: Show data through today's close
             market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
             # Apply 1-day buffer for free tier compliance
-            end_date = market_close_date - timedelta(days=1)
+            end_date = market_close_date- timedelta(days=1)
             data_context = "After hours - showing data through previous day's close"
             
         elif is_overnight:
@@ -148,7 +154,7 @@ def generate_signals(symbol, data):
         }
         
         signals = strategy.generate_signals(
-            current_date=datetime.now(),
+            current_date=get_eastern_time(),
             current_prices=current_prices,
             current_data=current_data,
             historical_data=historical_data,
@@ -171,7 +177,7 @@ def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Mom
         backtester = Backtester(initial_cash=initial_cash, commission=0.01)
         
         # Load data for all symbols
-        end_date = datetime.now() - timedelta(days=2)  # Avoid weekend issues
+        end_date = get_eastern_time() - timedelta(days=2)  # Avoid weekend issues
         start_date = end_date - timedelta(days=days_back)
         
         for symbol in symbols:
@@ -317,7 +323,7 @@ def generate_dashboard_transaction_log(results, symbols):
         
         # Create DataFrame and save
         transactions_df = pd.DataFrame(enhanced_trades)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = get_eastern_time().strftime('%Y%m%d_%H%M%S')
         filename = f"dashboard_transactions_{timestamp}.csv"
         
         transactions_df.to_csv(filename, index=False)
@@ -335,11 +341,11 @@ def main():
     st.markdown("**Python 3.12 • Real-time Data • Advanced Analytics • Named after Carl Friedrich Gauss**")
     
     # Time information and enhanced market status
-    current_time = datetime.now()
+    current_time = get_eastern_time()
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        st.markdown(f"**📅 Dashboard Time:** {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.markdown(f"**📅 Dashboard Time (ET):** {current_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     
     with col2:
         st.warning("⏰ Alpaca free tier: 15-min delay")
@@ -453,7 +459,7 @@ def main_analysis_tab(symbol, days_back):
         data_end = data.index[-1].strftime('%Y-%m-%d')
         
         # Add contextual information based on current market state
-        current_time = datetime.now()
+        current_time = get_eastern_time()
         is_weekend = current_time.weekday() >= 5
         is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
         is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
@@ -705,7 +711,7 @@ def account_tab():
     
     # Data limitations notice with market context
     st.markdown("---")
-    current_time = datetime.now()
+    current_time = get_eastern_time()
     is_weekend = current_time.weekday() >= 5
     is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
     is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
