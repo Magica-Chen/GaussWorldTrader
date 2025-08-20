@@ -4,35 +4,34 @@ from abc import ABC, abstractmethod
 import pandas as pd
 from datetime import datetime
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Any
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 class BaseStrategy(ABC):
-    def __init__(self, name: str, parameters: dict[str, Any] | None = None) -> None:
-        self.name = name
+    def __init__(self, parameters: Dict[str, Any] = None) -> None:
         self.parameters = parameters or {}
-        self.logger = logging.getLogger(f"{__name__}.{name}")
+        self.logger = logging.getLogger(self.__class__.__name__)
         
         # Strategy state
-        self.positions: dict[str, Any] = {}
-        self.signals: list[dict[str, Any]] = []
-        self.performance_metrics: dict[str, Any] = {}
+        self.positions: Dict[str, Any] = {}
+        self.signals: List[Dict[str, Any]] = []
+        self.performance_metrics: Dict[str, Any] = {}
         
     @abstractmethod
-    def generate_signals(self, current_date: datetime, current_prices: dict[str, float],
-                        current_data: dict[str, dict[str, Any]], 
-                        historical_data: dict[str, pd.DataFrame],
-                        portfolio) -> list[dict[str, Any]]:
+    def generate_signals(self, current_date: datetime, current_prices: Dict[str, float],
+                        current_data: Dict[str, Any], 
+                        historical_data: Dict[str, pd.DataFrame],
+                        portfolio: Any = None) -> List[Dict[str, Any]]:
         pass
     
     @abstractmethod
     def calculate_position_size(self, symbol: str, price: float, 
-                              portfolio_value: float, volatility: float | None = None) -> int:
+                              portfolio_value: float, volatility: float = None) -> int:
         pass
     
-    def validate_signal(self, signal: dict[str, Any]) -> bool:
+    def validate_signal(self, signal: Dict[str, Any]) -> bool:
         required_fields = ['symbol', 'action', 'quantity']
         
         if not all(field in signal for field in required_fields):
@@ -119,7 +118,7 @@ class BaseStrategy(ABC):
         
         # MACD
         if len(data) >= 26:
-            indicators['macd'], indicators['macd_signal'] = self._calculate_macd(data['close'])
+            indicators['macd'], indicators['macd_signal'], indicators['macd_histogram'] = self._calculate_macd(data['close'])
         
         # Bollinger Bands
         if len(data) >= 20:
@@ -146,7 +145,8 @@ class BaseStrategy(ABC):
         ema_slow = prices.ewm(span=slow).mean()
         macd = ema_fast - ema_slow
         macd_signal = macd.ewm(span=signal).mean()
-        return macd, macd_signal
+        macd_histogram = macd - macd_signal
+        return macd, macd_signal, macd_histogram
     
     def _calculate_bollinger_bands(self, prices: pd.Series, period: int = 20, std_dev: int = 2):
         sma = prices.rolling(window=period).mean()
@@ -181,7 +181,13 @@ class BaseStrategy(ABC):
     
     def get_strategy_info(self) -> Dict[str, Any]:
         return {
-            'name': self.name,
+            'name': self.__class__.__name__,
+            'type': 'Unknown',
+            'timeframe': 'Unknown',
+            'risk_level': 'Unknown', 
+            'expected_trades_per_day': 'Unknown',
+            'holding_period': 'Unknown',
+            'description': 'No description',
             'parameters': self.parameters,
             'current_positions': self.positions,
             'total_signals_generated': len(self.signals),

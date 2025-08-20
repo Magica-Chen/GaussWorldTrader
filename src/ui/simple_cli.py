@@ -44,6 +44,18 @@ if HAS_RICH:
     def validate_config_cmd():
         """🔧 Validate configuration"""
         validate_config()
+    
+    @app.command("check-positions")
+    def check_positions_cmd():
+        """📈 Check current positions and recent orders"""
+        from src.ui.portfolio_commands import check_positions_and_orders
+        check_positions_and_orders()
+    
+    @app.command("watchlist-trade") 
+    def watchlist_trade_cmd():
+        """🎯 Analyze watchlist and execute trades"""
+        from src.ui.portfolio_commands import get_watchlists_and_trade
+        get_watchlists_and_trade()
         
     def account_info_impl():
         try:

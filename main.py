@@ -35,6 +35,17 @@ except ImportError:
     def get_config():
         return Config()
 
+# Import new modules
+try:
+    from src.account import AccountManager, PositionManager, OrderManager
+    from src.agent import AgentManager
+    ACCOUNT_MODULE_AVAILABLE = True
+    AGENT_MODULE_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Some modules not available: {e}")
+    ACCOUNT_MODULE_AVAILABLE = False
+    AGENT_MODULE_AVAILABLE = False
+
 try:
     from rich.console import Console
     console = Console()
@@ -42,6 +53,7 @@ try:
 except ImportError:
     HAS_RICH = False
     console = None
+
 
 def main() -> None:
     """

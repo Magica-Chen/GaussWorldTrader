@@ -60,6 +60,27 @@ app.add_typer(trade_app, name="trade")
 app.add_typer(strategy_app, name="strategy")
 app.add_typer(analysis_app, name="analysis")
 
+# Add new v2.0 commands as top-level commands
+@app.command("check-positions")
+def check_positions_cmd() -> None:
+    """📈 Check current positions and recent orders"""
+    try:
+        from src.ui.portfolio_commands import check_positions_and_orders
+        check_positions_and_orders()
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+        raise typer.Exit(1)
+
+@app.command("watchlist-trade")
+def watchlist_trade_cmd() -> None:
+    """🎯 Analyze watchlist and execute trades"""
+    try:
+        from src.ui.portfolio_commands import get_watchlists_and_trade
+        get_watchlists_and_trade()
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
+        raise typer.Exit(1)
+
 @account_app.command("info")
 def account_info(
     refresh: Annotated[bool, typer.Option("--refresh", "-r", help="Force refresh cache")] = False

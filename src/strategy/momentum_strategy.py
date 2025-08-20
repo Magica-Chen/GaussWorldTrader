@@ -22,7 +22,7 @@ class MomentumStrategy(BaseStrategy):
         if parameters:
             default_params.update(parameters)
         
-        super().__init__("Momentum Strategy", default_params)
+        super().__init__(default_params)
         
     def generate_signals(self, current_date: datetime, current_prices: Dict[str, float],
                         current_data: Dict[str, Dict[str, Any]], 
@@ -267,3 +267,19 @@ class MomentumStrategy(BaseStrategy):
             suggestions['position_size_pct'] = min(0.15, self.parameters['position_size_pct'] * 1.2)  # Larger positions
         
         return suggestions
+    
+    def get_strategy_info(self) -> Dict[str, Any]:
+        """Get strategy information"""
+        return {
+            'name': 'Momentum Strategy',
+            'type': 'Classical Technical',
+            'timeframe': 'Intraday to Daily',
+            'risk_level': 'Medium-High', 
+            'expected_trades_per_day': '3-8',
+            'holding_period': 'Hours to days',
+            'description': 'Momentum-based strategy using RSI, volume confirmation, and price momentum',
+            'parameters': self.parameters,
+            'current_positions': self.positions,
+            'total_signals_generated': len(self.signals),
+            'performance_metrics': self.performance_metrics
+        }

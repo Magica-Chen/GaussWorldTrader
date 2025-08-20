@@ -9,7 +9,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 
 **🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
 **👤 Author**: Magica Chen  
-**📊 Version**: 1.1.0 - Complete CLI with Technical Analysis
+**📊 Version**: 2.0.0 - AI-Powered Trading with Advanced Portfolio Management
 
 ## ✨ Features
 
@@ -30,10 +30,32 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 - **Technical Analysis**: Full suite of technical indicators and pattern recognition
 - **Strategy Framework**: Modular strategy system with momentum strategy example
 
+### 🤖 AI-Powered Analysis (NEW v2.0)
+- **Multi-LLM Integration**: Support for OpenAI, DeepSeek, Claude, and Moonshot APIs
+- **Fundamental Analysis**: AI-powered company analysis with financial ratios
+- **Economic Context**: Integration with FRED economic data for macro analysis
+- **News Sentiment**: Intelligent news analysis and sentiment scoring
+- **Comparative Analysis**: Multi-provider AI analysis for comprehensive insights
+
+### 📈 Advanced Portfolio Management (NEW v2.0)
+- **Real-time Positions**: Live position tracking with P&L analysis
+- **Order Management**: Complete order lifecycle management and analysis
+- **Portfolio Analytics**: Advanced performance metrics and risk assessment
+- **Account Configuration**: Full Alpaca account settings management
+- **Risk Metrics**: Value at Risk, concentration analysis, and drawdown tracking
+
 ### 🖥️ Modern Interfaces
 - **Rich CLI**: Beautiful command-line interface with progress bars and tables
+- **Advanced Dashboard**: Modern Streamlit web dashboard with tabbed interface
 - **Async Operations**: Non-blocking data fetching and order execution
-- **Performance Monitoring**: Real-time metrics and error tracking  
+- **Performance Monitoring**: Real-time metrics and error tracking
+
+### 🎯 Advanced Trading Strategies (NEW v2.0)
+- **Classical Strategies**: Momentum, Scalping, Statistical Arbitrage, Trend Following, Value Investment
+- **ML-Based Strategies**: XGBoost, Deep Learning (LSTM/CNN/Attention), Gaussian Process
+- **Strategy Selector**: Intelligent strategy recommendation based on market conditions
+- **Backtesting Engine**: Comprehensive strategy backtesting with performance comparison
+- **Portfolio Management**: Multi-strategy portfolio optimization and risk management  
 - **Configuration Management**: TOML-based config with validation
 - **Risk Management**: Built-in position sizing and risk controls
 
@@ -42,10 +64,13 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 ```
 GaussWorldTrader/
 ├── src/
-│   ├── analysis/           # Technical analysis and financial metrics
+│   ├── account/           # 🆕 Account management and portfolio tracking
+│   ├── agent/             # 🆕 AI-powered analysis with multi-LLM support
+│   ├── analysis/          # Technical analysis and financial metrics
+│   ├── backtest/          # 🆕 Enhanced backtesting framework (moved from trade)
 │   ├── data/              # Data providers (Alpaca, Crypto, News, Macro)  
 │   ├── strategy/          # Trading strategy implementations
-│   ├── trade/             # Trading engine, portfolio, and backtesting
+│   ├── trade/             # Trading engine and execution
 │   ├── ui/                # User interfaces (CLI and dashboard)
 │   └── utils/             # Utility functions and validators
 ├── config/                # Configuration management
@@ -105,6 +130,12 @@ GaussWorldTrader/
 - **Finhub**: Get free API key from [finnhub.io](https://finnhub.io)
 - **FRED**: Get free API key from [fred.stlouisfed.org](https://fred.stlouisfed.org)
 
+### 🤖 Optional AI Provider API Keys (NEW v2.0)
+- **OpenAI**: Get API key from [platform.openai.com](https://platform.openai.com)
+- **DeepSeek**: Get API key from [platform.deepseek.com](https://platform.deepseek.com)
+- **Claude (Anthropic)**: Get API key from [console.anthropic.com](https://console.anthropic.com)
+- **Moonshot**: Get API key from [platform.moonshot.cn](https://platform.moonshot.cn)
+
 ### 🚀 Performance Optimizations
 The system includes Python 3.12 specific optimizations:
 - Faster startup times with optimized imports
@@ -115,6 +146,29 @@ The system includes Python 3.12 specific optimizations:
 ## 🚀 Quick Start
 
 ### Modern CLI Interface (Python 3.12 Powered)
+
+#### 🆕 Quick CLI Reference for v2.0 Features
+
+```bash
+# Portfolio Management Commands
+python main.py check-positions          # Check positions and recent orders  
+python main.py watchlist-trade          # Analyze watchlist and execute trades
+
+# Using the new modules programmatically
+python -c "
+from src.account import AccountManager
+manager = AccountManager()
+print(manager.get_account_summary())
+"
+
+# AI Analysis (requires API keys)
+python -c "
+from src.agent import AgentManager
+agent = AgentManager()
+analysis = agent.analyze_symbol('AAPL', 'openai')
+print(analysis)
+"
+```
 
 ```bash
 # 🆕 Rich, beautiful CLI with async operations
@@ -136,11 +190,90 @@ python main.py trade place AAPL buy 100 --type market --dry-run
 # Strategy Operations
 python main.py strategy run AAPL GOOGL TSLA --strategy momentum --watch
 
+# 🆕 NEW v2.0 Commands - Advanced Portfolio Management
+python main.py check-positions                              # Check positions and recent orders
+python main.py watchlist-trade                              # Analyze watchlist and execute trades
+
 # Get help for any command
 python main.py --help
 python main.py account --help
+
+# 🌟 NEW Advanced Dashboard (v2.0)
+python run_dashboard.py                                    # Launch advanced web dashboard
+# Opens in browser at http://localhost:3721
 python main.py analysis technical --help
 ```
+
+## 🌟 Advanced Web Dashboard
+
+The new Advanced Dashboard provides a comprehensive web-based interface for trading management, analysis, and strategy execution.
+
+### 🚀 Getting Started with Dashboard
+
+```bash
+# Install dashboard dependencies
+pip install -r requirements_dashboard.txt
+
+# Test dashboard functionality
+python test_dashboard.py
+
+# Launch the dashboard
+python run_dashboard.py
+```
+
+The dashboard will open automatically at **http://localhost:3721**
+
+### 📊 Dashboard Features
+
+#### 💼 Account Tab
+- **Portfolio Overview**: Real-time account metrics, equity, buying power, and P&L
+- **Position Management**: Detailed position tracking with real-time P&L and risk metrics
+- **Order Management**: Active orders, order history, and new order placement
+- **Account Configuration**: Trading permissions, risk settings, and account preferences
+- **P&L Analysis**: Interactive charts showing portfolio performance over time
+
+#### 📈 Live Analysis Tab
+- **Current Positions Analysis**: Technical and fundamental analysis for your active positions
+- **Symbol Analysis**: Comprehensive analysis for any stock symbol
+- **Market Overview**: Market indices, sentiment indicators, and sector performance
+- **Watchlist Management**: Track and analyze your favorite symbols
+
+#### 🧪 Backtesting Tab
+- **Position Backtesting**: Test strategies on your current positions
+- **Strategy Comparison**: Compare performance of multiple trading strategies
+- **Custom Backtesting**: Advanced backtesting with custom parameters
+- **Results Analysis**: Detailed performance metrics and visualizations
+
+#### ⚡ Trading Tab
+- **Quick Trade**: Fast order execution with risk management tools
+- **Strategy Trading**: Execute trades based on algorithmic strategies
+- **Options Trading**: Options chain analysis and trading (coming soon)
+- **Trade History**: Complete trading history with performance analysis
+
+### 🎯 8 Built-in Trading Strategies
+
+The dashboard integrates all advanced trading strategies:
+
+#### Classical Strategies
+1. **Momentum Strategy**: RSI and volume-based momentum trading
+2. **Scalping Strategy**: High-frequency VWAP-based scalping
+3. **Statistical Arbitrage**: Mean reversion and correlation trading
+4. **Trend Following**: Multi-timeframe trend analysis
+5. **Value Investment**: Fundamental analysis-based value investing
+
+#### ML-Based Strategies  
+6. **XGBoost Strategy**: Gradient boosting with feature engineering
+7. **Deep Learning Strategy**: LSTM, CNN, and Attention ensemble models
+8. **Gaussian Process Strategy**: Bayesian approach with uncertainty quantification
+
+### 🔧 Dashboard Architecture
+
+- **Modern UI**: Clean Streamlit interface with responsive design
+- **Real-time Data**: Live market data and account information
+- **Interactive Charts**: Advanced Plotly visualizations
+- **Risk Management**: Built-in position sizing and risk controls
+- **Strategy Integration**: Seamless integration with all trading strategies
+- **Export Capabilities**: Download reports and analysis results
 
 ### ⚡ CLI Features
 
@@ -181,6 +314,184 @@ python main.py analysis technical --help
 - **Progress Indicators**: Beautiful progress bars for long operations
 - **Error Recovery**: Graceful handling with detailed error messages
 - **Configuration Validation**: Automatic API credential validation
+
+## 🆕 NEW v2.0 Features Usage
+
+### 🤖 AI-Powered Analysis
+
+The new AI agent system provides comprehensive fundamental analysis using multiple LLM providers:
+
+```python
+from src.agent import AgentManager, FundamentalAnalyzer
+
+# Initialize AI agent manager
+agent_manager = AgentManager({
+    'finnhub_api_key': 'your_finnhub_key',
+    'fred_api_key': 'your_fred_key'
+})
+
+# Analyze a company using OpenAI
+analysis = agent_manager.analyze_symbol('AAPL', provider='openai')
+
+# Compare analysis from multiple AI providers
+comparison = agent_manager.compare_providers('AAPL', ['openai', 'claude', 'deepseek'])
+
+# Generate comprehensive report
+analyzer = FundamentalAnalyzer()
+company_analysis = analyzer.analyze_company('AAPL')
+report = analyzer.generate_report(company_analysis)
+print(report)
+```
+
+#### Supported AI Providers:
+- **OpenAI**: GPT-4 for comprehensive financial analysis
+- **DeepSeek**: Quantitative analysis with mathematical rigor
+- **Claude**: Balanced, nuanced investment insights
+- **Moonshot**: Bilingual analysis with Chinese market perspective
+
+#### AI Analysis Features:
+- Company profile and financial metrics
+- News sentiment analysis
+- Economic context integration
+- Analyst recommendations synthesis
+- Risk assessment and valuation
+
+### 📈 Advanced Portfolio Management
+
+Complete account and portfolio management with real-time tracking:
+
+```python
+from src.account import AccountManager, PositionManager, OrderManager, PortfolioTracker
+
+# Initialize account management
+account_manager = AccountManager()
+position_manager = PositionManager(account_manager)
+order_manager = OrderManager(account_manager)
+portfolio_tracker = PortfolioTracker(account_manager)
+
+# Account operations
+account_summary = account_manager.get_account_summary()
+trading_status = account_manager.get_trading_account_status()
+
+# Position management
+all_positions = position_manager.get_all_positions()
+positions_analysis = position_manager.analyze_positions()
+position_details = position_manager.get_position_details('AAPL')
+
+# Order management
+recent_orders = order_manager.get_recent_orders_summary()
+order_analysis = order_manager.analyze_orders(days=30)
+
+# Place new orders
+order_result = order_manager.place_order(
+    symbol='AAPL',
+    qty=100,
+    side='buy',
+    order_type='market'
+)
+
+# Portfolio analytics
+portfolio_performance = portfolio_tracker.get_portfolio_performance('1D')
+asset_allocation = portfolio_tracker.get_asset_allocation()
+risk_metrics = portfolio_tracker.calculate_risk_metrics()
+portfolio_report = portfolio_tracker.generate_portfolio_report()
+```
+
+#### Portfolio Features:
+- Real-time position tracking with P&L
+- Order history and analysis
+- Advanced performance metrics
+- Risk assessment and concentration analysis
+- Asset allocation visualization
+- Account configuration management
+
+### 🎯 Watchlist Trading
+
+Automated watchlist analysis and strategy-based trading:
+
+```python
+# From command line
+python main.py watchlist-trade
+
+# The system will:
+# 1. Display current watchlist symbols
+# 2. Check market status and account buying power
+# 3. Analyze each symbol using momentum strategy
+# 4. Generate trading signals
+# 5. Ask for confirmation before executing trades
+# 6. Place orders and provide execution feedback
+```
+
+#### Watchlist Features:
+- Pre-configured symbol watchlist (SPY, QQQ, AAPL, etc.)
+- Real-time market status checking
+- Strategy-based signal generation
+- Risk-aware position sizing
+- Confirmation prompts for safety
+- Execution tracking and reporting
+
+### 📊 Enhanced Backtesting
+
+Moved to dedicated module with advanced analytics:
+
+```python
+from src.backtest import Backtester, PerformanceAnalyzer
+
+# Enhanced backtesting
+backtester = Backtester(initial_cash=100000)
+backtester.add_data('AAPL', historical_data)
+
+# Run backtest with strategy
+results = backtester.run_backtest(strategy.generate_signals)
+
+# Advanced performance analysis
+analyzer = PerformanceAnalyzer(results)
+advanced_metrics = analyzer.calculate_advanced_metrics()
+performance_report = analyzer.generate_performance_report()
+
+# Generate visualization charts
+analyzer.plot_performance_charts('performance_charts.png')
+```
+
+#### Enhanced Metrics:
+- Value at Risk (VaR) and Conditional VaR
+- Sortino and Calmar ratios
+- Rolling Sharpe ratio analysis
+- Skewness and kurtosis analysis
+- Tail ratio and risk distribution
+- Interactive performance charts
+
+### 🔧 Account Configuration
+
+Full Alpaca account settings management:
+
+```python
+from src.account import AccountConfigurator
+
+configurator = AccountConfigurator(account_manager)
+
+# View current configurations
+current_config = configurator.get_account_configurations()
+config_summary = configurator.get_configuration_summary()
+
+# Enable/disable features
+configurator.enable_extended_hours_trading()
+configurator.enable_fractional_trading()
+configurator.set_pdt_check('BOTH')
+configurator.set_margin_multiplier(2.0)
+
+# Apply preset configurations
+configurator.apply_conservative_settings()  # Safe settings
+configurator.apply_aggressive_settings()    # Advanced trading
+```
+
+#### Configuration Options:
+- Trading hours (standard/extended)
+- Fractional share trading
+- Pattern Day Trader (PDT) checks
+- Margin multiplier settings
+- Short selling permissions
+- Trade confirmation emails
 
 ### Web Dashboard
 
@@ -255,14 +566,17 @@ strategy = MomentumStrategy({
 
 ## Backtesting Framework
 
-Comprehensive backtesting with:
+🆕 **Enhanced in v2.0** - Moved to dedicated module with advanced analytics:
+
 - **Performance Metrics**: Returns, Sharpe ratio, max drawdown
-- **Risk Analysis**: VaR, volatility, correlation analysis
+- **Advanced Risk Analysis**: VaR, CVaR, Sortino ratio, Calmar ratio
 - **Trade Analysis**: Win rate, profit factor, trade distribution
 - **Portfolio Tracking**: Full position and cash flow history
+- **Rolling Metrics**: Rolling Sharpe, volatility analysis
+- **Visualization**: Performance charts and drawdown analysis
 
 ```python
-from src.trade import Backtester
+from src.backtest import Backtester, PerformanceAnalyzer
 from src.strategy import MomentumStrategy
 
 backtester = Backtester(initial_cash=100000)
@@ -271,7 +585,14 @@ backtester.add_data('AAPL', historical_data)
 strategy = MomentumStrategy()
 results = backtester.run_backtest(strategy.generate_signals)
 
+# Basic results
 print(backtester.get_results_summary())
+
+# Advanced analysis
+analyzer = PerformanceAnalyzer(results)
+advanced_metrics = analyzer.calculate_advanced_metrics()
+performance_report = analyzer.generate_performance_report()
+analyzer.plot_performance_charts('charts.png')
 ```
 
 ## API Configuration
@@ -287,6 +608,12 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets
 # Financial Data
 FINHUB_API_KEY=your_finhub_key
 FRED_API_KEY=your_fred_key
+
+# 🆕 AI Provider APIs (Optional - for fundamental analysis)
+OPENAI_API_KEY=your_openai_key
+DEEPSEEK_API_KEY=your_deepseek_key
+ANTHROPIC_API_KEY=your_claude_key
+MOONSHOT_API_KEY=your_moonshot_key
 
 # Optional
 DATABASE_URL=sqlite:///trading_system.db
@@ -378,6 +705,35 @@ We welcome contributions to Gauss World Trader! Here's how to get started:
 ## License
 
 This project is licensed under the MIT License - see LICENSE file for details.
+
+## 📈 Changelog
+
+### v2.0.0 - AI-Powered Trading with Advanced Portfolio Management
+**🆕 Major New Features:**
+- **AI Agent System**: Multi-LLM support (OpenAI, DeepSeek, Claude, Moonshot)
+- **Advanced Portfolio Management**: Real-time tracking, analytics, and risk assessment
+- **Enhanced Backtesting**: Dedicated module with advanced performance metrics
+- **Account Configuration**: Full Alpaca account settings management
+- **Watchlist Trading**: Automated analysis and strategy-based execution
+- **Position Management**: Comprehensive position tracking and analysis
+- **Order Management**: Complete order lifecycle management
+
+**🔧 Technical Improvements:**
+- Modular architecture with dedicated account, agent, and backtest modules
+- Improved timezone handling for US market hours
+- Enhanced error handling and validation
+- Better API integration and data sources
+- Advanced risk metrics and analysis
+
+**🎯 New CLI Commands:**
+- `check-positions`: Quick portfolio status check
+- `watchlist-trade`: Automated watchlist analysis and trading
+
+### v1.1.0 - Complete CLI with Technical Analysis
+- Rich CLI interface with technical indicators
+- Modern Python 3.12+ optimizations
+- Streamlit dashboard
+- Basic trading and backtesting framework
 
 ## Disclaimer
 

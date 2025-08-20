@@ -70,8 +70,18 @@ pre-commit>=3.5.0
 sphinx>=7.2.0
 sphinx-rtd-theme>=1.3.0
 
+# Time and timezone handling
+pytz>=2023.3
+
+# Dashboard enhancements (optional)
+streamlit-option-menu>=0.3.6
+
 # Additional Python 3.12 optimizations
 tomli>=2.0.1; python_version < "3.11"
 tomli-w>=1.0.0
 pydantic>=2.4.0
 httpx>=0.25.0
+
+# Optional ML dependencies (install separately if needed)
+# tensorflow>=2.13.0   # For deep learning strategies
+# xgboost>=1.7.0       # For XGBoost strategies
