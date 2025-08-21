@@ -13,6 +13,7 @@ class BaseStrategy(ABC):
     def __init__(self, parameters: Dict[str, Any] = None) -> None:
         self.parameters = parameters or {}
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.name = self.__class__.__name__  # Add name attribute
         
         # Strategy state
         self.positions: Dict[str, Any] = {}

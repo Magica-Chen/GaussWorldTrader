@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple Streamlit Dashboard for the Trading System
+Enhanced with crypto, news, and technical analysis features
 Designed to work with existing components
 """
 
@@ -9,8 +10,10 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import pytz
+from typing import Optional
 
 # Add project to path
 sys.path.insert(0, '../..')  # Go up two levels to project root
@@ -164,6 +167,75 @@ def generate_signals(symbol, data):
         return signals, None
     except Exception as e:
         return [], str(e)
+
+@st.cache_data(ttl=600)
+def get_technical_indicators(data):
+    """Get technical indicators with caching"""
+    try:
+        from src.analysis import TechnicalAnalysis
+        
+        if data is None or data.empty:
+            return None
+        
+        ta = TechnicalAnalysis()
+        
+        indicators = {}
+        
+        # RSI
+        rsi = ta.rsi(data['close'])
+        indicators['rsi'] = rsi.iloc[-1] if not rsi.empty else 0
+        
+        # Moving Averages
+        sma_20 = ta.sma(data['close'], 20)
+        sma_50 = ta.sma(data['close'], 50)
+        indicators['sma_20'] = sma_20.iloc[-1] if not sma_20.empty else 0
+        indicators['sma_50'] = sma_50.iloc[-1] if not sma_50.empty else 0
+        
+        # MACD
+        macd, signal, histogram = ta.macd(data['close'])
+        indicators['macd'] = macd.iloc[-1] if not macd.empty else 0
+        
+        # Trend Analysis
+        trend_info = ta.trend_analysis(data)
+        indicators['trends'] = trend_info
+        
+        # Support/Resistance
+        support_resistance = ta.calculate_support_resistance(data)
+        indicators['support_resistance'] = support_resistance
+        
+        return indicators
+        
+    except Exception as e:
+        st.error(f"Error calculating technical indicators: {e}")
+        return None
+
+@st.cache_data(ttl=600)
+def get_crypto_data():
+    """Get cryptocurrency data with caching"""
+    try:
+        from src.data import CryptoDataProvider
+        provider = CryptoDataProvider()
+        
+        btc_data = provider.get_bitcoin_price()
+        return btc_data, None
+        
+    except Exception as e:
+        return None, str(e)
+
+@st.cache_data(ttl=1200)
+def get_news_sentiment(symbol):
+    """Get news and sentiment data with caching"""
+    try:
+        from src.data import NewsDataProvider
+        provider = NewsDataProvider()
+        
+        news = provider.get_company_news(symbol)
+        sentiment = provider.get_news_sentiment(symbol)
+        
+        return news, sentiment, None
+        
+    except Exception as e:
+        return [], None, str(e)
 
 @st.cache_data(ttl=1800)  # Cache for 30 minutes
 def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Momentum"):
@@ -383,11 +455,14 @@ def main():
         st.cache_data.clear()
         st.rerun()
     
-    # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Live Analysis", "🔄 Backtesting", "💼 Account", "🔄 Trading"])
+    # Create tabs with enhanced features
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "📈 Live Analysis", "🔄 Backtesting", "💼 Account", 
+        "🔄 Trading", "📰 News & Sentiment", "₿ Crypto"
+    ])
     
     with tab1:
-        # Live Analysis Tab
+        # Live Analysis Tab (enhanced with technical indicators)
         main_analysis_tab(symbol, days_back)
     
     with tab2:
@@ -401,9 +476,17 @@ def main():
     with tab4:
         # Trading Tab
         trading_tab(symbol)
+    
+    with tab5:
+        # News & Sentiment Tab (new feature from class dashboard)
+        news_sentiment_tab(symbol)
+    
+    with tab6:
+        # Cryptocurrency Tab (new feature from class dashboard)
+        crypto_tab()
 
 def main_analysis_tab(symbol, days_back):
-    """Main analysis tab content"""
+    """Main analysis tab content with technical indicators"""
     # Main layout
     col1, col2 = st.columns([2, 1])
     
@@ -416,13 +499,10 @@ def main_analysis_tab(symbol, days_back):
         
         if error:
             if "Using" in error or "showing data through" in error or "delayed" in error:
-                # This is contextual information or a warning about using fallback data
                 st.info(f"ℹ️ {error}")
             elif "previous day" in error or "older historical" in error:
-                # This is a warning about using fallback data
                 st.warning(f"⚠️ {error}")
             else:
-                # This is a real error
                 st.error(f"❌ Data Error: {error}")
                 st.info("💡 Make sure your Alpaca API keys are configured in .env file")
                 return
@@ -431,22 +511,43 @@ def main_analysis_tab(symbol, days_back):
             st.warning(f"⚠️ No data found for {symbol}")
             return
         
-        # Create candlestick chart
-        fig = go.Figure(data=go.Candlestick(
-            x=data.index,
-            open=data['open'],
-            high=data['high'],
-            low=data['low'],
-            close=data['close'],
-            name=symbol
-        ))
+        # Create enhanced candlestick chart with volume
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.05,
+            row_heights=[0.7, 0.3],
+            subplot_titles=(f"{symbol} Price Chart", "Volume")
+        )
+        
+        # Candlestick chart
+        fig.add_trace(
+            go.Candlestick(
+                x=data.index,
+                open=data['open'],
+                high=data['high'],
+                low=data['low'],
+                close=data['close'],
+                name=symbol
+            ),
+            row=1, col=1
+        )
+        
+        # Volume chart
+        fig.add_trace(
+            go.Bar(
+                x=data.index,
+                y=data['volume'],
+                name='Volume',
+                opacity=0.3
+            ),
+            row=2, col=1
+        )
         
         fig.update_layout(
-            title=f"{symbol} Price Chart",
-            yaxis_title="Price ($)",
-            xaxis_title="Date",
-            height=500,
-            showlegend=False
+            height=600,
+            showlegend=False,
+            xaxis_rangeslider_visible=False
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -454,17 +555,15 @@ def main_analysis_tab(symbol, days_back):
         # Recent data table
         st.subheader("📋 Recent Data")
         
-        # Show data period information with contextual messaging
+        # Show data period information
         data_start = data.index[0].strftime('%Y-%m-%d')
         data_end = data.index[-1].strftime('%Y-%m-%d')
         
-        # Add contextual information based on current market state
         current_time = get_eastern_time()
         is_weekend = current_time.weekday() >= 5
         is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
-        is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
-        is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
-        is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+        is_after_hours = 16 <= current_time.hour < 20
+        is_overnight = current_time.hour >= 20 or current_time.hour < 4
         
         # Generate contextual message
         if is_weekend:
@@ -508,6 +607,26 @@ def main_analysis_tab(symbol, days_back):
             label="Range (30d)",
             value=f"${data['low'].min():.2f} - ${data['high'].max():.2f}"
         )
+        
+        # Technical Indicators
+        st.subheader("🔬 Technical Indicators")
+        
+        with st.spinner("Calculating indicators..."):
+            indicators = get_technical_indicators(data)
+        
+        if indicators:
+            st.metric("RSI (14)", f"{indicators['rsi']:.2f}")
+            st.metric("SMA 20", f"${indicators['sma_20']:.2f}")
+            st.metric("SMA 50", f"${indicators['sma_50']:.2f}")
+            st.metric("MACD", f"{indicators['macd']:.4f}")
+            
+            # Trend Analysis
+            st.subheader("📈 Trend Analysis")
+            if 'trends' in indicators and indicators['trends']:
+                trends = indicators['trends']
+                st.write("**Short-term:**", trends.get('short_term_trend', 'N/A'))
+                st.write("**Medium-term:**", trends.get('medium_term_trend', 'N/A'))
+                st.write("**Long-term:**", trends.get('long_term_trend', 'N/A'))
         
         # Trading signals
         st.subheader("🧠 Trading Signals")
@@ -553,7 +672,7 @@ def main_analysis_tab(symbol, days_back):
         
         with col4:
             st.metric("Day Trades", account_data.get('day_trade_count', 0))
-    
+
 def backtesting_tab():
     """Backtesting functionality tab"""
     st.subheader("🔄 Strategy Backtesting")
@@ -708,15 +827,30 @@ def account_tab():
                 st.success(f"Status: ✅ {status}")
             else:
                 st.warning(f"Status: ⚠️ {status}")
+        
+        # Show current positions
+        try:
+            from src.trade import TradingEngine
+            engine = TradingEngine()
+            positions = engine.get_current_positions()
+            
+            if positions:
+                st.subheader("📊 Current Positions")
+                positions_df = pd.DataFrame(positions)
+                st.dataframe(positions_df, use_container_width=True)
+            else:
+                st.info("📭 No current positions")
+                
+        except Exception as e:
+            st.error(f"Error fetching positions: {e}")
     
-    # Data limitations notice with market context
+    # Data limitations notice
     st.markdown("---")
     current_time = get_eastern_time()
     is_weekend = current_time.weekday() >= 5
     is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
-    is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
-    is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
-    is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+    is_after_hours = 16 <= current_time.hour < 20
+    is_overnight = current_time.hour >= 20 or current_time.hour < 4
     
     if is_weekend:
         st.info("📊 **Data Notice**: Weekend - Historical data available through Friday's close. Free tier includes 1-day buffer for SIP compliance.")
@@ -821,6 +955,138 @@ def trading_tab(symbol):
     st.markdown("---")
     st.warning("⚠️ **Risk Warning**: Trading involves risk. Only trade with money you can afford to lose.")
     st.info("📈 **Paper Trading**: Make sure you're in paper trading mode for testing")
+
+def news_sentiment_tab(symbol):
+    """News and sentiment analysis tab"""
+    st.subheader("📰 News & Sentiment Analysis")
+    
+    with st.spinner("Loading news and sentiment data..."):
+        news, sentiment, error = get_news_sentiment(symbol)
+    
+    if error:
+        st.error(f"Error loading news data: {error}")
+        st.info("💡 Make sure your news API is configured properly")
+        return
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader(f"📰 Company News - {symbol}")
+        
+        if news and len(news) > 0:
+            for article in news[:5]:  # Show top 5
+                st.write(f"**{article.get('headline', 'No headline')}**")
+                st.write(f"Source: {article.get('source', 'Unknown')}")
+                if 'url' in article and article['url']:
+                    st.write(f"[Read more]({article['url']})")
+                st.write("---")
+        else:
+            st.info("No news articles available")
+    
+    with col2:
+        st.subheader("📊 Sentiment Analysis")
+        
+        if sentiment:
+            col2a, col2b, col2c = st.columns(3)
+            
+            with col2a:
+                st.metric(
+                    "Bullish %", 
+                    f"{sentiment.get('sentiment_bullish_percent', 0):.1f}%"
+                )
+            
+            with col2b:
+                st.metric(
+                    "Bearish %", 
+                    f"{sentiment.get('sentiment_bearish_percent', 0):.1f}%"
+                )
+            
+            with col2c:
+                st.metric(
+                    "News Score", 
+                    f"{sentiment.get('company_news_score', 0):.2f}"
+                )
+            
+            # Sentiment visualization
+            if 'sentiment_bullish_percent' in sentiment and 'sentiment_bearish_percent' in sentiment:
+                bullish = sentiment['sentiment_bullish_percent']
+                bearish = sentiment['sentiment_bearish_percent']
+                neutral = 100 - bullish - bearish
+                
+                fig = go.Figure(data=[go.Pie(
+                    labels=['Bullish', 'Bearish', 'Neutral'],
+                    values=[bullish, bearish, neutral],
+                    marker_colors=['green', 'red', 'gray']
+                )])
+                
+                fig.update_layout(
+                    title="Sentiment Distribution",
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No sentiment data available")
+
+def crypto_tab():
+    """Cryptocurrency information tab"""
+    st.subheader("₿ Cryptocurrency Information")
+    
+    with st.spinner("Loading cryptocurrency data..."):
+        crypto_data, error = get_crypto_data()
+    
+    if error:
+        st.error(f"Error loading crypto data: {error}")
+        st.info("💡 Make sure your crypto data provider is configured")
+        return
+    
+    if crypto_data:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Bitcoin (USD)", 
+                f"${crypto_data.get('price_usd', 0):,.2f}"
+            )
+        
+        with col2:
+            st.metric(
+                "Bitcoin (EUR)", 
+                f"€{crypto_data.get('price_eur', 0):,.2f}"
+            )
+        
+        with col3:
+            st.metric(
+                "Bitcoin (GBP)", 
+                f"£{crypto_data.get('price_gbp', 0):,.2f}"
+            )
+        
+        # Additional crypto metrics if available
+        if 'market_cap' in crypto_data:
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Market Cap", 
+                    f"${crypto_data.get('market_cap', 0):,.0f}"
+                )
+            
+            with col2:
+                st.metric(
+                    "24h Volume", 
+                    f"${crypto_data.get('volume_24h', 0):,.0f}"
+                )
+            
+            with col3:
+                st.metric(
+                    "24h Change", 
+                    f"{crypto_data.get('change_24h', 0):.2f}%"
+                )
+    else:
+        st.info("No cryptocurrency data available")
+    
+    st.markdown("---")
+    st.info("💡 **Crypto Data**: Real-time cryptocurrency prices and market information")
 
 if __name__ == "__main__":
     main()

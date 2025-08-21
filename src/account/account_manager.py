@@ -288,3 +288,42 @@ Using: {"Paper Trading" if "paper" in self.base_url else "Live Trading"}
             validation['errors'].append(f"Validation failed: {str(e)}")
         
         return validation
+    
+    def get_account_configurations(self) -> Dict[str, Any]:
+        """Get account configurations"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/v2/account/configurations",
+                headers=self.headers,
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            configurations = response.json()
+            self.logger.info("Account configurations retrieved successfully")
+            
+            return configurations
+            
+        except Exception as e:
+            self.logger.error(f"Error retrieving account configurations: {e}")
+            return {"error": str(e)}
+    
+    def update_account_configurations(self, configurations: Dict[str, Any]) -> Dict[str, Any]:
+        """Update account configurations"""
+        try:
+            response = requests.patch(
+                f"{self.base_url}/v2/account/configurations",
+                headers=self.headers,
+                json=configurations,
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            updated_config = response.json()
+            self.logger.info("Account configurations updated successfully")
+            
+            return updated_config
+            
+        except Exception as e:
+            self.logger.error(f"Error updating account configurations: {e}")
+            return {"error": str(e)}

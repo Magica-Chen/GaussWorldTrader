@@ -94,8 +94,8 @@ def initialize_session_state():
     if 'account_manager' not in st.session_state:
         try:
             st.session_state.account_manager = AccountManager()
-            st.session_state.position_manager = PositionManager()
-            st.session_state.order_manager = OrderManager()
+            st.session_state.position_manager = PositionManager(st.session_state.account_manager)
+            st.session_state.order_manager = OrderManager(st.session_state.account_manager)
             st.session_state.fundamental_analyzer = FundamentalAnalyzer()
             st.session_state.strategy_selector = get_strategy_selector()
             st.session_state.data_provider = AlpacaDataProvider()
@@ -121,7 +121,7 @@ def create_sidebar():
     
     if selected_tab != st.session_state.current_tab:
         st.session_state.current_tab = selected_tab
-        st.experimental_rerun()
+        st.rerun()
     
     st.sidebar.markdown("---")
     
@@ -130,7 +130,7 @@ def create_sidebar():
     
     try:
         # Account status
-        account_info = st.session_state.account_manager.get_account_status()
+        account_info = st.session_state.account_manager.get_trading_account_status()
         equity = account_info.get('equity', 0)
         buying_power = account_info.get('buying_power', 0)
         
@@ -188,7 +188,7 @@ def render_account_overview():
     st.subheader("📈 Portfolio Overview")
     
     try:
-        account_info = st.session_state.account_manager.get_account_status()
+        account_info = st.session_state.account_manager.get_trading_account_status()
         
         # Key metrics in columns
         col1, col2, col3, col4 = st.columns(4)
@@ -286,7 +286,7 @@ def render_positions_view():
                     return color
                 return ''
             
-            styled_df = df.style.applymap(style_pnl, subset=['Unrealized P&L', 'Unrealized %'])
+            styled_df = df.style.map(style_pnl, subset=['Unrealized P&L', 'Unrealized %'])
             st.dataframe(styled_df, use_container_width=True)
         else:
             st.info("No active positions found.")
@@ -337,9 +337,9 @@ def render_orders_view():
             # Date range selector
             col1, col2 = st.columns(2)
             with col1:
-                start_date = st.date_input("Start Date", datetime.now() - timedelta(days=30))
+                start_date = st.date_input("Start Date", datetime.now() - timedelta(days=30), key="order_history_start_date")
             with col2:
-                end_date = st.date_input("End Date", datetime.now())
+                end_date = st.date_input("End Date", datetime.now(), key="order_history_end_date")
             
             if st.button("Load Order History"):
                 orders = st.session_state.order_manager.get_orders(
@@ -382,16 +382,16 @@ def render_place_order_form():
         symbol = st.text_input("Symbol", placeholder="e.g., AAPL")
         side = st.selectbox("Side", ["buy", "sell"])
         order_type = st.selectbox("Order Type", ["market", "limit", "stop", "stop_limit"])
-        quantity = st.number_input("Quantity", min_value=1, value=1)
+        quantity = st.number_input("Quantity", min_value=1, value=1, key="order_quantity")
     
     with col2:
         if order_type in ["limit", "stop_limit"]:
-            limit_price = st.number_input("Limit Price", min_value=0.01, value=1.00, step=0.01)
+            limit_price = st.number_input("Limit Price", min_value=0.01, value=1.00, step=0.01, key="order_limit_price")
         else:
             limit_price = None
         
         if order_type in ["stop", "stop_limit"]:
-            stop_price = st.number_input("Stop Price", min_value=0.01, value=1.00, step=0.01)
+            stop_price = st.number_input("Stop Price", min_value=0.01, value=1.00, step=0.01, key="order_stop_price")
         else:
             stop_price = None
         
@@ -481,9 +481,9 @@ def render_pnl_analysis():
     # Date range selector
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=90))
+        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=90), key="pnl_start_date")
     with col2:
-        end_date = st.date_input("End Date", datetime.now())
+        end_date = st.date_input("End Date", datetime.now(), key="pnl_end_date")
     
     try:
         # Generate sample P&L data (in a real implementation, this would come from the account manager)
@@ -938,13 +938,13 @@ def render_watchlist_analysis():
                 return color
             return ''
         
-        styled_df = df.style.applymap(style_change, subset=['Change', 'Change %'])
+        styled_df = df.style.map(style_change, subset=['Change', 'Change %'])
         st.dataframe(styled_df, use_container_width=True)
         
         # Remove from watchlist
         if st.button("🗑️ Clear Watchlist"):
             st.session_state.watchlist = []
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("Your watchlist is empty. Add symbols to start tracking them.")
 
@@ -1004,13 +1004,13 @@ def render_position_backtesting():
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            start_date = st.date_input("Start Date", datetime.now() - timedelta(days=365))
+            start_date = st.date_input("Start Date", datetime.now() - timedelta(days=365), key="backtest1_start_date")
         
         with col2:
-            end_date = st.date_input("End Date", datetime.now())
+            end_date = st.date_input("End Date", datetime.now(), key="backtest1_end_date")
         
         with col3:
-            initial_capital = st.number_input("Initial Capital", min_value=1000, value=100000, step=1000)
+            initial_capital = st.number_input("Initial Capital", min_value=1000, value=100000, step=1000, key="backtest1_initial_capital")
         
         if st.button("🚀 Run Backtest", type="primary"):
             run_backtest_analysis(selected_symbol, selected_strategy, start_date, end_date, initial_capital)
@@ -1038,14 +1038,14 @@ def render_strategy_comparison():
     
     with col2:
         symbol = st.text_input("Symbol for Comparison", value="SPY", placeholder="e.g., SPY, AAPL")
-        initial_capital = st.number_input("Initial Capital", min_value=1000, value=100000, step=1000)
+        initial_capital = st.number_input("Initial Capital", min_value=1000, value=100000, step=1000, key="backtest2_initial_capital")
     
     # Date range
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=365))
+        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=365), key="backtest2_start_date")
     with col2:
-        end_date = st.date_input("End Date", datetime.now())
+        end_date = st.date_input("End Date", datetime.now(), key="backtest2_end_date")
     
     if st.button("📊 Compare Strategies") and selected_strategies:
         render_strategy_comparison_results(selected_strategies, symbol, start_date, end_date, initial_capital)
@@ -1065,21 +1065,21 @@ def render_custom_backtest():
             height=100
         )
         strategy = st.selectbox("Strategy", st.session_state.strategy_selector.list_strategies())
-        initial_capital = st.number_input("Initial Capital", min_value=1000, value=100000, step=1000)
+        initial_capital = st.number_input("Initial Capital", min_value=1000, value=100000, step=1000, key="backtest3_initial_capital")
     
     with col2:
         st.markdown("**Advanced Settings**")
-        commission = st.number_input("Commission per Trade", min_value=0.0, value=1.0, step=0.1)
-        slippage = st.number_input("Slippage (%)", min_value=0.0, value=0.1, step=0.01)
+        commission = st.number_input("Commission per Trade", min_value=0.0, value=1.0, step=0.1, key="backtest3_commission")
+        slippage = st.number_input("Slippage (%)", min_value=0.0, value=0.1, step=0.01, key="backtest3_slippage")
         position_sizing = st.selectbox("Position Sizing", ["Equal Weight", "Risk Parity", "Kelly Criterion"])
         rebalance_freq = st.selectbox("Rebalance Frequency", ["Daily", "Weekly", "Monthly", "Quarterly"])
     
     # Date range
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=730))
+        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=730), key="backtest3_start_date")
     with col2:
-        end_date = st.date_input("End Date", datetime.now())
+        end_date = st.date_input("End Date", datetime.now(), key="backtest3_end_date")
     
     if st.button("🧪 Run Custom Backtest", type="primary"):
         symbol_list = [s.strip().upper() for s in symbols.split('\n') if s.strip()]
@@ -1169,22 +1169,22 @@ def render_quick_trading():
         
         with col1a:
             action = st.selectbox("Action", ["Buy", "Sell"])
-            quantity = st.number_input("Quantity", min_value=1, value=100)
+            quantity = st.number_input("Quantity", min_value=1, value=100, key="trading_quantity")
         
         with col1b:
             order_type = st.selectbox("Order Type", ["Market", "Limit", "Stop Loss", "Stop Limit"])
             if order_type in ["Limit", "Stop Limit"]:
-                limit_price = st.number_input("Limit Price", value=current_price if 'current_price' in locals() else 100.0)
+                limit_price = st.number_input("Limit Price", value=current_price if 'current_price' in locals() else 100.0, key="trading_limit_price")
         
         # Risk management
         st.markdown("#### 🛡️ Risk Management")
         col1a, col1b = st.columns(2)
         
         with col1a:
-            stop_loss = st.number_input("Stop Loss (%)", min_value=0.0, value=5.0, step=0.1)
+            stop_loss = st.number_input("Stop Loss (%)", min_value=0.0, value=5.0, step=0.1, key="trading_stop_loss")
         
         with col1b:
-            take_profit = st.number_input("Take Profit (%)", min_value=0.0, value=10.0, step=0.1)
+            take_profit = st.number_input("Take Profit (%)", min_value=0.0, value=10.0, step=0.1, key="trading_take_profit")
         
         if st.button("🚀 Execute Trade", type="primary"):
             execute_trade_simulation(symbol, action, quantity, order_type, locals())
@@ -1194,7 +1194,7 @@ def render_quick_trading():
         st.markdown("#### 📊 Position Calculator")
         
         try:
-            account_info = st.session_state.account_manager.get_account_status()
+            account_info = st.session_state.account_manager.get_trading_account_status()
             portfolio_value = float(account_info.get('equity', 100000))
             
             risk_pct = st.slider("Risk per Trade (%)", 0.5, 10.0, 2.0, 0.1)
@@ -1281,10 +1281,10 @@ def render_trade_history():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        start_date = st.date_input("From", datetime.now() - timedelta(days=30))
+        start_date = st.date_input("From", datetime.now() - timedelta(days=30), key="analysis_start_date")
     
     with col2:
-        end_date = st.date_input("To", datetime.now())
+        end_date = st.date_input("To", datetime.now(), key="analysis_end_date")
     
     with col3:
         symbol_filter = st.text_input("Symbol Filter", placeholder="Optional")
@@ -1306,7 +1306,7 @@ def render_trade_history():
                         return ''
                 return ''
             
-            styled_df = df.style.applymap(style_pnl, subset=['P&L'])
+            styled_df = df.style.map(style_pnl, subset=['P&L'])
             st.dataframe(styled_df, use_container_width=True)
             
             # Trade statistics
@@ -1478,7 +1478,7 @@ def generate_strategy_signals(strategy, symbols, auto_trade):
         else:
             return 'color: orange; font-weight: bold'
     
-    styled_df = df.style.applymap(style_signals, subset=['Signal'])
+    styled_df = df.style.map(style_signals, subset=['Signal'])
     st.dataframe(styled_df, use_container_width=True)
     
     if auto_trade:
