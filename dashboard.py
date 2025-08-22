@@ -28,9 +28,12 @@ def run_dashboard(mode="advanced"):
     if mode == "simple":
         dashboard_file = "src/ui/simple_dashboard.py"
         print("🔹 Starting Simple Dashboard via Streamlit...")
-    else:  # advanced (default)
+    elif mode == "advanced":
         dashboard_file = "src/ui/advanced_dashboard.py"
         print("🔷 Starting Advanced Dashboard via Streamlit...")
+    else:  # modern (default)
+        dashboard_file = "src/ui/modern_dashboard.py"
+        print("🌍 Starting Modern Dashboard via Streamlit...")
     
     try:
         # Launch using streamlit run command
@@ -83,7 +86,7 @@ def launch_dashboard(mode="advanced"):
         print("• 📰 News & Sentiment Analysis")
         print("• ₿ Cryptocurrency Data")
         print("=" * 60)
-    else:  # advanced (default)
+    elif mode == "advanced":
         dashboard_file = "src/ui/advanced_dashboard.py"
         print("🔷 Starting Gauss World Trader - Advanced Dashboard")
         print("=" * 60)
@@ -92,6 +95,19 @@ def launch_dashboard(mode="advanced"):
         print("• 📊 Live Market Analysis (Technical & Fundamental)")
         print("• 🧪 Strategy Backtesting (8+ Trading Strategies)")
         print("• ⚡ Active Trading Interface")
+        print("=" * 60)
+    else:  # modern (default)
+        dashboard_file = "src/ui/modern_dashboard.py"
+        print("🌍 Starting Gauss World Trader - Modern Unified Dashboard")
+        print("=" * 60)
+        print("Dashboard Features:")
+        print("• 📈 Live Market Analysis (Technical & Fundamental)")
+        print("• 💼 Comprehensive Account Management")
+        print("• 🧪 Enhanced Strategy Backtesting with CSV Export")
+        print("• ⚡ Active Trading with Risk Management")
+        print("• 📰 News & Sentiment Analysis")
+        print("• ₿ Cryptocurrency Information")
+        print("• 📊 Portfolio Analytics & Optimization")
         print("=" * 60)
     
     try:
@@ -135,14 +151,18 @@ if __name__ == "__main__":
                        help='Use simple dashboard interface (includes crypto, news, and technical analysis)')
     parser.add_argument('--advanced', action='store_true', 
                        help='Use advanced dashboard interface (comprehensive trading and backtesting)')
+    parser.add_argument('--modern', action='store_true', 
+                       help='Use modern unified dashboard interface (combines all features)')
     
     args = parser.parse_args()
     
     # Determine dashboard mode
     if args.simple:
         mode = "simple"
+    elif args.advanced:
+        mode = "advanced"
     else:
-        mode = "advanced"  # default
+        mode = "modern"  # default
     
     # Execute command
     if args.command == "launch":

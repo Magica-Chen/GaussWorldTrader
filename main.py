@@ -4,11 +4,8 @@ Gauss World Trader - Python 3.12+ Optimized Entry Point
 Features async operations, rich CLI, and performance monitoring
 Named after Carl Friedrich Gauss, pioneer of mathematical finance
 """
-from __future__ import annotations
-
 import sys
 import os
-import asyncio
 from pathlib import Path
 
 # Add the project root to the Python path

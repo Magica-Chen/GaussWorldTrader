@@ -3,19 +3,23 @@ import argparse
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 import json
-
+import pytz
+EASTERN = pytz.timezone('US/Eastern')
 from config import Config
 from src.data import AlpacaDataProvider, CryptoDataProvider, NewsDataProvider, MacroDataProvider
 from src.trade import TradingEngine, Backtester
 from src.strategy import MomentumStrategy
 from src.analysis import TechnicalAnalysis, FinancialMetrics
 from src.utils import setup_logger
+from src.utils.watchlist_manager import WatchlistManager
+
 
 class CLIInterface:
     def __init__(self):
         self.logger = setup_logger('CLI', Config.LOG_LEVEL)
         self.trading_engine = None
         self.data_provider = None
+        self.watchlist_manager = WatchlistManager()
         
         try:
             self.data_provider = AlpacaDataProvider()
@@ -74,6 +78,17 @@ class CLIInterface:
         news_parser.add_argument('--market', action='store_true', help='Get market news')
         news_parser.add_argument('--sentiment', help='Get news sentiment for symbol')
         
+        # Watchlist commands
+        watchlist_parser = subparsers.add_parser('watchlist', help='Watchlist management')
+        watchlist_group = watchlist_parser.add_mutually_exclusive_group(required=True)
+        watchlist_group.add_argument('--list', action='store_true', help='Show current watchlist')
+        watchlist_group.add_argument('--add', help='Add symbol to watchlist')
+        watchlist_group.add_argument('--remove', help='Remove symbol from watchlist')
+        watchlist_group.add_argument('--clear', action='store_true', help='Clear entire watchlist')
+        watchlist_group.add_argument('--info', action='store_true', help='Show watchlist information')
+        watchlist_group.add_argument('--backup', help='Backup watchlist to file')
+        watchlist_group.add_argument('--restore', help='Restore watchlist from backup file')
+        
         return parser
     
     def handle_account_command(self, args):
@@ -107,7 +122,9 @@ class CLIInterface:
             return
         
         try:
-            end_date = datetime.now()
+            # Use ET time for trading data fetching
+
+            end_date = datetime.now(EASTERN)
             start_date = end_date - timedelta(days=args.days)
             
             data = self.data_provider.get_bars(
@@ -170,7 +187,7 @@ class CLIInterface:
                 mock_portfolio = Portfolio()
                 
                 signals = strategy.generate_signals(
-                    current_date=datetime.now(),
+                    current_date=datetime.now(EASTERN),  # Use ET time for trading logic
                     current_prices=current_prices,
                     current_data={},
                     historical_data=historical_data,
@@ -296,6 +313,73 @@ class CLIInterface:
         except Exception as e:
             print(f"Error fetching news: {e}")
     
+    def handle_watchlist_command(self, args):
+        """Handle watchlist management commands"""
+        try:
+            if args.list:
+                watchlist = self.watchlist_manager.get_watchlist()
+                if watchlist:
+                    print(f"\n📋 Current Watchlist ({len(watchlist)} symbols):")
+                    print("-" * 50)
+                    for i, symbol in enumerate(watchlist, 1):
+                        print(f"{i:2d}. {symbol}")
+                else:
+                    print("📭 Watchlist is empty")
+            
+            elif args.add:
+                symbol = args.add.upper().strip()
+                if self.watchlist_manager.add_symbol(symbol):
+                    print(f"✅ Added {symbol} to watchlist")
+                else:
+                    print(f"ℹ️  {symbol} is already in watchlist")
+            
+            elif args.remove:
+                symbol = args.remove.upper().strip()
+                if self.watchlist_manager.remove_symbol(symbol):
+                    print(f"✅ Removed {symbol} from watchlist")
+                else:
+                    print(f"❌ {symbol} not found in watchlist")
+            
+            elif args.clear:
+                confirm = input("⚠️  Are you sure you want to clear the entire watchlist? (y/N): ")
+                if confirm.lower() in ['y', 'yes']:
+                    self.watchlist_manager.clear_watchlist()
+                    print("✅ Watchlist cleared")
+                else:
+                    print("❌ Operation cancelled")
+            
+            elif args.info:
+                info = self.watchlist_manager.get_watchlist_info()
+                watchlist = info.get('watchlist', [])
+                metadata = info.get('metadata', {})
+                
+                print(f"\n📊 Watchlist Information:")
+                print("-" * 50)
+                print(f"Symbols: {len(watchlist)}")
+                print(f"Created: {metadata.get('created', 'Unknown')}")
+                print(f"Last Updated: {metadata.get('last_updated', 'Unknown')}")
+                print(f"Description: {metadata.get('description', 'N/A')}")
+                print(f"Version: {metadata.get('version', 'N/A')}")
+                
+                if watchlist:
+                    print(f"\nSymbols: {', '.join(watchlist)}")
+            
+            elif args.backup:
+                backup_file = self.watchlist_manager.backup_watchlist(args.backup)
+                print(f"✅ Watchlist backed up to {backup_file}")
+            
+            elif args.restore:
+                try:
+                    self.watchlist_manager.restore_from_backup(args.restore)
+                    print(f"✅ Watchlist restored from {args.restore}")
+                except FileNotFoundError:
+                    print(f"❌ Backup file not found: {args.restore}")
+                except ValueError as e:
+                    print(f"❌ Invalid backup file: {e}")
+        
+        except Exception as e:
+            print(f"❌ Error managing watchlist: {e}")
+    
     def run(self):
         parser = self.create_parser()
         args = parser.parse_args()
@@ -319,6 +403,8 @@ class CLIInterface:
             self.handle_analysis_command(args)
         elif args.command == 'news':
             self.handle_news_command(args)
+        elif args.command == 'watchlist':
+            self.handle_watchlist_command(args)
 
 if __name__ == '__main__':
     cli = CLIInterface()

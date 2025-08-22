@@ -8,8 +8,7 @@ import os
 import requests
 import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
-import pandas as pd
+from datetime import datetime
 
 class AccountManager:
     """Main account management interface"""

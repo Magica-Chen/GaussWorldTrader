@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import logging
 import pytz
+EASTERN = pytz.timezone('US/Eastern')
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -29,6 +30,7 @@ from src.agent.fundamental_analyzer import FundamentalAnalyzer
 from src.strategy.strategy_selector import get_strategy_selector
 from src.backtest import Backtester, Portfolio
 from src.data import AlpacaDataProvider
+from src.utils.watchlist_manager import WatchlistManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -82,10 +84,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def get_eastern_time():
-    """Get current time in Eastern timezone"""
-    eastern = pytz.timezone('US/Eastern')
-    return datetime.now(eastern)
+def get_local_time():
+    """Get current time in local timezone for display purposes"""
+    return datetime.now()
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -99,6 +100,11 @@ def initialize_session_state():
             st.session_state.fundamental_analyzer = FundamentalAnalyzer()
             st.session_state.strategy_selector = get_strategy_selector()
             st.session_state.data_provider = AlpacaDataProvider()
+            st.session_state.watchlist_manager = WatchlistManager()
+            
+            # Get subscription info for account tier display
+            st.session_state.subscription_info = st.session_state.data_provider.get_subscription_info()
+            
         except Exception as e:
             logger.error(f"Error initializing managers: {e}")
             st.error("Error initializing trading modules. Please check API configuration.")
@@ -149,7 +155,9 @@ def create_sidebar():
     st.sidebar.markdown("---")
     
     # Market status
-    current_time = get_eastern_time()
+    current_time = datetime.now(EASTERN)
+    local_time = get_local_time()
+    st.sidebar.markdown(f"**Local Time:** {local_time.strftime('%H:%M:%S')}")
     st.sidebar.markdown(f"**Market Time (ET):** {current_time.strftime('%H:%M:%S')}")
     
     # Market hours check (simplified)
@@ -888,65 +896,137 @@ def render_market_overview():
         st.plotly_chart(fig, use_container_width=True)
 
 def render_watchlist_analysis():
-    """Render watchlist with analysis"""
+    """Render watchlist with analysis using JSON persistence"""
     st.subheader("👀 Watchlist Analysis")
     
     # Watchlist management
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
-        new_symbol = st.text_input("Add Symbol to Watchlist", placeholder="e.g., AAPL")
+        new_symbol = st.text_input("Add Symbol to Watchlist", placeholder="e.g., AAPL", key="watchlist_add_symbol")
     
     with col2:
-        if st.button("➕ Add"):
+        if st.button("➕ Add", key="watchlist_add_btn"):
             if new_symbol:
-                if 'watchlist' not in st.session_state:
-                    st.session_state.watchlist = []
-                if new_symbol.upper() not in st.session_state.watchlist:
-                    st.session_state.watchlist.append(new_symbol.upper())
-                    st.success(f"Added {new_symbol.upper()} to watchlist")
+                try:
+                    if st.session_state.watchlist_manager.add_symbol(new_symbol):
+                        st.success(f"✅ Added {new_symbol.upper()} to watchlist")
+                        st.rerun()
+                    else:
+                        st.warning(f"ℹ️ {new_symbol.upper()} is already in watchlist")
+                except Exception as e:
+                    st.error(f"Error adding symbol: {e}")
     
-    # Display watchlist
-    if 'watchlist' not in st.session_state:
-        st.session_state.watchlist = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN']
-    
-    if st.session_state.watchlist:
-        watchlist_data = []
-        
-        for symbol in st.session_state.watchlist:
-            # Simulate market data
-            price = 100 + np.random.randn() * 20
-            change = np.random.randn() * 2
-            change_pct = change / price * 100
-            volume = np.random.randint(1000000, 50000000)
-            
-            watchlist_data.append({
-                'Symbol': symbol,
-                'Price': f"${price:.2f}",
-                'Change': f"${change:+.2f}",
-                'Change %': f"{change_pct:+.2f}%",
-                'Volume': f"{volume:,}",
-                'Action': '🗑️'
-            })
-        
-        df = pd.DataFrame(watchlist_data)
-        
-        # Style the dataframe
-        def style_change(val):
-            if isinstance(val, str) and ('+' in val or '-' in val):
-                color = 'color: green' if '+' in val else 'color: red'
-                return color
-            return ''
-        
-        styled_df = df.style.map(style_change, subset=['Change', 'Change %'])
-        st.dataframe(styled_df, use_container_width=True)
-        
-        # Remove from watchlist
-        if st.button("🗑️ Clear Watchlist"):
-            st.session_state.watchlist = []
+    with col3:
+        if st.button("🔄 Refresh", key="watchlist_refresh_btn"):
             st.rerun()
-    else:
-        st.info("Your watchlist is empty. Add symbols to start tracking them.")
+    
+    # Display current watchlist from JSON
+    try:
+        watchlist = st.session_state.watchlist_manager.get_watchlist()
+        
+        if watchlist:
+            st.write(f"**Current Watchlist ({len(watchlist)} symbols):**")
+            
+            watchlist_data = []
+            
+            for symbol in watchlist:
+                # Simulate market data (in production, fetch real data)
+                price = 100 + np.random.randn() * 20
+                change = np.random.randn() * 2
+                change_pct = change / price * 100
+                volume = np.random.randint(1000000, 50000000)
+                
+                watchlist_data.append({
+                    'Symbol': symbol,
+                    'Price': f"${price:.2f}",
+                    'Change': f"${change:+.2f}",
+                    'Change %': f"{change_pct:+.2f}%",
+                    'Volume': f"{volume:,}"
+                })
+            
+            df = pd.DataFrame(watchlist_data)
+            
+            # Style the dataframe
+            def style_change(val):
+                if isinstance(val, str) and ('+' in val or '-' in val):
+                    color = 'color: green' if '+' in val else 'color: red'
+                    return color
+                return ''
+            
+            styled_df = df.style.map(style_change, subset=['Change', 'Change %'])
+            st.dataframe(styled_df, use_container_width=True)
+            
+            # Symbol removal section
+            st.subheader("🗑️ Remove Symbols")
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                symbol_to_remove = st.selectbox("Select symbol to remove", watchlist, key="watchlist_remove_select")
+            
+            with col2:
+                if st.button("🗑️ Remove", key="watchlist_remove_btn"):
+                    try:
+                        if st.session_state.watchlist_manager.remove_symbol(symbol_to_remove):
+                            st.success(f"✅ Removed {symbol_to_remove} from watchlist")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {symbol_to_remove} not found in watchlist")
+                    except Exception as e:
+                        st.error(f"Error removing symbol: {e}")
+            
+            # Bulk operations
+            st.subheader("⚙️ Bulk Operations")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("🗑️ Clear All", key="watchlist_clear_btn"):
+                    try:
+                        st.session_state.watchlist_manager.clear_watchlist()
+                        st.success("✅ Watchlist cleared")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error clearing watchlist: {e}")
+            
+            with col2:
+                backup_filename = st.text_input("Backup filename (optional)", placeholder="watchlist_backup.json", key="watchlist_backup_name")
+                if st.button("💾 Backup", key="watchlist_backup_btn"):
+                    try:
+                        backup_file = st.session_state.watchlist_manager.backup_watchlist(backup_filename if backup_filename else None)
+                        st.success(f"✅ Watchlist backed up to {backup_file}")
+                    except Exception as e:
+                        st.error(f"Error backing up watchlist: {e}")
+        else:
+            st.info("📭 Your watchlist is empty. Add symbols to start tracking them.")
+            
+        # Watchlist info
+        with st.expander("📊 Watchlist Information"):
+            try:
+                info = st.session_state.watchlist_manager.get_watchlist_info()
+                metadata = info.get('metadata', {})
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**Symbols:** {len(watchlist)}")
+                    st.write(f"**Created:** {metadata.get('created', 'Unknown')}")
+                
+                with col2:
+                    st.write(f"**Last Updated:** {metadata.get('last_updated', 'Unknown')}")
+                    st.write(f"**Version:** {metadata.get('version', 'N/A')}")
+                
+                st.write(f"**Description:** {metadata.get('description', 'N/A')}")
+                
+            except Exception as e:
+                st.error(f"Error loading watchlist info: {e}")
+    
+    except Exception as e:
+        st.error(f"Error loading watchlist: {e}")
+        st.info("Using fallback watchlist")
+        # Fallback to hardcoded list if JSON fails
+        fallback_watchlist = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN']
+        st.write("**Fallback Watchlist:**")
+        st.write(", ".join(fallback_watchlist))
 
 def calculate_rsi(prices, period=14):
     """Calculate RSI indicator"""
@@ -1522,9 +1602,55 @@ def main():
     # Initialize session state
     initialize_session_state()
     
-    # Main header
+    # Main header with account tier info
     st.markdown('<h1 class="main-header">🌍 Gauss World Trader - Advanced Dashboard</h1>', 
                 unsafe_allow_html=True)
+    
+    # Account tier and delay notice header
+    current_time = datetime.now(EASTERN)
+    
+    try:
+        subscription_info = st.session_state.subscription_info
+        is_subscribed = subscription_info.get('has_sip_subscription', False)
+        account_tier = "Pro Tier" if is_subscribed else "Free Tier"
+        
+        # Check if today is a trading day
+        is_trading_day = current_time.weekday() < 5  # Monday=0, Friday=4
+        
+        # Create header info row
+        col1, col2, col3 = st.columns([2, 1, 2])
+        
+        with col1:
+            local_time = get_local_time()
+            st.markdown(f"**📅 Local Time:** {local_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        with col2:
+            # Account tier display
+            if is_subscribed:
+                st.success(f"✨ {account_tier}")
+            else:
+                st.info(f"🆓 {account_tier}")
+        
+        with col3:
+            # Data source notice for free tier on trading days
+            if not is_subscribed and is_trading_day:
+                st.info("📊 Today's data: Real-time IEX")
+                
+    except Exception as e:
+        # Fallback if subscription info not available
+        col1, col2 = st.columns([2, 2])
+        
+        with col1:
+            local_time = get_local_time()
+            st.markdown(f"**📅 Local Time:** {local_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        with col2:
+            is_trading_day = current_time.weekday() < 5
+            if is_trading_day:
+                st.info("🆓 Free Tier")
+                st.info("📊 Today's data: Real-time IEX")
+    
+    st.markdown("---")
     
     # Create sidebar
     create_sidebar()

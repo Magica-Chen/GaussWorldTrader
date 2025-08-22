@@ -22,7 +22,10 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 - **Cached Properties**: `@cached_property` for expensive computations
 
 ### 📊 Trading & Data Features  
+- **Smart Data Feeds**: Intelligent subscription detection with SIP historical + IEX real-time data
 - **Real-time Trading**: Integration with Alpaca Markets API for stocks and options
+- **Subscription Management**: Automatic Pro/Free tier detection with appropriate data feeds
+- **Watchlist System**: JSON-based watchlist management with CLI and dashboard editing
 - **Cryptocurrency Data**: Real-time crypto prices via CoinDesk and CoinGecko APIs  
 - **News & Sentiment**: Financial news and sentiment analysis via Finhub API
 - **Macro Economics**: Economic indicators via FRED API
@@ -127,6 +130,8 @@ GaussWorldTrader/
 
 ### 🔑 Required API Keys
 - **Alpaca**: Get free paper trading keys from [alpaca.markets](https://alpaca.markets)
+  - **Free Tier**: Access to SIP historical data + IEX real-time data for today
+  - **Pro Tier**: Full SIP real-time data access
 - **Finhub**: Get free API key from [finnhub.io](https://finnhub.io)
 - **FRED**: Get free API key from [fred.stlouisfed.org](https://fred.stlouisfed.org)
 
@@ -269,11 +274,13 @@ The dashboard integrates all advanced trading strategies:
 ### 🔧 Dashboard Architecture
 
 - **Modern UI**: Clean Streamlit interface with responsive design
-- **Real-time Data**: Live market data and account information
+- **Smart Data Feeds**: Automatic subscription detection and optimal data routing
+- **Real-time Data**: Live market data with subscription-aware messaging
 - **Interactive Charts**: Advanced Plotly visualizations
 - **Risk Management**: Built-in position sizing and risk controls
 - **Strategy Integration**: Seamless integration with all trading strategies
 - **Export Capabilities**: Download reports and analysis results
+- **Watchlist Management**: JSON-based watchlist with real-time editing
 
 ### ⚡ CLI Features
 
@@ -707,6 +714,26 @@ We welcome contributions to Gauss World Trader! Here's how to get started:
 This project is licensed under the MIT License - see LICENSE file for details.
 
 ## 📈 Changelog
+
+### v2.1.0 - Smart Data Feeds & Subscription Management (Latest)
+**🆕 Major New Features:**
+- **Smart Subscription Detection**: Automatic Pro/Free tier detection using SIP feed testing
+- **Optimized Data Feeds**: SIP historical + IEX real-time for Free tier, full SIP for Pro tier
+- **JSON Watchlist System**: Flexible watchlist management with CLI and dashboard editing
+- **Subscription-Aware UI**: Context-aware messaging showing data sources and real-time status
+- **Enhanced Strategy Execution**: Improved get_watchlists_and_trade with strategy parameters
+
+**🔧 Technical Improvements:**
+- Simplified subscription status checking with single function approach
+- Removed unused imports and functions for cleaner codebase
+- Enhanced error handling for subscription status detection
+- Improved timezone handling with consistent ET time for trading logic
+- Better data source routing based on subscription tier
+
+**🎯 Data Feed Optimizations:**
+- Free Tier: SIP historical data + IEX real-time data for current day
+- Pro Tier: Full SIP real-time data access
+- No more delayed data - all tiers get real-time information
 
 ### v2.0.0 - AI-Powered Trading with Advanced Portfolio Management
 **🆕 Major New Features:**

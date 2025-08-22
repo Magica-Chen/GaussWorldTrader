@@ -12,7 +12,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 from collections.abc import Sequence
-
+import pytz
+EASTERN = pytz.timezone('US/Eastern')
+import pandas as pd
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -241,14 +243,14 @@ async def _account_performance_async(days: int) -> None:
             
             console.print(perf_table)
             
-            # Time period information
-            end_date = datetime.now()
+            # Time period information - use ET time for trading logic
+            end_date = datetime.now(EASTERN)
             start_date = end_date - timedelta(days=days)
             console.print(f"\n[bold cyan]📅 Analysis Period:[/bold cyan]")
-            console.print(f"• Start: {start_date.strftime('%Y-%m-%d %H:%M:%S')}")
-            console.print(f"• End: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            console.print(f"• Start: {start_date.strftime('%Y-%m-%d %H:%M:%S')} ET")
+            console.print(f"• End: {end_date.strftime('%Y-%m-%d %H:%M:%S')} ET")
             console.print(f"• Duration: {days} days")
-            console.print(f"[yellow]⏰ Note: Alpaca free tier has 15-minute delayed data[/yellow]")
+            console.print(f"[yellow]⏰ Note: Free tier accounts have 15-min delayed current data[/yellow]")
             
             # Trading activity summary
             try:
@@ -290,15 +292,15 @@ async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, outpu
     # Validate symbols
     symbols = [s.upper().strip() for s in symbols]
     
-    # Calculate time period
-    end_date = datetime.now() - timedelta(days=2)  # Account for free tier delay
+    # Calculate time period - use ET time for trading logic
+    end_date = datetime.now(EASTERN)
     start_date = end_date - timedelta(days=days)
     
     console.print(f"[bold cyan]📅 Data Period:[/bold cyan]")
-    console.print(f"• Start: {start_date.strftime('%Y-%m-%d')}")
-    console.print(f"• End: {end_date.strftime('%Y-%m-%d')}")
+    console.print(f"• Start: {start_date.strftime('%Y-%m-%d')} ET")
+    console.print(f"• End: {end_date.strftime('%Y-%m-%d')} ET")
     console.print(f"• Duration: {days} days")
-    console.print(f"[yellow]⏰ Note: Using 2-day delayed data (Alpaca free tier: 15-min delay)[/yellow]\n")
+    console.print(f"[yellow]⏰ Note: Free tier accounts have 15-min delayed current data[/yellow]\n")
     
     with Progress(
         SpinnerColumn(),
@@ -390,7 +392,9 @@ async def _stream_data_async(symbols: list[str], live: bool, interval: int) -> N
     symbols = [s.upper().strip() for s in symbols]
     
     console.print(f"[bold cyan]📡 Streaming data for: {', '.join(symbols)}[/bold cyan]")
-    console.print(f"[bold cyan]📅 Stream Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/bold cyan]")
+    from datetime import datetime
+    local_time = datetime.now()
+    console.print(f"[bold cyan]📅 Stream Started: {local_time.strftime('%Y-%m-%d %H:%M:%S')} (Local Time)[/bold cyan]")
     if not live:
         console.print("[yellow]ℹ️ Using simulated streaming (--live not enabled)[/yellow]")
     console.print(f"[yellow]⏰ Note: Alpaca free tier has 15-minute delayed data[/yellow]")
@@ -440,12 +444,13 @@ async def _stream_data_async(symbols: list[str], live: bool, interval: int) -> N
                     data_table.add_column("Volume", style="blue")
                     data_table.add_column("Time", style="dim")
                     
-                    current_time = datetime.now()
+                    # Use ET time for trading logic
+                    current_time = datetime.now(EASTERN)
                     
                     for symbol in symbols:
                         try:
-                            # Get latest data (using delayed data for free tier)
-                            end_date = current_time - timedelta(days=2)
+                            # Get latest data
+                            end_date = current_time
                             start_date = end_date - timedelta(days=1)
                             
                             data = provider.get_bars(symbol, '1Day', start_date, end_date)
@@ -738,8 +743,8 @@ async def _technical_analysis_async(symbol: str, indicators: list[str], days: in
             
             # Fetch data
             provider = AlpacaDataProvider()
-            # Use older data to avoid free tier limitations
-            end_date = datetime.now() - timedelta(days=5)
+            # Use current data - ET time for trading logic
+            end_date = datetime.now(EASTERN)
             start_date = end_date - timedelta(days=days)
             
             data = provider.get_bars(symbol, '1Day', start_date, end_date)
@@ -865,11 +870,17 @@ async def _technical_analysis_async(symbol: str, indicators: list[str], days: in
             # Add price summary and time information
             console.print(f"\n[bold cyan]💰 Current Price: ${current_price:.2f}[/bold cyan]")
             console.print(f"\n[bold cyan]📅 Analysis Period:[/bold cyan]")
-            console.print(f"• Data Start: {data.index[0].strftime('%Y-%m-%d')}")
-            console.print(f"• Data End: {data.index[-1].strftime('%Y-%m-%d')}")
+            try:
+                data_start = data.index[0].strftime('%Y-%m-%d') if pd.notna(data.index[0]) else "N/A"
+                data_end = data.index[-1].strftime('%Y-%m-%d') if pd.notna(data.index[-1]) else "N/A"
+                console.print(f"• Data Start: {data_start}")
+                console.print(f"• Data End: {data_end}")
+            except (AttributeError, ValueError):
+                console.print(f"• Data Start: N/A")
+                console.print(f"• Data End: N/A")
             console.print(f"• Trading Days: {len(data)} days")
             console.print(f"• Requested Period: {days} days")
-            console.print(f"[yellow]⏰ Note: Using historical data (Alpaca free tier: 15-min delay)[/yellow]")
+            console.print(f"[yellow]⏰ Note: Free tier accounts have 15-min delayed current data[/yellow]")
             
         except ImportError as e:
             console.print(f"[red]❌ Technical analysis module not available: {e}[/red]")

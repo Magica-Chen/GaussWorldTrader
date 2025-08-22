@@ -31,7 +31,7 @@ if HAS_RICH:
     # Create Typer app
     app = typer.Typer(
         name="trading-system",
-        help="🚀 Quantitative Trading System (Python 3.12 Compatible)",
+        help="🚀 Quantitative Trading System",
         add_completion=False
     )
     
