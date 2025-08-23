@@ -11,17 +11,14 @@ import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
-from collections.abc import Sequence
-import pytz
-EASTERN = pytz.timezone('US/Eastern')
 import pandas as pd
+from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Confirm, Prompt
-from rich import print as rprint
 from rich.layout import Layout
 from rich.live import Live
 
@@ -74,11 +71,14 @@ def check_positions_cmd() -> None:
         raise typer.Exit(1)
 
 @app.command("watchlist-trade")
-def watchlist_trade_cmd() -> None:
+def watchlist_trade_cmd(
+    days: Annotated[int, typer.Option("--days", "-d", help="Backtesting days")] = 30,
+    strategy: Annotated[str, typer.Option("--strategy", "-s", help="Strategy to use")] = "momentum"
+) -> None:
     """🎯 Analyze watchlist and execute trades"""
     try:
         from src.ui.portfolio_commands import get_watchlists_and_trade
-        get_watchlists_and_trade()
+        get_watchlists_and_trade(days=days, strategy=strategy)
     except Exception as e:
         console.print(f"[red]❌ Error: {e}[/red]")
         raise typer.Exit(1)
@@ -402,7 +402,6 @@ async def _stream_data_async(symbols: list[str], live: bool, interval: int) -> N
     
     try:
         from src.data.alpaca_provider import AlpacaDataProvider
-        from datetime import datetime, timedelta
         import time
         
         provider = AlpacaDataProvider()

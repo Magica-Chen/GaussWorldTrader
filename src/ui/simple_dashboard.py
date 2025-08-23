@@ -9,12 +9,10 @@ import sys
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
-import pytz
-EASTERN = pytz.timezone('US/Eastern')
 from typing import Optional
+from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 
 # Add project to path
 sys.path.insert(0, '../..')  # Go up two levels to project root
@@ -31,75 +29,52 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-@st.cache_data(ttl=900)  # Cache for 15 minutes (free tier limitation)
+@st.cache_data(ttl=900)  # Cache for 15 minutes
 def load_data(symbol, days=30):
-    """Load market data with smart market close detection and free tier compliance"""
+    """Load market data with VIP/free tier detection"""
     try:
         from src.data import AlpacaDataProvider
         provider = AlpacaDataProvider()
-        subscription_info = provider.get_subscription_info()
-        is_subscribed = subscription_info.get('has_sip_subscription', False)
+        vip = provider.vip
+        using_iex = provider.using_iex
         
-        current_time = datetime.now(EASTERN)
+        current_time = now_et()
         
-        # Smart Market Close Detection (all times in Eastern Time)
-        # Market hours: 9:30 AM - 4:00 PM ET, Monday-Friday
-        # Pre-market: 4:00 AM - 9:30 AM ET
-        # After hours: 4:00 PM - 8:00 PM ET  
-        # Overnight: 8:00 PM - 4:00 AM ET (next day)
-        is_weekend = current_time.weekday() >= 5  # Saturday=5, Sunday=6
-        is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
-        is_after_hours = 16 <= current_time.hour < 20  # 4:00 PM - 8:00 PM
-        is_overnight = current_time.hour >= 20 or current_time.hour < 4  # 8:00 PM - 4:00 AM
-        is_market_open = not is_weekend and not is_pre_market and not is_after_hours and not is_overnight and (9 <= current_time.hour < 16)
+        # Use centralized market status detection
+        market_status = get_market_status(current_time)
+        is_weekend = current_time.weekday() >= 5
+        is_market_open = market_status == 'open'
         
-        # Determine the most recent market close - no longer need 1-day buffer
-        if is_weekend:
-            # Weekend: Show data through Friday's close
-            days_to_friday = current_time.weekday() - 4  # Go back to Friday
-            market_close_date = current_time - timedelta(days=days_to_friday)
-            market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
-            end_date = market_close_date
-            data_context = "Weekend - showing data through Friday's close"
-            
-        elif is_after_hours:
-            # After hours: Show data through today's close
-            market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
-            end_date = market_close_date
-            if is_subscribed:
-                data_context = "After hours - showing today's data (SIP real-time)"
+        # Determine data context based on market status and account tier
+        if market_status == 'closed':
+            if is_weekend:
+                days_to_friday = current_time.weekday() - 4
+                market_close_date = current_time - timedelta(days=days_to_friday)
+                market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
+                end_date = market_close_date
+                data_context = "Weekend - showing data through Friday's close"
             else:
-                data_context = "After hours - showing today's data (IEX real-time)"
-            
-        elif is_overnight:
-            # Overnight: Show data through today's close (if late night) or previous day's close (if early morning)
-            if current_time.hour >= 20:  # Late night (8 PM - midnight)
+                # Weekday closed hours
                 market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
-            else:  # Early morning (midnight - 4 AM)
-                market_close_date = (current_time - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
-            end_date = market_close_date
-            if is_subscribed:
-                data_context = "Overnight - showing today's data (SIP real-time)"
-            else:
-                data_context = "Overnight - showing today's data (IEX real-time)"
-            
-        elif is_pre_market:
-            # Pre-market: Show data through previous trading day's close
-            if current_time.weekday() == 0:  # Monday
-                market_close_date = current_time - timedelta(days=3)  # Go back to Friday
-            else:
-                market_close_date = current_time - timedelta(days=1)  # Previous day
-            market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
-            end_date = market_close_date
-            data_context = "Pre-market - showing data through previous trading day's close"
-            
-        else:
-            # During market hours: Show current data
+                if current_time.hour < 16:
+                    market_close_date = (current_time - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
+                end_date = market_close_date
+                data_context = f"Market closed - showing data through market close"
+        elif market_status in ['pre-market', 'post-market']:
             end_date = current_time
-            if is_subscribed:
-                data_context = "Market open - showing today's data (SIP real-time)"
-            else:
-                data_context = "Market open - showing today's data (IEX real-time)"
+            data_context = f"{market_status.title()} - showing today's data"
+        else:
+            # Market open
+            end_date = current_time
+            data_context = f"Market {market_status} - showing live data"
+        
+        # Add data source context
+        if vip:
+            data_context += " (SIP feed)"
+        elif using_iex:
+            data_context += " (IEX + SIP feeds)"
+        else:
+            data_context += " (Historical data)"
         
         start_date = end_date - timedelta(days=days)
         
@@ -117,7 +92,10 @@ def load_data(symbol, days=30):
         data = provider.get_bars(symbol, '1Day', start_date, end_date)
         
         if data is not None and not data.empty:
-            return data, "Using older historical data due to free tier limitations"
+            fallback_context = "Using historical data"
+            if using_iex:
+                fallback_context += " (IEX + SIP feeds)"
+            return data, fallback_context
         else:
             return None, "No data available"
             
@@ -163,7 +141,7 @@ def generate_signals(symbol, data):
         }
         
         signals = strategy.generate_signals(
-            current_date=datetime.now(EASTERN),
+            current_date=now_et(),
             current_prices=current_prices,
             current_data=current_data,
             historical_data=historical_data,
@@ -255,7 +233,7 @@ def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Mom
         backtester = Backtester(initial_cash=initial_cash, commission=0.01)
         
         # Load data for all symbols
-        end_date = datetime.now(EASTERN)  # Use current date
+        end_date = now_et()  # Use current date
         start_date = end_date - timedelta(days=days_back)
         
         for symbol in symbols:
@@ -401,7 +379,7 @@ def generate_dashboard_transaction_log(results, symbols):
         
         # Create DataFrame and save
         transactions_df = pd.DataFrame(enhanced_trades)
-        timestamp = datetime.now(EASTERN).strftime('%Y%m%d_%H%M%S')
+        timestamp = now_et().strftime('%Y%m%d_%H%M%S')
         filename = f"dashboard_transactions_{timestamp}.csv"
         
         transactions_df.to_csv(filename, index=False)
@@ -419,16 +397,17 @@ def main():
     st.markdown("**Python 3.12 • Real-time Data • Advanced Analytics • Named after Carl Friedrich Gauss**")
     
     # Account tier and delay notice header
-    current_time = datetime.now(EASTERN)
+    current_time = now_et()
     
     try:
-        # Initialize data provider to get subscription info
+        # Initialize data provider to get account info
         from src.data import AlpacaDataProvider
         data_provider = AlpacaDataProvider()
-        subscription_info = data_provider.get_subscription_info()
+        account_info = data_provider.get_account_info()
         
-        is_subscribed = subscription_info.get('has_sip_subscription', False)
-        account_tier = "Pro Tier" if is_subscribed else "Free Tier"
+        vip = account_info.get('vip', False)
+        using_iex = account_info.get('using_iex', False)
+        account_tier = "VIP Account" if vip else "Free Tier"
         
         # Check if today is a trading day
         is_trading_day = current_time.weekday() < 5  # Monday=0, Friday=4
@@ -442,15 +421,18 @@ def main():
         
         with col2:
             # Account tier display
-            if is_subscribed:
+            if vip:
                 st.success(f"✨ {account_tier}")
             else:
                 st.info(f"🆓 {account_tier}")
         
         with col3:
             # Data source notice for free tier on trading days
-            if not is_subscribed and is_trading_day:
-                st.info("📊 Today's data: Real-time IEX")
+            if not vip and is_trading_day:
+                if using_iex:
+                    st.info("📊 Today's data: Real-time IEX + SIP Historical")
+                else:
+                    st.info("📊 Historical data only")
         
         with col4:
             # Enhanced Market Status Indicator
@@ -508,7 +490,7 @@ def main():
     
     with tab1:
         # Live Analysis Tab (enhanced with technical indicators)
-        main_analysis_tab(symbol, days_back, is_subscribed)
+        main_analysis_tab(symbol, days_back, vip, using_iex)
     
     with tab2:
         # Backtesting Tab
@@ -530,7 +512,7 @@ def main():
         # Cryptocurrency Tab (new feature from class dashboard)
         crypto_tab()
 
-def main_analysis_tab(symbol, days_back, is_subscribed):
+def main_analysis_tab(symbol, days_back, vip, using_iex):
     """Main analysis tab content with technical indicators"""
     # Main layout
     col1, col2 = st.columns([2, 1])
@@ -608,32 +590,36 @@ def main_analysis_tab(symbol, days_back, is_subscribed):
             data_start = "N/A"
             data_end = "N/A"
         
-        current_time = datetime.now(EASTERN)
+        current_time = now_et()
+        market_status = get_market_status(current_time)
         is_weekend = current_time.weekday() >= 5
-        is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
-        is_after_hours = 16 <= current_time.hour < 20
-        is_overnight = current_time.hour >= 20 or current_time.hour < 4
         
         # Generate contextual message
         if is_weekend:
             context_msg = "Weekend - showing data through Friday's close"
-        elif is_overnight:
-            if is_subscribed:
-                context_msg = "Overnight - showing today's data (SIP real-time)"
+        elif market_status == 'closed':
+            if vip:
+                context_msg = "Market closed - showing today's data (SIP real-time)"
+            elif using_iex:
+                context_msg = "Market closed - showing today's data (IEX + SIP)"
             else:
-                context_msg = "Overnight - showing today's data (IEX real-time)"
-        elif is_after_hours:
-            if is_subscribed:
+                context_msg = "Market closed - historical data"
+        elif market_status == 'post-market':
+            if vip:
                 context_msg = "After hours - showing today's data (SIP real-time)"
+            elif using_iex:
+                context_msg = "After hours - showing today's data (IEX + SIP)"
             else:
-                context_msg = "After hours - showing today's data (IEX real-time)"
-        elif is_pre_market:
+                context_msg = "After hours - historical data"
+        elif market_status == 'pre-market':
             context_msg = "Pre-market - showing data through previous trading day's close"
-        else:
-            if is_subscribed:
+        elif market_status == 'open':
+            if vip:
                 context_msg = "Market open - showing today's data (SIP real-time)"
+            elif using_iex:
+                context_msg = "Market open - showing today's data (IEX + SIP)"
             else:
-                context_msg = "Market open - showing today's data (IEX real-time)"
+                context_msg = "Market open - historical data"
         
         st.info(f"📅 Data Period: {data_start} to {data_end} ({len(data)} trading days) | {context_msg}")
         
@@ -904,7 +890,7 @@ def account_tab():
     
     # Data limitations notice
     st.markdown("---")
-    current_time = datetime.now(EASTERN)
+    current_time = now_et()
     is_weekend = current_time.weekday() >= 5
     is_pre_market = (4 <= current_time.hour < 9) or (current_time.hour == 9 and current_time.minute < 30)
     is_after_hours = 16 <= current_time.hour < 20

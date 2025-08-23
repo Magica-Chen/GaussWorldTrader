@@ -16,8 +16,7 @@ import sys
 import os
 from pathlib import Path
 import logging
-import pytz
-EASTERN = pytz.timezone('US/Eastern')
+from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -102,8 +101,8 @@ def initialize_session_state():
             st.session_state.data_provider = AlpacaDataProvider()
             st.session_state.watchlist_manager = WatchlistManager()
             
-            # Get subscription info for account tier display
-            st.session_state.subscription_info = st.session_state.data_provider.get_subscription_info()
+            # Get account info for tier display
+            st.session_state.account_info = st.session_state.data_provider.get_account_info()
             
         except Exception as e:
             logger.error(f"Error initializing managers: {e}")
@@ -155,7 +154,7 @@ def create_sidebar():
     st.sidebar.markdown("---")
     
     # Market status
-    current_time = datetime.now(EASTERN)
+    current_time = now_et()
     local_time = get_local_time()
     st.sidebar.markdown(f"**Local Time:** {local_time.strftime('%H:%M:%S')}")
     st.sidebar.markdown(f"**Market Time (ET):** {current_time.strftime('%H:%M:%S')}")
@@ -1607,12 +1606,13 @@ def main():
                 unsafe_allow_html=True)
     
     # Account tier and delay notice header
-    current_time = datetime.now(EASTERN)
+    current_time = now_et()
     
     try:
-        subscription_info = st.session_state.subscription_info
-        is_subscribed = subscription_info.get('has_sip_subscription', False)
-        account_tier = "Pro Tier" if is_subscribed else "Free Tier"
+        account_info = st.session_state.account_info
+        vip = account_info.get('vip', False)
+        using_iex = account_info.get('using_iex', False)
+        account_tier = "VIP Account" if vip else "Free Tier"
         
         # Check if today is a trading day
         is_trading_day = current_time.weekday() < 5  # Monday=0, Friday=4
@@ -1626,15 +1626,18 @@ def main():
         
         with col2:
             # Account tier display
-            if is_subscribed:
+            if vip:
                 st.success(f"✨ {account_tier}")
             else:
                 st.info(f"🆓 {account_tier}")
         
         with col3:
             # Data source notice for free tier on trading days
-            if not is_subscribed and is_trading_day:
-                st.info("📊 Today's data: Real-time IEX")
+            if not vip and is_trading_day:
+                if using_iex:
+                    st.info("📊 Today's data: Real-time IEX + SIP Historical")
+                else:
+                    st.info("📊 Historical data only")
                 
     except Exception as e:
         # Fallback if subscription info not available

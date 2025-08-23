@@ -3,9 +3,8 @@ import argparse
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 import json
-import pytz
-EASTERN = pytz.timezone('US/Eastern')
 from config import Config
+from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 from src.data import AlpacaDataProvider, CryptoDataProvider, NewsDataProvider, MacroDataProvider
 from src.trade import TradingEngine, Backtester
 from src.strategy import MomentumStrategy

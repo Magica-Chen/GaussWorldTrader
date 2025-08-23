@@ -5,7 +5,6 @@ Features async operations, rich CLI, and performance monitoring
 Named after Carl Friedrich Gauss, pioneer of mathematical finance
 """
 import sys
-import os
 from pathlib import Path
 
 # Add the project root to the Python path

@@ -3,9 +3,8 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 from datetime import datetime, timedelta
 import logging
-import pytz
-EASTERN = pytz.timezone('US/Eastern')
 from config import Config
+from src.utils.timezone_utils import EASTERN, now_et
 
 class AlpacaDataProvider:
     def __init__(self):
@@ -19,26 +18,48 @@ class AlpacaDataProvider:
             api_version='v2'
         )
         
-        # Check subscription status and determine feed type
-        self.subscription_status = self._check_subscription_status()
+        # Check VIP status using get_latest_bar with SPY
+        self.vip = self._check_vip_status()
         self.default_feed = 'sip'
+        self.using_iex = False
         
-        if not self.subscription_status['has_sip_subscription']:
-            logging.info("Free tier: Using SIP for historical data + IEX for today's real-time data")
+        if not self.vip:
+            logging.info("Free tier: Using fallback logic - SIP historical + IEX for today's data")
+        else:
+            logging.info("Pro tier: Using SIP feed for all data")
     
     def get_bars(self, symbol: str, timeframe: str = '1Day', 
                  start: Optional[datetime] = None, 
                  end: Optional[datetime] = None,
-                 limit: int = 1000) -> pd.DataFrame:
+                 limit: int = 1000, feed: str = 'sip') -> pd.DataFrame:
         # Use ET time for all trading logic
         if start is None:
-            start = datetime.now(EASTERN) - timedelta(days=365)
+            start = now_et() - timedelta(days=365)
         if end is None:
-            end = datetime.now(EASTERN)
+            end = now_et()
         
-        # Use conditional logic based on subscription status
-        if self.subscription_status['has_sip_subscription']:
-            # Full SIP subscription - use real-time feed
+        # Reset IEX usage flag for each call
+        self.using_iex = False
+        
+        # VIP accounts can use SIP directly
+        if self.vip:
+            try:
+                bars = self.api.get_bars(
+                    symbol,
+                    timeframe,
+                    start=start.strftime('%Y-%m-%d'),
+                    end=end.strftime('%Y-%m-%d'),
+                    limit=limit,
+                    adjustment='raw',
+                    feed=feed
+                )
+                return self._process_bars(bars)
+            except Exception as e:
+                logging.error(f"SIP feed failed for VIP account: {e}")
+                # Fallback to free tier logic
+        
+        # Free tier or fallback logic: try SIP first, then use historical SIP + today's IEX
+        try:
             bars = self.api.get_bars(
                 symbol,
                 timeframe,
@@ -48,28 +69,31 @@ class AlpacaDataProvider:
                 adjustment='raw',
                 feed='sip'
             )
-        else:
-            # Free tier - combine historical data (until yesterday) + latest data
-            today = datetime.now(EASTERN).date()
-            yesterday = end- timedelta(days=1)
-
+            return self._process_bars(bars)
+        except Exception as sip_error:
+            logging.info(f"SIP feed failed, using fallback logic: {sip_error}")
+            
+            # Fallback: combine historical SIP data + today's IEX data
+            today = now_et().date()
+            yesterday = end - timedelta(days=1)
+            
             if end.date() >= today:
                 # Need to combine historical + latest data
                 historical_end = yesterday
-
-                # Get historical data until yesterday
-                historical_bars = self.api.get_bars(
-                    symbol,
-                    timeframe,
-                    start=start.strftime('%Y-%m-%d'),
-                    end=historical_end.strftime('%Y-%m-%d'),
-                    limit=limit,
-                    adjustment='raw',
-                    feed='sip'  # Historical data is free
-                )
-
-                # Get today's data with IEX feed (real-time, not delayed)
+                
                 try:
+                    # Get historical data until yesterday
+                    historical_bars = self.api.get_bars(
+                        symbol,
+                        timeframe,
+                        start=start.strftime('%Y-%m-%d'),
+                        end=historical_end.strftime('%Y-%m-%d'),
+                        limit=limit,
+                        adjustment='raw',
+                        feed='sip'  # Historical data is free
+                    )
+                    
+                    # Get today's data with IEX feed
                     today_bars = self.api.get_bars(
                         symbol,
                         timeframe,
@@ -82,25 +106,46 @@ class AlpacaDataProvider:
                     
                     # Combine historical and today's bars
                     all_bars = list(historical_bars) + list(today_bars)
-                    bars = all_bars
+                    self.using_iex = True
                     logging.info(f"Combined historical SIP data + today's IEX data for {symbol}")
-
+                    return self._process_bars(all_bars)
+                    
                 except Exception as e:
                     logging.warning(f"Could not get today's IEX data for {symbol}: {e}")
-                    bars = historical_bars
-
+                    # Return historical data only
+                    try:
+                        historical_bars = self.api.get_bars(
+                            symbol,
+                            timeframe,
+                            start=start.strftime('%Y-%m-%d'),
+                            end=historical_end.strftime('%Y-%m-%d'),
+                            limit=limit,
+                            adjustment='raw',
+                            feed='sip'
+                        )
+                        return self._process_bars(historical_bars)
+                    except Exception as final_error:
+                        logging.error(f"All data retrieval methods failed for {symbol}: {final_error}")
+                        return pd.DataFrame()
             else:
-                # Requesting only historical data - use SIP feed
-                bars = self.api.get_bars(
-                    symbol,
-                    timeframe,
-                    start=start.strftime('%Y-%m-%d'),
-                    end=end.strftime('%Y-%m-%d'),
-                    limit=limit,
-                    adjustment='raw',
-                    feed='sip'
-                )
+                # Requesting only historical data - try SIP again
+                try:
+                    bars = self.api.get_bars(
+                        symbol,
+                        timeframe,
+                        start=start.strftime('%Y-%m-%d'),
+                        end=end.strftime('%Y-%m-%d'),
+                        limit=limit,
+                        adjustment='raw',
+                        feed='sip'
+                    )
+                    return self._process_bars(bars)
+                except Exception as e:
+                    logging.error(f"Failed to get historical data for {symbol}: {e}")
+                    return pd.DataFrame()
         
+    def _process_bars(self, bars) -> pd.DataFrame:
+        """Process bars data into DataFrame"""
         data = []
         for bar in bars:
             # Handle different bar object formats
@@ -120,57 +165,30 @@ class AlpacaDataProvider:
             })
         
         df = pd.DataFrame(data)
-        df.set_index('timestamp', inplace=True)
-        
-        # Ensure index is datetime and drop any NaT values
-        df.index = pd.to_datetime(df.index)
-        df = df.dropna()
+        if not df.empty:
+            df.set_index('timestamp', inplace=True)
+            # Ensure index is datetime and drop any NaT values
+            df.index = pd.to_datetime(df.index)
+            df = df.dropna()
         
         return df
     
-    def _check_subscription_status(self) -> Dict[str, Any]:
-        """Check the account's market data subscription status by testing SIP feed access"""
+    def _check_vip_status(self) -> bool:
+        """Check if account is VIP by testing get_latest_bar with SPY and SIP feed"""
         try:
-            account = self.api.get_account()
-            equity = float(account.equity) if account.equity else 0
+            # Test VIP status by attempting to get latest bar for SPY with SIP feed
+            latest_bar = self.api.get_latest_bar('SPY', feed='sip')
             
-            # Test SIP subscription by attempting to get latest bar with SIP feed
-            has_sip_subscription = False
-            test_error = None
-            
-            try:
-                # Simple test: get latest bar for SPY with SIP feed
-                latest_bar = self.api.get_latest_bar('SPY', feed='sip')
-                
-                # If we get here without exception, SIP subscription is active
-                has_sip_subscription = True
-                logging.info("Pro Tier detected: Successfully accessed SIP feed")
-                
-            except Exception as sip_error:
-                has_sip_subscription = False
-                test_error = f"Free Tier: {sip_error}"
-                logging.info("Free Tier detected: SIP subscription not available")
-            
-            return {
-                'has_sip_subscription': has_sip_subscription,
-                'account_equity': equity,
-                'account_status': account.status if hasattr(account, 'status') else 'unknown',
-                'pattern_day_trader': getattr(account, 'pattern_day_trader', False),
-                'sip_test_error': test_error
-            }
+            # If we get here without exception, it's a VIP account
+            logging.info("VIP account detected: Successfully accessed SIP feed")
+            return True
             
         except Exception as e:
-            logging.error(f"Error checking subscription status: {e}")
-            return {
-                'has_sip_subscription': False,
-                'account_equity': 0,
-                'account_status': 'error',
-                'pattern_day_trader': False,
-                'error': str(e)
-            }
+            logging.info(f"Free tier account detected: {e}")
+            return False
     
     def get_latest_quote(self, symbol: str) -> Dict[str, Any]:
-        feed_type = 'sip' if self.subscription_status['has_sip_subscription'] else 'iex'
+        feed_type = 'sip' if self.vip else 'iex'
         
         try:
             quote = self.api.get_latest_quote(symbol, feed=feed_type)
@@ -186,7 +204,7 @@ class AlpacaDataProvider:
                 'is_delayed': False  # IEX is real-time, SIP is also real-time
             }
             
-            if not self.subscription_status['has_sip_subscription']:
+            if not self.vip:
                 result['data_source'] = "Real-time IEX data"
             else:
                 result['data_source'] = "Real-time SIP data"
@@ -225,16 +243,31 @@ class AlpacaDataProvider:
             'unrealized_plpc': float(pos.unrealized_plpc)
         } for pos in positions]
     
-    def get_subscription_info(self) -> Dict[str, Any]:
-        """Get detailed subscription and data feed information for display"""
-        info = self.subscription_status.copy()
-        info.update({
-            'default_feed': self.default_feed,
-            'has_real_time_data': True,  # Both SIP and IEX provide real-time data
-            'data_delay': 'Real-time',
-            'feed_description': 'Securities Information Processor (SIP)' if self.subscription_status['has_sip_subscription'] else 'IEX Real-time + SIP Historical'
-        })
-        return info
+    def get_account_info(self) -> Dict[str, Any]:
+        """Get account information including VIP status and data feed info"""
+        try:
+            account = self.api.get_account()
+            return {
+                'vip': self.vip,
+                'using_iex': self.using_iex,
+                'account_equity': float(account.equity) if account.equity else 0,
+                'account_status': account.status if hasattr(account, 'status') else 'unknown',
+                'pattern_day_trader': getattr(account, 'pattern_day_trader', False),
+                'default_feed': self.default_feed,
+                'has_real_time_data': True,
+                'data_delay': 'Real-time',
+                'feed_description': 'Securities Information Processor (SIP)' if self.vip else 'IEX Real-time + SIP Historical'
+            }
+        except Exception as e:
+            logging.error(f"Error getting account info: {e}")
+            return {
+                'vip': self.vip,
+                'using_iex': self.using_iex,
+                'account_equity': 0,
+                'account_status': 'error',
+                'pattern_day_trader': False,
+                'error': str(e)
+            }
     
     
     def get_options_chain(self, underlying_symbol: str) -> pd.DataFrame:

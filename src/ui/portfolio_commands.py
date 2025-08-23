@@ -4,11 +4,9 @@ Portfolio and Watchlist Command Implementations
 Separated from main.py to avoid circular imports
 """
 
-import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
-import pytz
-EASTERN = pytz.timezone('US/Eastern')
+from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 
 def check_positions_and_orders() -> None:
     """Check current positions and recent orders"""
@@ -73,11 +71,12 @@ def check_positions_and_orders() -> None:
         else:
             print(f"❌ Error checking positions and orders: {e}")
 
-def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
+def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None:
     """Get watchlist info and run strategy with direct trading
     
     Args:
-        strategy_name: Strategy to use ('momentum', 'value', etc.). Default is 'momentum'
+        days: Number of backtesting days (default: 30)
+        strategy: Strategy to use ('momentum', 'value', etc.). Default is 'momentum'
     """
     try:
         from src.account import AccountManager, OrderManager
@@ -128,50 +127,76 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
         # Step 3: Combine and deduplicate symbols (watchlist + current positions)
         all_symbols = list(set(watchlist_symbols + position_symbols))
         
-        # Step 4: Initialize strategy based on parameter
-        strategy = None
+        # Step 4: Initialize strategy based on parameter  
+        strategy_obj = None
+        strategy_short_names = {
+            'momentum': 'MomentumStrategy',
+            'value': 'ValueStrategy', 
+            'trend': 'TrendFollowingStrategy',
+            'scalping': 'ScalpingStrategy',
+            'arbitrage': 'ArbitrageStrategy',
+            'gaussian': 'GaussianProcessStrategy',
+            'xgboost': 'XGBoostStrategy',
+            'deep': 'DeepLearningStrategy'
+        }
+        
+        strategy_name = strategy.lower()
         try:
-            if strategy_name.lower() == "momentum":
+            if strategy_name == "momentum":
                 from src.strategy import MomentumStrategy
-                strategy = MomentumStrategy()
-            elif strategy_name.lower() == "value":
+                strategy_obj = MomentumStrategy()
+            elif strategy_name == "value":
                 from src.strategy import ValueStrategy
-                strategy = ValueStrategy()
+                strategy_obj = ValueStrategy()
+            elif strategy_name == "trend":
+                from src.strategy import TrendFollowingStrategy
+                strategy_obj = TrendFollowingStrategy()
+            elif strategy_name == "scalping":
+                from src.strategy import ScalpingStrategy
+                strategy_obj = ScalpingStrategy()
+            elif strategy_name == "arbitrage":
+                from src.strategy import ArbitrageStrategy
+                strategy_obj = ArbitrageStrategy()
+            elif strategy_name == "gaussian":
+                from src.strategy import GaussianProcessStrategy
+                strategy_obj = GaussianProcessStrategy()
+            elif strategy_name == "xgboost":
+                from src.strategy import XGBoostStrategy
+                strategy_obj = XGBoostStrategy()
+            elif strategy_name == "deep":
+                from src.strategy import DeepLearningStrategy
+                strategy_obj = DeepLearningStrategy()
             else:
                 # Default to momentum if unknown strategy
                 from src.strategy import MomentumStrategy
-                strategy = MomentumStrategy()
+                strategy_obj = MomentumStrategy()
                 if HAS_RICH and console:
-                    console.print(f"[yellow]Unknown strategy '{strategy_name}', using Momentum strategy[/yellow]")
+                    console.print(f"[yellow]Unknown strategy '{strategy}', using Momentum strategy[/yellow]")
                 else:
-                    print(f"Unknown strategy '{strategy_name}', using Momentum strategy")
+                    print(f"Unknown strategy '{strategy}', using Momentum strategy")
         except ImportError as e:
             # Fallback to momentum strategy
             from src.strategy import MomentumStrategy
-            strategy = MomentumStrategy()
+            strategy_obj = MomentumStrategy()
             if HAS_RICH and console:
-                console.print(f"[yellow]Could not load {strategy_name} strategy ({e}), using Momentum strategy[/yellow]")
+                console.print(f"[yellow]Could not load {strategy} strategy ({e}), using Momentum strategy[/yellow]")
             else:
-                print(f"Could not load {strategy_name} strategy ({e}), using Momentum strategy")
+                print(f"Could not load {strategy} strategy ({e}), using Momentum strategy")
         
         if HAS_RICH and console:
             console.print("\n[bold blue]🌍 Gauss World Trader - Strategic Trading Analysis[/bold blue]")
-            console.print(f"[cyan]Strategy: {strategy_name.title()}[/cyan]")
+            console.print(f"[cyan]Strategy: {strategy.title()}[/cyan]")
+            console.print(f"[cyan]Backtesting Days: {days}[/cyan]")
             console.print(f"[cyan]Watchlist Symbols ({len(watchlist_symbols)}): {', '.join(watchlist_symbols)}[/cyan]")
             if position_symbols:
                 console.print(f"[cyan]Current Positions ({len(position_symbols)}): {', '.join(position_symbols)}[/cyan]")
             console.print(f"[cyan]Total Symbols to Analyze ({len(all_symbols)}): {', '.join(sorted(all_symbols))}[/cyan]")
             
-            # Check market status
-            market_clock = account_manager.get_market_clock()
-            if 'error' not in market_clock:
-                is_open = market_clock.get('is_open', False)
-                next_open = market_clock.get('next_open', 'N/A')
-                next_close = market_clock.get('next_close', 'N/A')
-                
-                console.print(f"[yellow]Market Status: {'🟢 OPEN' if is_open else '🔴 CLOSED'}[/yellow]")
-                if not is_open:
-                    console.print(f"[yellow]Next Open: {next_open}[/yellow]")
+            # Check market status using centralized timezone
+            current_time = now_et()
+            market_status = get_market_status(current_time)
+            console.print(f"[yellow]Market Status: {market_status.upper()}[/yellow]")
+            console.print(f"[yellow]Current Time (ET): {current_time.strftime('%Y-%m-%d %H:%M:%S')}[/yellow]")
             
             # Get account status
             account_status = account_manager.get_trading_account_status()
@@ -184,22 +209,29 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
                 console.print("[yellow]Trading cancelled by user[/yellow]")
                 return
             
-            console.print(f"\n[cyan]🔍 Analyzing {len(all_symbols)} symbols with {strategy_name.title()} strategy...[/cyan]")
+            console.print(f"\n[cyan]🔍 Analyzing {len(all_symbols)} symbols with {strategy.title()} strategy...[/cyan]")
+            
+            # Check if using IEX and show notice
+            from src.data import AlpacaDataProvider
+            data_provider = AlpacaDataProvider()
+            if data_provider.using_iex:
+                console.print(f"[yellow]ℹ️ Using IEX feed for today's data[/yellow]")
             
         else:
             print("\n🌍 Gauss World Trader - Strategic Trading Analysis")
             print("=" * 50)
-            print(f"Strategy: {strategy_name.title()}")
+            print(f"Strategy: {strategy.title()}")
+            print(f"Backtesting Days: {days}")
             print(f"Watchlist Symbols ({len(watchlist_symbols)}): {', '.join(watchlist_symbols)}")
             if position_symbols:
                 print(f"Current Positions ({len(position_symbols)}): {', '.join(position_symbols)}")
             print(f"Total Symbols to Analyze ({len(all_symbols)}): {', '.join(sorted(all_symbols))}")
             
-            # Check market status
-            market_clock = account_manager.get_market_clock()
-            if 'error' not in market_clock:
-                is_open = market_clock.get('is_open', False)
-                print(f"Market Status: {'🟢 OPEN' if is_open else '🔴 CLOSED'}")
+            # Check market status using centralized timezone
+            current_time = now_et()
+            market_status = get_market_status(current_time)
+            print(f"Market Status: {market_status.upper()}")
+            print(f"Current Time (ET): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
             
             # Simple confirmation
             response = input("\nProceed with strategy analysis and potential trading? (y/N): ")
@@ -207,11 +239,12 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
                 print("Trading cancelled by user")
                 return
             
-            print(f"\n🔍 Analyzing {len(all_symbols)} symbols with {strategy_name.title()} strategy...")
+            print(f"\n🔍 Analyzing {len(all_symbols)} symbols with {strategy.title()} strategy...")
         
-        # Step 5: Initialize data provider 
-        from src.data import AlpacaDataProvider
-        data_provider = AlpacaDataProvider()
+        # Step 5: Initialize data provider (already initialized above for IEX check)
+        if 'data_provider' not in locals():
+            from src.data import AlpacaDataProvider
+            data_provider = AlpacaDataProvider()
         
         # Step 6: Analyze each symbol (watchlist + current positions)
         signals = []
@@ -220,8 +253,8 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
         for symbol in all_symbols:
             try:
                 # Get recent data for analysis - use ET time for trading logic
-                end_date = datetime.now(EASTERN)
-                start_date = end_date - timedelta(days=30)
+                end_date = now_et()
+                start_date = end_date - timedelta(days=days)
                 
                 data = data_provider.get_bars(symbol, '1Day', start_date, end_date)
                 if data.empty:
@@ -237,8 +270,8 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
                     'volume': data['volume'].iloc[-1]
                 }}
 
-                symbol_signals = strategy.generate_signals(
-                    current_date=datetime.now(EASTERN),  # Use ET time for trading logic
+                symbol_signals = strategy_obj.generate_signals(
+                    current_date=now_et(),  # Use ET time for trading logic
                     current_prices=current_prices,
                     current_data=current_data,
                     historical_data={symbol: data},
@@ -303,14 +336,28 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
                 if Confirm.ask("\nExecute these trades?"):
                     console.print("[cyan]🚀 Executing trades...[/cyan]")
                     
+                    # Determine order type based on market status
+                    current_time = now_et()
+                    market_status = get_market_status(current_time)
+                    order_type = 'market' if market_status == 'open' else 'limit'
+                    
+                    console.print(f"[yellow]Market Status: {market_status.upper()} - Using {order_type.upper()} orders[/yellow]")
+                    
                     for signal in signals:
                         try:
+                            # For limit orders during closed hours, use current price as limit
+                            limit_price = None
+                            if order_type == 'limit':
+                                symbol_result = analysis_results.get(signal['symbol'], {})
+                                limit_price = symbol_result.get('current_price')
+                            
                             order_result = order_manager.place_order(
                                 symbol=signal['symbol'],
                                 qty=signal['quantity'],
                                 side=signal['action'],
-                                order_type='market',
-                                time_in_force='day'
+                                order_type=order_type,
+                                time_in_force='day',
+                                limit_price=limit_price
                             )
                             
                             if 'error' not in order_result:
@@ -332,14 +379,28 @@ def get_watchlists_and_trade(strategy_name: str = "momentum") -> None:
                 if response.lower() == 'y':
                     print("🚀 Executing trades...")
                     
+                    # Determine order type based on market status
+                    current_time = now_et()
+                    market_status = get_market_status(current_time)
+                    order_type = 'market' if market_status == 'open' else 'limit'
+                    
+                    print(f"Market Status: {market_status.upper()} - Using {order_type.upper()} orders")
+                    
                     for signal in signals:
                         try:
+                            # For limit orders during closed hours, use current price as limit
+                            limit_price = None
+                            if order_type == 'limit':
+                                symbol_result = analysis_results.get(signal['symbol'], {})
+                                limit_price = symbol_result.get('current_price')
+                            
                             order_result = order_manager.place_order(
                                 symbol=signal['symbol'],
                                 qty=signal['quantity'],
                                 side=signal['action'],
-                                order_type='market',
-                                time_in_force='day'
+                                order_type=order_type,
+                                time_in_force='day',
+                                limit_price=limit_price
                             )
                             
                             if 'error' not in order_result:
