@@ -18,18 +18,9 @@ if sys.version_info < (3, 12):
     print("💡 Please upgrade to Python 3.12 for optimal performance")
     sys.exit(1)
 
-try:
-    from src.ui.modern_cli import app
-    from config.optimized_config import get_config
-    MODERN_CLI = True
-except ImportError:
-    # Fallback to simple CLI with existing components
-    from src.ui.simple_cli import app
-    from config import Config
-    MODERN_CLI = False
-    
-    def get_config():
-        return Config()
+# Import modern CLI components
+from src.ui.modern_cli import app
+from config.optimized_config import get_config
 
 # Import new modules
 try:
@@ -69,13 +60,7 @@ def main() -> None:
         # Basic config validation
         try:
             config = get_config()
-            if MODERN_CLI and hasattr(config, 'get_validation_summary'):
-                console.print(config.get_validation_summary())
-            else:
-                # Basic validation for legacy config
-                console.print("🔧 Configuration Status:")
-                console.print(f"• Alpaca: {'✅ Valid' if Config.validate_alpaca_config() else '❌ Missing'}")
-                console.print(f"• System: [green]Ready[/green]")
+            console.print(config.get_validation_summary())
                 
         except Exception as e:
             console.print(f"[red]❌ Configuration Error: {e}[/red]")

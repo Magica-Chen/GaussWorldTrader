@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 
 from src.strategy.strategy_selector import StrategySelector, get_strategy_selector
 from src.data import AlpacaDataProvider
-from src.backtest import Backtester
+from src.trade import Backtester
 
 def demonstrate_strategy_selection():
     """Demonstrate the strategy selection system"""

@@ -9,7 +9,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 
 **🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
 **👤 Author**: Magica Chen  
-**📊 Version**: 2.1.0 - Smart Data Feeds & Enhanced Trading
+**📊 Version**: 1.1.0 - Smart Data Feeds & Enhanced Trading
 
 ---
 
@@ -34,14 +34,24 @@ cp .env.template .env
 # Edit .env with your Alpaca API keys
 ```
 
-### 3. Launch Dashboard
+### 3. Launch Dashboard (Web UI)
 ```bash
+# Modern unified dashboard (default)
 python dashboard.py
+
+# Or choose specific dashboard
+python dashboard.py --modern    # Full-featured modern UI
+python dashboard.py --advanced  # Advanced trading features  
+python dashboard.py --simple    # Basic analysis tools
+
 # Opens at http://localhost:3721
 ```
 
-### 4. CLI Commands
+### 4. CLI Commands (Terminal Interface)
 ```bash
+# Main CLI entry point
+python main.py
+
 # Check account status
 python main.py account info
 
@@ -167,17 +177,73 @@ FRED_API_KEY=your_fred_key        # fred.stlouisfed.org
 GaussWorldTrader/
 ├── src/
 │   ├── account/          # Portfolio & order management
+│   │   ├── account_config.py    # Account configuration
+│   │   ├── account_manager.py   # Account operations
+│   │   ├── order_manager.py     # Order lifecycle management
+│   │   ├── portfolio_tracker.py # Portfolio tracking
+│   │   └── position_manager.py  # Position management
 │   ├── agent/            # AI-powered analysis (multi-LLM)
+│   │   ├── agent_manager.py     # AI agent coordination
+│   │   ├── data_sources.py      # Data source management
+│   │   ├── fundamental_analyzer.py # Fundamental analysis
+│   │   └── llm_providers.py     # LLM integration
 │   ├── analysis/         # Technical analysis & metrics
-│   ├── backtest/         # Strategy backtesting framework
-│   ├── data/             # Smart data providers (Alpaca, crypto, news)
-│   ├── strategy/         # 8 trading strategies
+│   │   ├── financial_metrics.py # Financial calculations
+│   │   ├── performance_analyzer.py # Performance analysis
+│   │   └── technical_analysis.py # Technical indicators
+│   ├── data/             # Smart data providers
+│   │   ├── alpaca_provider.py   # Alpaca API integration
+│   │   ├── async_data_provider.py # Async data handling
+│   │   ├── crypto_provider.py   # Cryptocurrency data
+│   │   ├── macro_provider.py    # Macroeconomic data
+│   │   └── news_provider.py     # News data integration
+│   ├── strategy/         # 10 trading strategies
+│   │   ├── base_strategy.py     # Abstract base class
+│   │   ├── momentum_strategy.py # Momentum trading
+│   │   ├── value_strategy.py    # Value investing
+│   │   ├── trend_following_strategy.py # Trend following
+│   │   ├── scalping_strategy.py # High-frequency scalping
+│   │   ├── arbitrage_strategy.py # Statistical arbitrage
+│   │   ├── xgboost_strategy.py  # XGBoost ML strategy
+│   │   ├── deep_learning_strategy.py # Neural networks
+│   │   ├── gaussian_process_strategy.py # Bayesian approach
+│   │   └── strategy_selector.py # Strategy recommendation
 │   ├── trade/            # Trading engine & execution
-│   ├── ui/               # CLI & dashboard interfaces
-│   └── utils/            # Timezone, validation, watchlist
+│   │   ├── backtester.py        # Backtesting framework
+│   │   ├── trading_engine.py    # Core trading engine
+│   │   ├── optimized_trading_engine.py # Performance optimized
+│   │   └── portfolio.py         # Portfolio management
+│   ├── ui/               # Multiple interface options
+│   │   ├── modern_dashboard.py  # Modern web interface
+│   │   ├── advanced_dashboard.py # Advanced features
+│   │   ├── simple_dashboard.py  # Simple interface
+│   │   ├── modern_cli.py        # Rich CLI interface
+│   │   ├── cli_interface.py     # Command-line interface
+│   │   ├── simple_cli.py        # Basic CLI
+│   │   └── portfolio_commands.py # Portfolio CLI commands
+│   └── utils/            # Utilities and helpers
+│       ├── dashboard_utils.py   # Dashboard utilities
+│       ├── error_handling.py    # Error management
+│       ├── logger.py            # Logging system
+│       ├── timezone_utils.py    # Timezone handling
+│       ├── validators.py        # Data validation
+│       └── watchlist_manager.py # Watchlist management
 ├── config/               # Configuration management
-├── examples/             # Usage examples
-└── dashboard.py          # Quick dashboard launcher
+│   ├── config.py                # Base configuration
+│   └── optimized_config.py      # Performance optimized config
+├── examples/             # Usage examples and tutorials
+│   ├── simple_example.py        # Basic usage
+│   ├── run_backtest_example.py  # Backtesting example
+│   ├── momentum_backtest_example.py # Momentum strategy
+│   └── advanced_strategies_example.py # Advanced usage
+├── results/              # Backtesting and analysis results
+├── tests/                # Test suite
+├── docs/                 # Project documentation
+├── main.py               # CLI entry point
+├── dashboard.py          # Dashboard launcher
+├── pyproject.toml        # Project configuration
+├── requirements.txt      # Python dependencies
+└── watchlist.json        # Trading watchlist
 ```
 
 ---
@@ -195,6 +261,11 @@ GaussWorldTrader/
 6. **XGBoost**: Gradient boosting with feature engineering
 7. **Deep Learning**: LSTM, CNN, and Attention models
 8. **Gaussian Process**: Bayesian approach with uncertainty quantification
+
+### **Strategy Components**
+- **Base Strategy**: Abstract foundation for all trading strategies
+- **Strategy Selector**: Intelligent strategy recommendation system
+- **10 Total Strategies**: Complete suite for different market conditions
 
 ### **Usage Example**
 ```python
@@ -241,7 +312,7 @@ signals = strategy.generate_signals(current_date, prices, data, historical_data,
 
 ## 📈 Recent Updates
 
-### **v2.1.0 - Smart Data Feeds & Enhanced Trading**
+### **v1.1.0 - Smart Data Feeds & Enhanced Trading**
 - ✅ **Automatic VIP Detection**: Uses SPY SIP feed test for tier detection
 - ✅ **Centralized Timezone**: Consistent Eastern Time for all market operations
 - ✅ **Enhanced Watchlist Trading**: Added `--days` and `--strategy` parameters
@@ -250,7 +321,7 @@ signals = strategy.generate_signals(current_date, prices, data, historical_data,
 - ✅ **Data Source Notifications**: Clear indicators for SIP vs IEX usage
 - ✅ **Fallback Logic**: Robust data retrieval with intelligent fallbacks
 
-### **v2.0.0 - AI & Portfolio Management**
+### **v1.0.0 - AI & Portfolio Management**
 - 🤖 Multi-LLM AI analysis (OpenAI, DeepSeek, Claude, Moonshot)
 - 💼 Complete portfolio management system
 - 📊 Advanced backtesting with risk metrics

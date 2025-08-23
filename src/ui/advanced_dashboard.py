@@ -27,7 +27,7 @@ from src.account.position_manager import PositionManager
 from src.account.order_manager import OrderManager
 from src.agent.fundamental_analyzer import FundamentalAnalyzer
 from src.strategy.strategy_selector import get_strategy_selector
-from src.backtest import Backtester, Portfolio
+from src.trade import Backtester, Portfolio
 from src.data import AlpacaDataProvider
 from src.utils.watchlist_manager import WatchlistManager
 

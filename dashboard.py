@@ -2,8 +2,9 @@
 """
 Gauss World Trader - Dashboard Launcher
 
-Simple interface launcher for the advanced dashboard
-Main dashboard code is located in src/ui/advanced_dashboard.py
+Root-level dashboard launcher for easy access alongside main.py
+Supports simple, advanced, and modern dashboard interfaces
+All dashboard implementations are in src/ui/ directory
 """
 
 import sys

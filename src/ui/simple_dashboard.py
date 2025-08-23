@@ -78,31 +78,17 @@ def load_data(symbol, days=30):
         
         start_date = end_date - timedelta(days=days)
         
-        # Fetch data with fallback strategy
-        try:
-            data = provider.get_bars(symbol, '1Day', start_date, end_date)
-            if data is not None and not data.empty:
-                return data, data_context
-        except Exception:
-            pass  # Fall through to fallback
-        
-        # Fallback: Use current data if primary strategy fails
-        end_date = current_time
-        start_date = end_date - timedelta(days=days)
+        # Fetch data directly - no fallback
         data = provider.get_bars(symbol, '1Day', start_date, end_date)
         
         if data is not None and not data.empty:
-            fallback_context = "Using historical data"
-            if using_iex:
-                fallback_context += " (IEX + SIP feeds)"
-            return data, fallback_context
+            return data, data_context
         else:
-            return None, "No data available"
+            return None, f"No data available for {symbol}"
             
     except Exception as e:
         error_msg = str(e)
-        if "subscription does not permit" in error_msg.lower():
-            error_msg = "Free tier limitation: Cannot access recent SIP data. Showing historical data."
+        # Let real errors surface
         return None, error_msg
 
 @st.cache_data(ttl=300)
@@ -278,7 +264,7 @@ def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Mom
                 'take_profit_pct': 0.18
             })
         else:
-            strategy = MomentumStrategy()  # Default fallback
+            raise ValueError(f"Unknown strategy type: {strategy_type}")
         
         def strategy_func(current_date, current_prices, current_data, historical_data, portfolio):
             return strategy.generate_signals(

@@ -86,7 +86,8 @@ class OptimizedConfig:
         # Initialize from environment and config file
         self._load_configuration()
         
-        logger.info(f"✅ Configuration loaded (Python {os.sys.version_info.major}.{os.sys.version_info.minor})")
+        version = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
+        logger.info(f"✅ Configuration loaded (Python {version})")
     
     def _load_configuration(self) -> None:
         """Load configuration from environment and files"""
@@ -121,11 +122,21 @@ class OptimizedConfig:
         # Trading limits from config or environment
         limits_config = config_data.get('trading_limits', {})
         self._trading_limits = TradingLimits(
-            max_position_size=float(os.getenv('MAX_POSITION_SIZE', limits_config.get('max_position_size', 0.1))),
-            max_daily_trades=int(os.getenv('MAX_DAILY_TRADES', limits_config.get('max_daily_trades', 50))),
-            max_open_positions=int(os.getenv('MAX_OPEN_POSITIONS', limits_config.get('max_open_positions', 10))),
-            stop_loss_pct=float(os.getenv('STOP_LOSS_PCT', limits_config.get('stop_loss_pct', 0.05))),
-            take_profit_pct=float(os.getenv('TAKE_PROFIT_PCT', limits_config.get('take_profit_pct', 0.15)))
+            max_position_size=float(
+                os.getenv('MAX_POSITION_SIZE', limits_config.get('max_position_size', 0.1))
+            ),
+            max_daily_trades=int(
+                os.getenv('MAX_DAILY_TRADES', limits_config.get('max_daily_trades', 50))
+            ),
+            max_open_positions=int(
+                os.getenv('MAX_OPEN_POSITIONS', limits_config.get('max_open_positions', 10))
+            ),
+            stop_loss_pct=float(
+                os.getenv('STOP_LOSS_PCT', limits_config.get('stop_loss_pct', 0.05))
+            ),
+            take_profit_pct=float(
+                os.getenv('TAKE_PROFIT_PCT', limits_config.get('take_profit_pct', 0.15))
+            )
         )
         
         # Performance configuration
@@ -190,7 +201,8 @@ class OptimizedConfig:
         
         for service, is_valid in validations.items():
             emoji = status_emojis[is_valid]
-            lines.append(f"  {emoji} {service.capitalize()}: {'Valid' if is_valid else 'Invalid/Missing'}")
+            status = 'Valid' if is_valid else 'Invalid/Missing'
+            lines.append(f"  {emoji} {service.capitalize()}: {status}")
         
         return "\n".join(lines)
     
