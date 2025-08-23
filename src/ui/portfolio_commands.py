@@ -115,8 +115,8 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
         try:
             from src.account import PositionManager
             position_manager = PositionManager(account_manager)
-            current_positions = position_manager.get_positions()
-            position_symbols = [pos.get('symbol', '') for pos in current_positions if pos.get('symbol')]
+            current_positions = position_manager.get_all_positions()
+            position_symbols = [pos.get('symbol', '') for pos in current_positions if pos.get('symbol') and 'error' not in pos]
         except Exception as e:
             if HAS_RICH and console:
                 console.print(f"[yellow]Warning: Could not get current positions: {e}[/yellow]")
@@ -246,7 +246,36 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
             from src.data import AlpacaDataProvider
             data_provider = AlpacaDataProvider()
         
-        # Step 6: Analyze each symbol (watchlist + current positions)
+        # Step 6: Create a portfolio object for strategy analysis
+        try:
+            from src.trade.portfolio import Portfolio
+            account_status = account_manager.get_trading_account_status()
+            buying_power = account_status.get('buying_power', 100000.0) if 'error' not in account_status else 100000.0
+            portfolio = Portfolio(initial_cash=buying_power)
+            
+            # Add current positions to the portfolio
+            for pos in current_positions:
+                if 'error' not in pos and pos.get('symbol'):
+                    try:
+                        qty = float(pos.get('qty', 0))
+                        avg_price = float(pos.get('avg_entry_price', 0))
+                        if qty != 0 and avg_price > 0:
+                            portfolio.positions[pos['symbol']] = {
+                                'quantity': qty,
+                                'cost_basis': avg_price,
+                                'last_price': float(pos.get('current_price', avg_price)),
+                                'last_updated': now_et()
+                            }
+                    except (ValueError, TypeError):
+                        continue
+        except Exception as e:
+            if HAS_RICH and console:
+                console.print(f"[yellow]Warning: Could not create portfolio object: {e}[/yellow]")
+            else:
+                print(f"Warning: Could not create portfolio object: {e}")
+            portfolio = None
+
+        # Step 7: Analyze each symbol (watchlist + current positions)
         signals = []
         analysis_results = {}
         
@@ -275,7 +304,7 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                     current_prices=current_prices,
                     current_data=current_data,
                     historical_data={symbol: data},
-                    portfolio=None  # Would need actual portfolio for position sizing
+                    portfolio=portfolio
                 )
 
                 # Store analysis results
@@ -301,7 +330,7 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                 else:
                     print(f"Error analyzing {symbol}: {e}")
         
-        # Step 7: Categorize and display signals
+        # Step 8: Categorize and display signals
         if signals:
             # Categorize signals by action and symbol type
             buy_signals = [s for s in signals if s.get('action', '').lower() == 'buy']
