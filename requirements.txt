@@ -6,7 +6,7 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 
 # Trading API
-alpaca-trade-api>=3.1.1
+alpaca-py>=0.25.0
 
 # Technical Analysis
 ta-lib>=0.4.28
