@@ -75,7 +75,7 @@ class CLIInterface:
         news_parser = subparsers.add_parser('news', help='News and sentiment analysis')
         news_parser.add_argument('--symbol', help='Stock symbol for company news')
         news_parser.add_argument('--market', action='store_true', help='Get market news')
-        news_parser.add_argument('--sentiment', help='Get news sentiment for symbol')
+        news_parser.add_argument('--sentiment', help='Get insider information for symbol')
         
         # Watchlist commands
         watchlist_parser = subparsers.add_parser('watchlist', help='Watchlist management')
@@ -303,11 +303,29 @@ class CLIInterface:
                     print("-" * 30)
             
             elif args.sentiment:
-                sentiment = news_provider.get_news_sentiment(args.sentiment)
-                print(f"\\nNews Sentiment for {args.sentiment}:")
+                # Show insider information instead
+                insider_transactions = news_provider.get_insider_transactions(args.sentiment)
+                insider_sentiment = news_provider.get_insider_sentiment(args.sentiment)
+                
+                print(f"\\nInsider Information for {args.sentiment}:")
                 print("-" * 50)
-                for key, value in sentiment.items():
-                    print(f"{key}: {value}")
+                
+                if insider_transactions:
+                    print("Recent Insider Transactions:")
+                    for i, transaction in enumerate(insider_transactions[:5]):
+                        print(f"  {i+1}. {transaction.get('name', 'Unknown')} - "
+                              f"Shares: {transaction.get('change', 0):+,} "
+                              f"({transaction.get('transactionDate', 'N/A')})")
+                
+                if insider_sentiment:
+                    print("\\nInsider Sentiment:")
+                    if 'data' in insider_sentiment and insider_sentiment['data']:
+                        latest = insider_sentiment['data'][-1]
+                        print(f"  Latest MSPR: {latest.get('mspr', 0):.2f}")
+                        print(f"  Change: {latest.get('change', 0):+.0f}")
+                        print(f"  Period: {latest.get('year', 'N/A')}-{latest.get('month', 'N/A'):02d}")
+                    else:
+                        print("  No insider sentiment data available")
         
         except Exception as e:
             print(f"Error fetching news: {e}")

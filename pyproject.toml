@@ -38,6 +38,7 @@ dependencies = [
     "streamlit>=1.28.0",
     "yfinance>=0.2.20",
     "fredapi>=0.5.1",
+    "finnhub-python>=2.4.20",
     "scipy>=1.11.0",
     "scikit-learn>=1.3.0",
     "sqlalchemy>=2.0.0",
@@ -161,7 +162,8 @@ module = [
     "ta",
     "fredapi.*",
     "yfinance.*",
-    "numba.*"
+    "numba.*",
+    "finnhub.*"
 ]
 ignore_missing_imports = true
 

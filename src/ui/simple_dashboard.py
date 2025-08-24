@@ -198,19 +198,20 @@ def get_crypto_data():
         return None, str(e)
 
 @st.cache_data(ttl=1200)
-def get_news_sentiment(symbol):
-    """Get news and sentiment data with caching"""
+def get_news_insider_data(symbol):
+    """Get news and insider data with caching"""
     try:
         from src.data import NewsDataProvider
         provider = NewsDataProvider()
         
         news = provider.get_company_news(symbol)
-        sentiment = provider.get_news_sentiment(symbol)
+        insider_transactions = provider.get_insider_transactions(symbol)
+        insider_sentiment = provider.get_insider_sentiment(symbol)
         
-        return news, sentiment, None
+        return news, insider_transactions, insider_sentiment, None
         
     except Exception as e:
-        return [], None, str(e)
+        return [], [], {}, str(e)
 
 @st.cache_data(ttl=1800)  # Cache for 30 minutes
 def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Momentum"):
@@ -476,7 +477,7 @@ def main():
     # Create tabs with enhanced features
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📈 Live Analysis", "🔄 Backtesting", "💼 Account", 
-        "🔄 Trading", "📰 News & Sentiment", "₿ Crypto"
+        "🔄 Trading", "📰 News & Insider", "₿ Crypto"
     ])
     
     with tab1:
@@ -496,8 +497,8 @@ def main():
         trading_tab(symbol)
     
     with tab5:
-        # News & Sentiment Tab (new feature from class dashboard)
-        news_sentiment_tab(symbol)
+        # News & Insider Tab (updated feature)
+        news_insider_tab(symbol)
     
     with tab6:
         # Cryptocurrency Tab (new feature from class dashboard)
@@ -991,21 +992,22 @@ def trading_tab(symbol):
     st.warning("⚠️ **Risk Warning**: Trading involves risk. Only trade with money you can afford to lose.")
     st.info("📈 **Paper Trading**: Make sure you're in paper trading mode for testing")
 
-def news_sentiment_tab(symbol):
-    """News and sentiment analysis tab"""
-    st.subheader("📰 News & Sentiment Analysis")
+def news_insider_tab(symbol):
+    """News and insider analysis tab"""
+    st.subheader("📰 News & Insider Analysis")
     
-    with st.spinner("Loading news and sentiment data..."):
-        news, sentiment, error = get_news_sentiment(symbol)
+    with st.spinner("Loading news and insider data..."):
+        news, insider_transactions, insider_sentiment, error = get_news_insider_data(symbol)
     
     if error:
-        st.error(f"Error loading news data: {error}")
-        st.info("💡 Make sure your news API is configured properly")
+        st.error(f"Error loading data: {error}")
+        st.info("💡 Make sure your Finnhub API is configured properly")
         return
     
-    col1, col2 = st.columns(2)
+    # Create tabs for different data types
+    news_tab, transactions_tab, sentiment_tab = st.tabs(["📰 Company News", "🏢 Insider Transactions", "📊 Insider Sentiment"])
     
-    with col1:
+    with news_tab:
         st.subheader(f"📰 Company News - {symbol}")
         
         if news and len(news) > 0:
@@ -1018,50 +1020,79 @@ def news_sentiment_tab(symbol):
         else:
             st.info("No news articles available")
     
-    with col2:
-        st.subheader("📊 Sentiment Analysis")
+    with transactions_tab:
+        st.subheader(f"🏢 Insider Transactions - {symbol}")
         
-        if sentiment:
-            col2a, col2b, col2c = st.columns(3)
-            
-            with col2a:
-                st.metric(
-                    "Bullish %", 
-                    f"{sentiment.get('sentiment_bullish_percent', 0):.1f}%"
-                )
-            
-            with col2b:
-                st.metric(
-                    "Bearish %", 
-                    f"{sentiment.get('sentiment_bearish_percent', 0):.1f}%"
-                )
-            
-            with col2c:
-                st.metric(
-                    "News Score", 
-                    f"{sentiment.get('company_news_score', 0):.2f}"
-                )
-            
-            # Sentiment visualization
-            if 'sentiment_bullish_percent' in sentiment and 'sentiment_bearish_percent' in sentiment:
-                bullish = sentiment['sentiment_bullish_percent']
-                bearish = sentiment['sentiment_bearish_percent']
-                neutral = 100 - bullish - bearish
-                
-                fig = go.Figure(data=[go.Pie(
-                    labels=['Bullish', 'Bearish', 'Neutral'],
-                    values=[bullish, bearish, neutral],
-                    marker_colors=['green', 'red', 'gray']
-                )])
-                
-                fig.update_layout(
-                    title="Sentiment Distribution",
-                    height=400
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
+        if insider_transactions and len(insider_transactions) > 0:
+            # Create a table for insider transactions
+            transactions_df = pd.DataFrame(insider_transactions[:10])  # Show latest 10
+            if not transactions_df.empty:
+                # Select relevant columns
+                cols_to_show = ['name', 'share', 'change', 'filingDate', 'transactionDate', 'transactionCode']
+                available_cols = [col for col in cols_to_show if col in transactions_df.columns]
+                if available_cols:
+                    st.dataframe(transactions_df[available_cols], use_container_width=True)
+                else:
+                    st.dataframe(transactions_df, use_container_width=True)
+            else:
+                st.info("No insider transactions data available")
         else:
-            st.info("No sentiment data available")
+            st.info("No insider transactions available")
+    
+    with sentiment_tab:
+        st.subheader(f"📊 Insider Sentiment - {symbol}")
+        
+        if insider_sentiment and 'data' in insider_sentiment:
+            sentiment_data = insider_sentiment['data']
+            if sentiment_data:
+                # Create metrics
+                col1, col2, col3 = st.columns(3)
+                
+                latest_data = sentiment_data[-1] if sentiment_data else {}
+                
+                with col1:
+                    st.metric(
+                        "Month", 
+                        f"{latest_data.get('year', 'N/A')}-{latest_data.get('month', 'N/A'):02d}"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "MSPR", 
+                        f"{latest_data.get('mspr', 0):.2f}"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "Change", 
+                        f"{latest_data.get('change', 0):+.0f}"
+                    )
+                
+                # Show trend chart if multiple data points
+                if len(sentiment_data) > 1:
+                    df_sentiment = pd.DataFrame(sentiment_data)
+                    if 'mspr' in df_sentiment.columns:
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=[f"{row['year']}-{row['month']:02d}" for _, row in df_sentiment.iterrows()],
+                            y=df_sentiment['mspr'],
+                            mode='lines+markers',
+                            name='MSPR',
+                            line=dict(color='blue')
+                        ))
+                        
+                        fig.update_layout(
+                            title="Insider Sentiment Trend (MSPR)",
+                            xaxis_title="Date",
+                            yaxis_title="MSPR",
+                            height=400
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No insider sentiment data available")
+        else:
+            st.info("No insider sentiment data available")
 
 def crypto_tab():
     """Cryptocurrency information tab"""

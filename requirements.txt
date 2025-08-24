@@ -25,6 +25,7 @@ dash-bootstrap-components>=1.5.0
 # Financial Data
 yfinance>=0.2.20
 fredapi>=0.5.1
+finnhub-python>=2.4.20
 
 # Statistical Analysis
 scipy>=1.11.0

@@ -74,7 +74,7 @@ class OptimizedConfig:
     """
     
     __slots__ = (
-        '_alpaca_credentials', '_finhub_credentials', '_fred_credentials',
+        '_alpaca_credentials', '_finnhub_credentials', '_fred_credentials',
         '_trading_limits', '_performance_config', '_database_url',
         '_log_level', '_config_file_path', '_last_reload'
     )
@@ -109,8 +109,8 @@ class OptimizedConfig:
             base_url=os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
         )
         
-        self._finhub_credentials = APICredentials(
-            api_key=os.getenv('FINHUB_API_KEY', ''),
+        self._finnhub_credentials = APICredentials(
+            api_key=os.getenv('FINNHUB_API_KEY', ''),
             base_url='https://finnhub.io/api/v1'
         )
         
@@ -155,9 +155,9 @@ class OptimizedConfig:
         return self._alpaca_credentials
     
     @property
-    def finhub(self) -> APICredentials:
-        """Finhub news API credentials"""
-        return self._finhub_credentials
+    def finnhub(self) -> APICredentials:
+        """Finnhub news API credentials"""
+        return self._finnhub_credentials
     
     @property
     def fred(self) -> APICredentials:
@@ -188,7 +188,7 @@ class OptimizedConfig:
         """Validate all API credentials"""
         return {
             'alpaca': self.alpaca.is_valid() and bool(self.alpaca.secret_key),
-            'finhub': self.finhub.is_valid(),
+            'finnhub': self.finnhub.is_valid(),
             'fred': self.fred.is_valid()
         }
     
@@ -268,7 +268,7 @@ format = "{time} | {level} | {name}:{function}:{line} | {message}"
 url = "sqlite:///trading_system.db"  # Database connection URL
 
 # Environment variables still take precedence for sensitive data:
-# ALPACA_API_KEY, ALPACA_SECRET_KEY, FINHUB_API_KEY, FRED_API_KEY
+# ALPACA_API_KEY, ALPACA_SECRET_KEY, FINNHUB_API_KEY, FRED_API_KEY
 '''
         
         output_path.write_text(template_content)
@@ -297,8 +297,8 @@ class Config:
         return get_config().validate_all_credentials()['alpaca']
     
     @staticmethod
-    def validate_finhub_config() -> bool:
-        return get_config().validate_all_credentials()['finhub']
+    def validate_finnhub_config() -> bool:
+        return get_config().validate_all_credentials()['finnhub']
     
     @staticmethod
     def validate_fred_config() -> bool:
@@ -313,7 +313,7 @@ class Config:
             'ALPACA_API_KEY': lambda: config.alpaca.api_key,
             'ALPACA_SECRET_KEY': lambda: config.alpaca.secret_key,
             'ALPACA_BASE_URL': lambda: config.alpaca.base_url,
-            'FINHUB_API_KEY': lambda: config.finhub.api_key,
+            'FINNHUB_API_KEY': lambda: config.finnhub.api_key,
             'FRED_API_KEY': lambda: config.fred.api_key,
             'DATABASE_URL': lambda: config.database_url,
             'LOG_LEVEL': lambda: config.log_level

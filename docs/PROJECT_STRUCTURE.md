@@ -35,7 +35,7 @@ GaussWorldTrader/
 │   ├── agent/             # AI/ML agents and analysis
 │   │   ├── __init__.py
 │   │   ├── agent_manager.py       # Agent coordination
-│   │   ├── data_sources.py        # Data source management
+│   │   ├── data_sources.py        # [REMOVED] Data source management
 │   │   ├── fundamental_analyzer.py # Fundamental analysis
 │   │   └── llm_providers.py       # LLM integration
 │   │

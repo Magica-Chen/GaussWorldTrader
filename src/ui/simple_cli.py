@@ -220,9 +220,9 @@ Latest Price: [magenta]${latest_price:.2f}[/magenta]
             alpaca_valid = Config.validate_alpaca_config()
             alpaca_status = "✅ Valid" if alpaca_valid else "❌ Invalid/Missing"
             
-            # Check Finhub
-            finhub_valid = Config.validate_finhub_config()
-            finhub_status = "✅ Valid" if finhub_valid else "❌ Invalid/Missing"
+            # Check Finnhub
+            finnhub_valid = Config.validate_finnhub_config()
+            finnhub_status = "✅ Valid" if finnhub_valid else "❌ Invalid/Missing"
             
             # Check FRED
             fred_valid = Config.validate_fred_config()
@@ -233,12 +233,12 @@ Latest Price: [magenta]${latest_price:.2f}[/magenta]
             table.add_column("Status", style="white")
             
             table.add_row("Alpaca Trading", alpaca_status)
-            table.add_row("Finhub News", finhub_status)
+            table.add_row("Finnhub News", finnhub_status)
             table.add_row("FRED Economic", fred_status)
             
             console.print(table)
             
-            if all([alpaca_valid, finhub_valid, fred_valid]):
+            if all([alpaca_valid, finnhub_valid, fred_valid]):
                 console.print("[green]🎉 All configurations valid![/green]")
             else:
                 console.print("[yellow]⚠️  Some configurations missing. Check your .env file[/yellow]")
@@ -285,7 +285,7 @@ else:
                     
             elif choice == "3":
                 print("Alpaca:", "✅" if Config.validate_alpaca_config() else "❌")
-                print("Finhub:", "✅" if Config.validate_finhub_config() else "❌") 
+                print("Finnhub:", "✅" if Config.validate_finnhub_config() else "❌") 
                 print("FRED:", "✅" if Config.validate_fred_config() else "❌")
                 
         except Exception as e:

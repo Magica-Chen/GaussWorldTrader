@@ -160,7 +160,7 @@ ALPACA_SECRET_KEY=your_secret
 ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
 # Financial Data (free tiers available)
-FINHUB_API_KEY=your_finhub_key    # finnhub.io
+FINNHUB_API_KEY=your_finnhub_key    # finnhub.io
 FRED_API_KEY=your_fred_key        # fred.stlouisfed.org
 ```
 
@@ -184,7 +184,7 @@ GaussWorldTrader/
 │   │   └── position_manager.py  # Position management
 │   ├── agent/            # AI-powered analysis (multi-LLM)
 │   │   ├── agent_manager.py     # AI agent coordination
-│   │   ├── data_sources.py      # Data source management
+│   │   ├── data_sources.py      # [REMOVED] Data source management
 │   │   ├── fundamental_analyzer.py # Fundamental analysis
 │   │   └── llm_providers.py     # LLM integration
 │   ├── analysis/         # Technical analysis & metrics

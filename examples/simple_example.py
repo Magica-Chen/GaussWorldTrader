@@ -18,11 +18,11 @@ def test_config():
         
         # Test basic config
         alpaca_valid = Config.validate_alpaca_config()
-        finhub_valid = Config.validate_finhub_config() 
+        finnhub_valid = Config.validate_finnhub_config() 
         fred_valid = Config.validate_fred_config()
         
         print(f"  Alpaca API: {'✅ Valid' if alpaca_valid else '❌ Missing/Invalid'}")
-        print(f"  Finhub API: {'✅ Valid' if finhub_valid else '❌ Missing/Invalid'}")
+        print(f"  Finnhub API: {'✅ Valid' if finnhub_valid else '❌ Missing/Invalid'}")
         print(f"  FRED API: {'✅ Valid' if fred_valid else '❌ Missing/Invalid'}")
         
         return alpaca_valid

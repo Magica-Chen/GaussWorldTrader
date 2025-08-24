@@ -11,7 +11,9 @@ from datetime import datetime, timedelta
 import logging
 import json
 
-from .data_sources import FinnhubProvider, FREDProvider, get_comprehensive_market_data
+from src.data.finnhub_provider import FinnhubProvider
+from src.data.fred_provider import FREDProvider
+from src.data.market_info_provider import get_comprehensive_market_data
 from .llm_providers import create_provider, get_available_providers
 
 class FundamentalAnalyzer:
@@ -50,8 +52,11 @@ class FundamentalAnalyzer:
         # Perform financial ratio analysis
         financial_analysis = self._analyze_financial_ratios(market_data.get('basic_financials', {}))
         
-        # Analyze news sentiment
-        news_analysis = self._analyze_news_sentiment(market_data.get('company_news', []))
+        # Analyze insider information
+        insider_analysis = self._analyze_insider_data(
+            market_data.get('insider_transactions', []),
+            market_data.get('insider_sentiment', {})
+        )
         
         # Economic context analysis
         economic_analysis = self._analyze_economic_context(market_data.get('economic_indicators', {}))
@@ -68,7 +73,7 @@ class FundamentalAnalyzer:
             'timestamp': datetime.now().isoformat(),
             'company_profile': market_data.get('company_profile', {}),
             'financial_analysis': financial_analysis,
-            'news_analysis': news_analysis,
+            'insider_analysis': insider_analysis,
             'economic_analysis': economic_analysis,
             'analyst_analysis': analyst_analysis,
             'raw_data': market_data
@@ -171,48 +176,81 @@ class FundamentalAnalyzer:
         
         return grades
     
-    def _analyze_news_sentiment(self, news: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Analyze news sentiment"""
-        if not news or any('error' in item for item in news):
-            return {"error": "No news data available"}
+    def _analyze_insider_data(self, insider_transactions: List[Dict[str, Any]], 
+                             insider_sentiment: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze insider transactions and sentiment"""
+        analysis = {}
         
-        analysis = {
-            'total_articles': len(news),
-            'recent_headlines': [item.get('headline', 'N/A') for item in news[:5]],
-            'news_sources': list(set([item.get('source', 'Unknown') for item in news])),
-            'date_range': {
-                'from': min([item.get('datetime', 0) for item in news]) if news else 0,
-                'to': max([item.get('datetime', 0) for item in news]) if news else 0
+        # Analyze insider transactions
+        if insider_transactions and not any('error' in item for item in insider_transactions if isinstance(item, dict)):
+            transactions_analysis = {
+                'total_transactions': len(insider_transactions),
+                'recent_count': len([t for t in insider_transactions[:10]]),
+                'net_change': 0,
+                'buy_transactions': 0,
+                'sell_transactions': 0,
+                'insider_activity_level': 'Low'
             }
-        }
-        
-        # Simple sentiment analysis based on keywords
-        positive_keywords = ['growth', 'profit', 'increase', 'beat', 'strong', 'positive', 'gain']
-        negative_keywords = ['loss', 'decline', 'decrease', 'miss', 'weak', 'negative', 'fall']
-        
-        sentiment_scores = []
-        for article in news:
-            headline = article.get('headline', '').lower()
-            summary = article.get('summary', '').lower()
-            text = f"{headline} {summary}"
             
-            positive_count = sum(1 for keyword in positive_keywords if keyword in text)
-            negative_count = sum(1 for keyword in negative_keywords if keyword in text)
+            # Calculate aggregated metrics
+            for transaction in insider_transactions[:20]:  # Recent 20 transactions
+                change = transaction.get('change', 0)
+                if isinstance(change, (int, float)):
+                    transactions_analysis['net_change'] += change
+                    
+                    # Count buy/sell based on change sign
+                    if change > 0:
+                        transactions_analysis['buy_transactions'] += 1
+                    elif change < 0:
+                        transactions_analysis['sell_transactions'] += 1
             
-            if positive_count > negative_count:
-                sentiment_scores.append(1)
-            elif negative_count > positive_count:
-                sentiment_scores.append(-1)
+            # Determine activity level
+            total_recent = transactions_analysis['recent_count']
+            if total_recent > 15:
+                transactions_analysis['insider_activity_level'] = 'High'
+            elif total_recent > 5:
+                transactions_analysis['insider_activity_level'] = 'Moderate'
+            
+            # Determine sentiment from net change
+            net_change = transactions_analysis['net_change']
+            if net_change > 50000:
+                transactions_analysis['transaction_sentiment'] = 'Bullish'
+            elif net_change < -50000:
+                transactions_analysis['transaction_sentiment'] = 'Bearish'
             else:
-                sentiment_scores.append(0)
-        
-        if sentiment_scores:
-            avg_sentiment = np.mean(sentiment_scores)
-            analysis['sentiment_score'] = avg_sentiment
-            analysis['sentiment_label'] = 'Positive' if avg_sentiment > 0.1 else 'Negative' if avg_sentiment < -0.1 else 'Neutral'
+                transactions_analysis['transaction_sentiment'] = 'Neutral'
+            
+            analysis['transactions'] = transactions_analysis
         else:
-            analysis['sentiment_score'] = 0
-            analysis['sentiment_label'] = 'Neutral'
+            analysis['transactions'] = {"error": "No insider transaction data available"}
+        
+        # Analyze insider sentiment
+        if insider_sentiment and 'data' in insider_sentiment:
+            sentiment_data = insider_sentiment['data']
+            if sentiment_data:
+                latest_data = sentiment_data[-1] if sentiment_data else {}
+                
+                sentiment_analysis = {
+                    'latest_mspr': latest_data.get('mspr', 0),
+                    'latest_change': latest_data.get('change', 0),
+                    'latest_period': f"{latest_data.get('year', 'N/A')}-{latest_data.get('month', 'N/A'):02d}",
+                    'data_points': len(sentiment_data)
+                }
+                
+                # Interpret MSPR (Monthly Share Purchase Ratio)
+                mspr = sentiment_analysis['latest_mspr']
+                if mspr > 0.5:
+                    sentiment_analysis['mspr_interpretation'] = 'Bullish (High insider buying)'
+                elif mspr < -0.5:
+                    sentiment_analysis['mspr_interpretation'] = 'Bearish (High insider selling)'
+                else:
+                    sentiment_analysis['mspr_interpretation'] = 'Neutral (Balanced activity)'
+                
+                analysis['sentiment'] = sentiment_analysis
+            else:
+                analysis['sentiment'] = {"error": "No insider sentiment data points"}
+        else:
+            analysis['sentiment'] = {"error": "No insider sentiment data available"}
         
         return analysis
     
@@ -307,7 +345,7 @@ class FundamentalAnalyzer:
         summary_data = {
             'symbol': analysis_data['symbol'],
             'financial_grades': analysis_data['financial_analysis'].get('ratio_grades', {}),
-            'sentiment': analysis_data['news_analysis'].get('sentiment_label', 'Neutral'),
+            'insider_sentiment': analysis_data['insider_analysis'].get('sentiment', {}).get('mspr_interpretation', 'Unknown'),
             'economic_environment': analysis_data['economic_analysis'].get('economic_environment', 'Unknown'),
             'analyst_consensus': analysis_data['analyst_analysis'].get('consensus', 'Unknown'),
             'valuation_ratios': analysis_data['financial_analysis'].get('valuation_ratios', {}),
@@ -365,15 +403,30 @@ Valuation Ratios:
 • EV/EBITDA: {valuation.get('ev_ebitda', 'N/A')}
 """
         
-        # News Sentiment
-        news = analysis_data.get('news_analysis', {})
-        if news and 'error' not in news:
+        # Insider Analysis
+        insider = analysis_data.get('insider_analysis', {})
+        if insider:
             report += f"""
-NEWS SENTIMENT ANALYSIS:
------------------------
-• Total Articles: {news.get('total_articles', 0)}
-• Sentiment: {news.get('sentiment_label', 'Neutral')}
-• Sentiment Score: {news.get('sentiment_score', 0):.2f}
+INSIDER ANALYSIS:
+-----------------"""
+            
+            # Transactions analysis
+            transactions = insider.get('transactions', {})
+            if transactions and 'error' not in transactions:
+                report += f"""
+• Recent Transactions: {transactions.get('recent_count', 0)}
+• Net Share Change: {transactions.get('net_change', 0):+,.0f}
+• Activity Level: {transactions.get('insider_activity_level', 'Unknown')}
+• Transaction Sentiment: {transactions.get('transaction_sentiment', 'Neutral')}
+"""
+            
+            # Sentiment analysis
+            sentiment = insider.get('sentiment', {})
+            if sentiment and 'error' not in sentiment:
+                report += f"""
+• Latest MSPR: {sentiment.get('latest_mspr', 0):.2f}
+• MSPR Interpretation: {sentiment.get('mspr_interpretation', 'Unknown')}
+• Data Period: {sentiment.get('latest_period', 'N/A')}
 """
         
         # Economic Context
