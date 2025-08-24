@@ -283,10 +283,36 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
             try:
                 # Get recent data for analysis - use ET time for trading logic
                 end_date = now_et()
+                
+                # # Use shorter history for options (they expire)
+                # if data_provider.is_option_symbol(symbol):
+                #     start_date = end_date - timedelta(days=min(days, 30))  # Max 30 days for options
+                #     if HAS_RICH and console:
+                #         console.print(f"[dim]🎯 {symbol} is an option - using {min(days, 30)} days history[/dim]")
+                #     else:
+                #         print(f"[O] {symbol} is an option - using {min(days, 30)} days history")
+                # else:
+                #     start_date = end_date - timedelta(days=days)
+
                 start_date = end_date - timedelta(days=days)
+                if data_provider.is_option_symbol(symbol):
+                    if HAS_RICH and console:
+                        console.print(f"[dim]🎯 {symbol} is an option [/dim]")
+                    else:
+                        print(f"[O] {symbol} is an option")
                 
                 data = data_provider.get_bars(symbol, '1Day', start_date, end_date)
                 if data.empty:
+                    if data_provider.is_option_symbol(symbol):
+                        if HAS_RICH and console:
+                            console.print(f"[yellow]ℹ️ Options data not available (requires Pro tier): {symbol}[/yellow]")
+                        else:
+                            print(f"Info: Options data not available (requires Pro tier): {symbol}")
+                    else:
+                        if HAS_RICH and console:
+                            console.print(f"[yellow]⚠️ No data available for {symbol}[/yellow]")
+                        else:
+                            print(f"Warning: No data available for {symbol}")
                     continue
                 
                 # Generate signals
@@ -319,9 +345,13 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                 
                 if HAS_RICH and console:
                     status = "📋" if symbol in watchlist_symbols else "💼" if symbol in position_symbols else "🔍"
+                    if data_provider.is_option_symbol(symbol):
+                        status = "🎯" + status  # Add option indicator
                     console.print(f"[dim]{status} Analyzed {symbol}: {len(symbol_signals)} signals[/dim]")
                 else:
                     status = "[W]" if symbol in watchlist_symbols else "[P]" if symbol in position_symbols else "[N]"
+                    if data_provider.is_option_symbol(symbol):
+                        status = "[O]" + status  # Add option indicator
                     print(f"{status} Analyzed {symbol}: {len(symbol_signals)} signals")
                     
             except Exception as e:
@@ -357,6 +387,10 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                         context = "📋"
                     elif result.get('in_positions'):
                         context = "💼"
+                    
+                    # Add option indicator
+                    if data_provider.is_option_symbol(symbol):
+                        context = "🎯" + context
                     
                     action_color = "green" if action == "BUY" else "red"
                     console.print(f"[{action_color}]{i:2d}. {context} {symbol} - {action} {quantity} shares[/{action_color}]")

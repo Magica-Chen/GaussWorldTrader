@@ -7,7 +7,7 @@ name = "gauss-world-trader"
 version = "1.1.0"
 description = "Gauss World Trader - A comprehensive Python 3.12+ quantitative trading system named after Carl Friedrich Gauss"
 authors = [
-    {name = "Magica Chen", email = "magica.chen@gaussworldtrader.com"}
+    {name = "Zexun Chen", email = "zexun.chen@gauss.world"}
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
