@@ -47,9 +47,7 @@ GaussWorldTrader/
 │   │
 │   ├── data/              # Data providers and handlers
 │   │   ├── __init__.py
-│   │   ├── alpaca_provider.py     # Alpaca API integration
-│   │   ├── async_data_provider.py # Async data handling
-│   │   ├── crypto_provider.py     # Cryptocurrency data
+│   │   ├── alpaca_provider.py     # Unified data provider (stocks, options, crypto)
 │   │   ├── macro_provider.py      # Macroeconomic data
 │   │   └── news_provider.py       # News and sentiment data
 │   │

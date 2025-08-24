@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import json
 from config import Config
 from src.utils.timezone_utils import EASTERN, now_et, get_market_status
-from src.data import AlpacaDataProvider, CryptoDataProvider, NewsDataProvider, MacroDataProvider
+from src.data import AlpacaDataProvider, NewsDataProvider, MacroDataProvider
 from src.trade import TradingEngine, Backtester
 from src.strategy import MomentumStrategy
 from src.analysis import TechnicalAnalysis, FinancialMetrics

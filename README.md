@@ -192,9 +192,7 @@ GaussWorldTrader/
 │   │   ├── performance_analyzer.py # Performance analysis
 │   │   └── technical_analysis.py # Technical indicators
 │   ├── data/             # Smart data providers
-│   │   ├── alpaca_provider.py   # Alpaca API integration
-│   │   ├── async_data_provider.py # Async data handling
-│   │   ├── crypto_provider.py   # Cryptocurrency data
+│   │   ├── alpaca_provider.py   # Unified data provider (stocks, options, crypto)
 │   │   ├── macro_provider.py    # Macroeconomic data
 │   │   └── news_provider.py     # News data integration
 │   ├── strategy/         # 10 trading strategies

@@ -259,9 +259,14 @@ def get_technical_indicators(data):
 def get_crypto_data():
     """Get cryptocurrency data with caching"""
     try:
-        from src.data import CryptoDataProvider
-        provider = CryptoDataProvider()
-        btc_data = provider.get_bitcoin_price()
+        from src.data import AlpacaDataProvider
+        provider = AlpacaDataProvider()
+        btc_quote = provider.get_crypto_latest_quote('BTC/USD')
+        btc_data = {
+            'symbol': 'BTC',
+            'price_usd': btc_quote.get('bid_price', 0) if 'error' not in btc_quote else 0,
+            'last_updated': btc_quote.get('timestamp', datetime.now()).strftime('%Y-%m-%d %H:%M:%S') if 'error' not in btc_quote else 'Unknown'
+        }
         return btc_data, None
     except Exception as e:
         return None, str(e)

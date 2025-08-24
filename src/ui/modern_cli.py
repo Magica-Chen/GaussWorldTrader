@@ -24,14 +24,14 @@ from rich.live import Live
 
 from config import Config
 try:
-    from src.data.async_data_provider import AsyncDataProvider
+    from src.data import AlpacaDataProvider
     from src.trade.optimized_trading_engine import OptimizedTradingEngine, OrderRequest
     from src.strategy.momentum_strategy import MomentumStrategy
     from src.utils.error_handling import safe_execute_async, handle_trading_operation_result
 except ImportError as e:
     # Fallback to basic imports for compatibility
     console.print(f"[yellow]⚠️  Some advanced features unavailable: {e}[/yellow]")
-    from src.data import AlpacaDataProvider as AsyncDataProvider
+    from src.data import AlpacaDataProvider
     from src.trade import TradingEngine as OptimizedTradingEngine
     from src.strategy import MomentumStrategy
 
@@ -657,11 +657,38 @@ async def _run_strategy_iteration(strategy, symbols: list[str], dry_run: bool) -
         # Fetch data
         task = progress.add_task("Fetching market data...", total=None)
         
-        async with AsyncDataProvider() as provider:
-            data_dict, error = await safe_execute_async(
-                provider.fetch_multiple_symbols,
-                symbols, '1Day', 100
-            )
+        # Use AlpacaDataProvider synchronously in async context
+        provider = AlpacaDataProvider()
+        
+        # Fetch data for multiple symbols concurrently using thread pool
+        loop = asyncio.get_running_loop()
+        data_dict = {}
+        
+        async def fetch_symbol_data(symbol):
+            """Fetch data for a single symbol in thread pool"""
+            try:
+                df = await loop.run_in_executor(
+                    None, 
+                    provider.get_bars, 
+                    symbol, '1Day', None, None, 100
+                )
+                return symbol, df
+            except Exception as e:
+                console.print(f"[red]Error fetching {symbol}: {e}[/red]")
+                return symbol, pd.DataFrame()
+        
+        # Fetch all symbols concurrently
+        tasks = [fetch_symbol_data(symbol) for symbol in symbols]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for result in results:
+            if isinstance(result, Exception):
+                console.print(f"[red]Failed to fetch data: {result}[/red]")
+                continue
+            symbol, df = result
+            data_dict[symbol] = df
+        
+        error = None if data_dict else "No data fetched for any symbols"
             
             if not handle_trading_operation_result(data_dict, error):
                 console.print("[red]❌ Failed to fetch market data[/red]")
