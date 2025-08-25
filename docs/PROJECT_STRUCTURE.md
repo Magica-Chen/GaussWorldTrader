@@ -8,7 +8,7 @@ This document describes the organized project structure following clean architec
 
 ```
 GaussWorldTrader/
-├── main.py                 # Main entry point (CLI interface)
+├── main.py                 # Main entry point (CLI interface selection)
 ├── dashboard.py            # Dashboard launcher (Web UI interface)
 ├── CLAUDE.md              # Code style guidelines
 ├── README.md              # Project documentation
@@ -73,13 +73,13 @@ GaussWorldTrader/
 │   │
 │   ├── ui/                # User interfaces
 │   │   ├── __init__.py
+│   │   ├── core_cli.py            # Base CLI abstraction (shared functionality)
 │   │   ├── dashboard.py           # Dashboard launcher
 │   │   ├── simple_dashboard.py    # Basic Streamlit dashboard
 │   │   ├── advanced_dashboard.py  # Advanced Streamlit dashboard
 │   │   ├── modern_dashboard.py    # Unified modern dashboard
-│   │   ├── simple_cli.py          # Basic CLI interface
-│   │   ├── modern_cli.py          # Modern CLI with Rich
-│   │   ├── cli_interface.py       # Command-line interface
+│   │   ├── simple_cli.py          # Basic CLI interface (uses core_cli)
+│   │   ├── modern_cli.py          # Modern CLI with Rich (uses core_cli, primary)
 │   │   └── portfolio_commands.py  # Portfolio CLI commands
 │   │
 │   └── utils/             # Shared utilities
@@ -141,7 +141,53 @@ GaussWorldTrader/
 
 ### Interface Modules
 - **`src/ui/`**: All user interface implementations
+  - **`core_cli.py`**: Base CLI abstraction providing shared functionality
+  - **`simple_cli.py`**: Basic CLI interface inheriting from core
+  - **`modern_cli.py`**: Advanced CLI interface using core utilities
 - **`src/utils/`**: Shared functionality across modules
+
+### CLI Architecture (New)
+The CLI system now uses an abstract base class to eliminate code duplication:
+
+```
+core_cli.py (BaseCLI class)
+├── Shared command implementations (account info, config validation, etc.)
+├── Common error handling and display utilities
+├── Base table creation and formatting functions
+└── Abstract methods for custom command setup
+
+simple_cli.py (SimpleCLI class inheriting from BaseCLI)
+├── Basic command registration
+├── Simple momentum strategy runner
+└── Fallback mode for systems without rich/typer
+
+modern_cli.py (Uses BaseCLI utilities)
+├── Advanced async operations
+├── Sub-command organization 
+├── Progress bars and live displays
+└── Comprehensive trading features
+```
+
+### Entry Point Selection (New)
+The `main.py` entry point now supports CLI interface selection:
+
+```bash
+# Use modern CLI (default)
+python main.py [commands]
+
+# Explicitly choose CLI interface
+python main.py --cli modern [commands]    # Rich CLI with sub-commands
+python main.py --cli simple [commands]    # Simple flat command structure
+
+# Examples
+python main.py account info               # Modern: sub-command syntax
+python main.py --cli simple account-info  # Simple: flat command syntax
+```
+
+**Benefits:**
+- **Modern CLI**: Rich interface, sub-commands, async operations, advanced features
+- **Simple CLI**: Lightweight, flat commands, basic functionality, fallback compatibility
+- **Unified Entry**: Single entry point with automatic CLI selection and argument forwarding
 
 ## Import Guidelines
 

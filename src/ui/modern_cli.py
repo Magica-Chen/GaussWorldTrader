@@ -1,8 +1,8 @@
 """
-Modern CLI using Python 3.12 features
-- Typer for better CLI experience
+Modern CLI using Python 3.12 features with core CLI abstraction
+- Uses BaseCLI for common functionality
 - Rich for beautiful output
-- Async operations
+- Async operations  
 - Pattern matching for command routing
 """
 from __future__ import annotations
@@ -23,6 +23,8 @@ from rich.layout import Layout
 from rich.live import Live
 
 from config import Config
+from src.ui.core_cli import handle_portfolio_command, print_error
+
 try:
     from src.data import AlpacaDataProvider
     from src.trade.optimized_trading_engine import OptimizedTradingEngine, OrderRequest
@@ -30,6 +32,7 @@ try:
     from src.utils.error_handling import safe_execute_async, handle_trading_operation_result
 except ImportError as e:
     # Fallback to basic imports for compatibility
+    console = Console()
     console.print(f"[yellow]⚠️  Some advanced features unavailable: {e}[/yellow]")
     from src.data import AlpacaDataProvider
     from src.trade import TradingEngine as OptimizedTradingEngine
@@ -59,16 +62,11 @@ app.add_typer(trade_app, name="trade")
 app.add_typer(strategy_app, name="strategy")
 app.add_typer(analysis_app, name="analysis")
 
-# Add new v2.0 commands as top-level commands
+# Add new v2.0 commands as top-level commands using core CLI utility functions
 @app.command("check-positions")
 def check_positions_cmd() -> None:
     """📈 Check current positions and recent orders"""
-    try:
-        from src.ui.portfolio_commands import check_positions_and_orders
-        check_positions_and_orders()
-    except Exception as e:
-        console.print(f"[red]❌ Error: {e}[/red]")
-        raise typer.Exit(1)
+    handle_portfolio_command("check-positions")
 
 @app.command("watchlist-trade")
 def watchlist_trade_cmd(
@@ -80,7 +78,7 @@ def watchlist_trade_cmd(
         from src.ui.portfolio_commands import get_watchlists_and_trade
         get_watchlists_and_trade(days=days, strategy=strategy)
     except Exception as e:
-        console.print(f"[red]❌ Error: {e}[/red]")
+        print_error(str(e))
         raise typer.Exit(1)
 
 @account_app.command("info")

@@ -5,6 +5,7 @@ Features async operations, rich CLI, and performance monitoring
 Named after Carl Friedrich Gauss, pioneer of mathematical finance
 """
 import sys
+import argparse
 from pathlib import Path
 
 # Add the project root to the Python path
@@ -18,8 +19,6 @@ if sys.version_info < (3, 12):
     print("💡 Please upgrade to Python 3.12 for optimal performance")
     sys.exit(1)
 
-# Import modern CLI components
-from src.ui.modern_cli import app
 from config.optimized_config import get_config
 
 # Import new modules
@@ -42,19 +41,34 @@ except ImportError:
     console = None
 
 
-def main() -> None:
-    """
-    Main entry point with Python 3.12 optimizations
-    - Validates configuration
-    - Shows system status
-    - Launches modern CLI
-    """
+def parse_cli_arguments():
+    """Parse command line arguments for CLI selection."""
+    parser = argparse.ArgumentParser(
+        description="🌍 Gauss World Trader - Quantitative Trading System",
+        add_help=False  # We'll handle help through the selected CLI
+    )
     
-    # Show startup banner
+    parser.add_argument(
+        '--cli',
+        choices=['modern', 'simple'],
+        default='modern',
+        help='Choose CLI interface: modern (default) or simple'
+    )
+    
+    # Parse only known args to allow CLI-specific arguments to pass through
+    args, remaining = parser.parse_known_args()
+    return args.cli, remaining
+
+
+def show_startup_banner(cli_type: str):
+    """Show startup banner with CLI type information."""
+    cli_description = "Modern Rich CLI" if cli_type == "modern" else "Simple CLI"
+    
     if HAS_RICH and console:
-        console.print("""
+        console.print(f"""
 [bold blue]🌍 Gauss World Trader[/bold blue]
 [cyan]Python 3.12 Compatible • High Performance Trading • Named after Carl Friedrich Gauss[/cyan]
+[dim]Interface: {cli_description}[/dim]
         """)
         
         # Basic config validation
@@ -70,11 +84,38 @@ def main() -> None:
         print("🌍 Gauss World Trader")
         print("Python 3.12 Compatible • High Performance Trading")
         print("Named after Carl Friedrich Gauss")
+        print(f"Interface: {cli_description}")
         print("=" * 50)
+
+
+def main() -> None:
+    """
+    Main entry point with CLI selection
+    - Parses CLI selection arguments
+    - Validates configuration
+    - Shows system status
+    - Launches selected CLI interface
+    """
     
-    # Launch CLI
+    # Parse CLI selection arguments
+    cli_type, remaining_args = parse_cli_arguments()
+    
+    # Show startup banner with selected CLI info
+    show_startup_banner(cli_type)
+    
+    # Temporarily modify sys.argv to pass remaining arguments to the selected CLI
+    original_argv = sys.argv
+    sys.argv = [sys.argv[0]] + remaining_args
+    
     try:
-        app()
+        if cli_type == 'simple':
+            # Import and launch simple CLI
+            from src.ui.simple_cli import main as simple_main
+            simple_main()
+        else:
+            # Import and launch modern CLI (default)
+            from src.ui.modern_cli import app
+            app()
     except KeyboardInterrupt:
         if HAS_RICH and console:
             console.print("\n[yellow]👋 Trading system shutdown complete[/yellow]")
@@ -86,6 +127,9 @@ def main() -> None:
         else:
             print(f"\n💥 Unexpected error: {e}")
         sys.exit(1)
+    finally:
+        # Restore original sys.argv
+        sys.argv = original_argv
 
 if __name__ == '__main__':
     # Use Python 3.12's improved startup performance

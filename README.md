@@ -49,16 +49,21 @@ python dashboard.py --simple    # Basic analysis tools
 
 ### 4. CLI Commands (Terminal Interface)
 ```bash
-# Main CLI entry point
+# Main CLI entry point (Modern CLI by default)
 python main.py
 
+# Choose CLI interface (NEW)
+python main.py --cli modern    # Rich CLI with sub-commands (default)
+python main.py --cli simple    # Simple CLI with flat commands
+
 # Check account status
-python main.py account info
+python main.py account info                    # Modern CLI
+python main.py --cli simple account-info      # Simple CLI
 
 # Analyze and trade watchlist (NEW)
 python main.py watchlist-trade --days 30 --strategy momentum
 
-# Real-time technical analysis
+# Real-time technical analysis (Modern CLI only)
 python main.py analysis technical AAPL --indicators rsi macd sma
 ```
 
@@ -117,6 +122,17 @@ Launch with `python dashboard.py` to access:
 ---
 
 ## 🛠️ CLI Commands
+
+### **CLI Interface Selection (NEW)**
+```bash
+# Choose your preferred CLI interface
+python main.py --cli modern     # Modern Rich CLI with sub-commands (default)
+python main.py --cli simple     # Simple CLI with flat command structure
+
+# All commands work with both interfaces, but syntax differs:
+python main.py account info              # Modern CLI (sub-command)
+python main.py --cli simple account-info # Simple CLI (flat command)
+```
 
 ### **Account Operations**
 ```bash
@@ -209,12 +225,12 @@ GaussWorldTrader/
 │   │   ├── optimized_trading_engine.py # Performance optimized
 │   │   └── portfolio.py         # Portfolio management
 │   ├── ui/               # Multiple interface options
+│   │   ├── core_cli.py          # Base CLI functionality (shared)
 │   │   ├── modern_dashboard.py  # Modern web interface
 │   │   ├── advanced_dashboard.py # Advanced features
 │   │   ├── simple_dashboard.py  # Simple interface
-│   │   ├── modern_cli.py        # Rich CLI interface
-│   │   ├── cli_interface.py     # Command-line interface
-│   │   ├── simple_cli.py        # Basic CLI
+│   │   ├── modern_cli.py        # Rich CLI interface (primary)
+│   │   ├── simple_cli.py        # Basic CLI (fallback)
 │   │   └── portfolio_commands.py # Portfolio CLI commands
 │   └── utils/            # Utilities and helpers
 │       ├── dashboard_utils.py   # Dashboard utilities
