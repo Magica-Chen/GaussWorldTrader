@@ -282,7 +282,7 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
         for symbol in all_symbols:
             try:
                 # Get recent data for analysis - use ET time for trading logic
-                end_date = now_et()
+                current_time = now_et()
                 
                 # # Use shorter history for options (they expire)
                 # if data_provider.is_option_symbol(symbol):
@@ -294,7 +294,7 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                 # else:
                 #     start_date = end_date - timedelta(days=days)
 
-                start_date = end_date - timedelta(days=days)
+                start_date = current_time - timedelta(days=days)
                 if data_provider.is_option_symbol(symbol):
                     if HAS_RICH and console:
                         console.print(f"[dim]🎯 {symbol} is an option [/dim]")

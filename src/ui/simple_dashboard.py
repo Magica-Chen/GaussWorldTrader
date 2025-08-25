@@ -31,58 +31,19 @@ st.set_page_config(
 
 @st.cache_data(ttl=900)  # Cache for 15 minutes
 def load_data(symbol, days=30):
-    """Load market data with VIP/free tier detection"""
+    """Load market data"""
     try:
         from src.data import AlpacaDataProvider
         provider = AlpacaDataProvider()
-        vip = provider.vip
-        using_iex = provider.using_iex
         
         current_time = now_et()
-        
-        # Use centralized market status detection
-        market_status = get_market_status(current_time)
-        is_weekend = current_time.weekday() >= 5
-        is_market_open = market_status == 'open'
-        
-        # Determine data context based on market status and account tier
-        if market_status == 'closed':
-            if is_weekend:
-                days_to_friday = current_time.weekday() - 4
-                market_close_date = current_time - timedelta(days=days_to_friday)
-                market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
-                end_date = market_close_date
-                data_context = "Weekend - showing data through Friday's close"
-            else:
-                # Weekday closed hours
-                market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
-                if current_time.hour < 16:
-                    market_close_date = (current_time - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
-                end_date = market_close_date
-                data_context = f"Market closed - showing data through market close"
-        elif market_status in ['pre-market', 'post-market']:
-            end_date = current_time
-            data_context = f"{market_status.title()} - showing today's data"
-        else:
-            # Market open
-            end_date = current_time
-            data_context = f"Market {market_status} - showing live data"
-        
-        # Add data source context
-        if vip:
-            data_context += " (SIP feed)"
-        elif using_iex:
-            data_context += " (IEX + SIP feeds)"
-        else:
-            data_context += " (Historical data)"
-        
-        start_date = end_date - timedelta(days=days)
+        start_date = current_time - timedelta(days=days)
         
         # Fetch data directly - no fallback
-        data = provider.get_bars(symbol, '1Day', start_date, end_date)
+        data = provider.get_bars(symbol, '1Day', start_date)
         
         if data is not None and not data.empty:
-            return data, data_context
+            return data, None
         else:
             return None, f"No data available for {symbol}"
             
@@ -225,11 +186,11 @@ def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Mom
         backtester = Backtester(initial_cash=initial_cash, commission=0.01)
         
         # Load data for all symbols
-        end_date = now_et()  # Use current date
-        start_date = end_date - timedelta(days=days_back)
+        current_time = now_et()  # Use current date
+        start_date = current_time - timedelta(days=days_back)
         
         for symbol in symbols:
-            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+            data = provider.get_bars(symbol, '1Day', start_date)
             if not data.empty:
                 backtester.add_data(symbol, data)
         
@@ -281,7 +242,7 @@ def run_backtest(symbols, days_back=365, initial_cash=100000, strategy_type="Mom
         results = backtester.run_backtest(
             strategy_func,
             start_date=start_date + timedelta(days=50),
-            end_date=end_date,
+            end_date=current_time,
             symbols=symbols
         )
         

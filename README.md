@@ -9,7 +9,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 
 **🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
 **👤 Author**: Magica Chen  
-**📊 Version**: 1.1.0 - Smart Data Feeds & Enhanced Trading
+**📊 Version**: 1.1.1 - Simplified Alpaca Integration
 
 ---
 
@@ -66,13 +66,11 @@ python main.py analysis technical AAPL --indicators rsi macd sma
 
 ## ✨ Key Features
 
-### 🎯 **Smart Data Feeds (NEW v2.1)**
-- **Automatic Tier Detection**: Detects VIP vs Free tier accounts using SPY SIP feed test
-- **Optimized Data Routing**: 
-  - **Free Tier**: SIP historical + IEX real-time for current day
-  - **VIP Tier**: Full SIP real-time data access
-- **Fallback Logic**: Intelligent fallback when primary data sources fail
-- **Real-time Notifications**: Clear indicators showing data sources in use
+### 🎯 **Streamlined Data Integration (NEW v1.1.1)**
+- **Simplified Alpaca API**: Unified data provider for stocks, options, and crypto
+- **Automatic Data Updates**: Real-time data fetching without manual end_date parameters
+- **Eastern Time Consistency**: All market operations use ET timezone for accuracy
+- **Clean Data Context**: Removed unnecessary market status calculations for better performance
 
 ### 🧠 **Advanced Trading Strategies**
 - **8 Built-in Strategies**: Momentum, Value, Trend Following, Scalping, Arbitrage
@@ -99,10 +97,10 @@ python main.py analysis technical AAPL --indicators rsi macd sma
 Launch with `python dashboard.py` to access:
 
 ### 📈 **Live Market Analysis**
-- **Smart Price Charts**: Real-time charts with market status awareness
+- **Real-time Price Charts**: Live charts with automatic data updates
 - **Technical Indicators**: RSI, MACD, Bollinger Bands, Moving Averages
 - **Multi-Symbol Analysis**: Compare multiple stocks simultaneously
-- **Market Status Display**: Clear indication of market hours (Open/Closed/Pre-market/After-hours)
+- **Streamlined Interface**: Clean, focused market data presentation
 
 ### 💰 **Trading Operations**
 - **Watchlist Trading**: Automated analysis and strategy-based execution
@@ -164,10 +162,10 @@ FINNHUB_API_KEY=your_finnhub_key    # finnhub.io
 FRED_API_KEY=your_fred_key        # fred.stlouisfed.org
 ```
 
-### **Data Feed Tiers**
-- **Free Tier**: Automatic detection, uses SIP historical + IEX real-time
-- **VIP Tier**: Full SIP real-time access (detected automatically)
-- **Smart Fallback**: System automatically handles data source switching
+### **Data Integration**
+- **Real-time Updates**: Alpaca API automatically provides current market data
+- **No Manual Configuration**: System automatically fetches up-to-date information
+- **Timezone Aware**: All operations use Eastern Time for market consistency
 
 ---
 
@@ -184,7 +182,6 @@ GaussWorldTrader/
 │   │   └── position_manager.py  # Position management
 │   ├── agent/            # AI-powered analysis (multi-LLM)
 │   │   ├── agent_manager.py     # AI agent coordination
-│   │   ├── data_sources.py      # [REMOVED] Data source management
 │   │   ├── fundamental_analyzer.py # Fundamental analysis
 │   │   └── llm_providers.py     # LLM integration
 │   ├── analysis/         # Technical analysis & metrics
@@ -310,12 +307,16 @@ signals = strategy.generate_signals(current_date, prices, data, historical_data,
 
 ## 📈 Recent Updates
 
-### **v1.1.0 - Smart Data Feeds & Enhanced Trading**
-- ✅ **Automatic VIP Detection**: Uses SPY SIP feed test for tier detection
+### **v1.1.1 - Simplified Alpaca Integration**
+- ✅ **Simplified Data Fetching**: Removed unnecessary end_date parameters from all Alpaca API calls
+- ✅ **Clean Dashboard Logic**: Removed complex data_context calculations from all dashboards
 - ✅ **Centralized Timezone**: Consistent Eastern Time for all market operations
 - ✅ **Enhanced Watchlist Trading**: Added `--days` and `--strategy` parameters
 - ✅ **Market Hours Awareness**: Smart order type selection (market/limit)
-- ✅ **Clean Codebase**: Removed unused imports and optimized performance
+- ✅ **Clean Codebase**: Streamlined data provider implementation
+
+### **v1.1.0 - Smart Data Feeds & Enhanced Trading**
+- ✅ **Automatic VIP Detection**: Uses SPY SIP feed test for tier detection
 - ✅ **Data Source Notifications**: Clear indicators for SIP vs IEX usage
 - ✅ **Fallback Logic**: Robust data retrieval with intelligent fallbacks
 

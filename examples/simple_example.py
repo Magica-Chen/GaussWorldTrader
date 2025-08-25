@@ -73,7 +73,7 @@ def test_data_provider(use_alpaca=True):
         
         print(f"  Fetching {symbol} data from {start_date.date()} to {end_date.date()}")
         
-        data = provider.get_bars(symbol, '1Day', start_date, end_date)
+        data = provider.get_bars(symbol, '1Day', start_date)
         
         if not data.empty:
             print(f"  ✅ Retrieved {len(data)} bars")

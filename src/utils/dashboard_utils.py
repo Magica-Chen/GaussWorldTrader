@@ -18,10 +18,9 @@ def get_shared_market_data(symbol: str, days: int = 30) -> Tuple[Optional[pd.Dat
     try:
         provider = AlpacaDataProvider()
         current_time = now_et()
-        end_date = current_time
-        start_date = end_date - timedelta(days=days)
+        start_date = current_time - timedelta(days=days)
         
-        data = provider.get_bars(symbol, '1Day', start_date, end_date)
+        data = provider.get_bars(symbol, '1Day', start_date)
         
         if data is not None and not data.empty:
             return data, None
@@ -40,13 +39,13 @@ def run_shared_backtest(symbols: List[str], days_back: int = 365,
         provider = AlpacaDataProvider()
         backtester = Backtester(initial_cash=initial_cash, commission=0.01)
         
-        end_date = now_et()
-        start_date = end_date - timedelta(days=days_back)
+        current_time = now_et()
+        start_date = current_time - timedelta(days=days_back)
         
         # Load data for all symbols
         for symbol in symbols:
             try:
-                data = provider.get_bars(symbol, '1Day', start_date, end_date)
+                data = provider.get_bars(symbol, '1Day', start_date)
                 if not data.empty:
                     backtester.add_data(symbol, data)
             except Exception:
@@ -89,7 +88,7 @@ def run_shared_backtest(symbols: List[str], days_back: int = 365,
         results = backtester.run_backtest(
             strategy_func,
             start_date=start_date + timedelta(days=50),  # Warmup period
-            end_date=end_date,
+            end_date=current_time,
             symbols=symbols
         )
         

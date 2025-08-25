@@ -244,11 +244,11 @@ async def _account_performance_async(days: int) -> None:
             console.print(perf_table)
             
             # Time period information - use ET time for trading logic
-            end_date = datetime.now(EASTERN)
-            start_date = end_date - timedelta(days=days)
+            current_time = now_et()
+            start_date = current_time - timedelta(days=days)
             console.print(f"\n[bold cyan]📅 Analysis Period:[/bold cyan]")
             console.print(f"• Start: {start_date.strftime('%Y-%m-%d %H:%M:%S')} ET")
-            console.print(f"• End: {end_date.strftime('%Y-%m-%d %H:%M:%S')} ET")
+            console.print(f"• End: {current_time.strftime('%Y-%m-%d %H:%M:%S')} ET (current)")
             console.print(f"• Duration: {days} days")
             console.print(f"[yellow]⏰ Note: Free tier accounts have 15-min delayed current data[/yellow]")
             
@@ -293,12 +293,12 @@ async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, outpu
     symbols = [s.upper().strip() for s in symbols]
     
     # Calculate time period - use ET time for trading logic
-    end_date = datetime.now(EASTERN)
-    start_date = end_date - timedelta(days=days)
+    current_time = now_et()
+    start_date = current_time - timedelta(days=days)
     
     console.print(f"[bold cyan]📅 Data Period:[/bold cyan]")
     console.print(f"• Start: {start_date.strftime('%Y-%m-%d')} ET")
-    console.print(f"• End: {end_date.strftime('%Y-%m-%d')} ET")
+    console.print(f"• End: {current_time.strftime('%Y-%m-%d')} ET (current)")
     console.print(f"• Duration: {days} days")
     console.print(f"[yellow]⏰ Note: Free tier accounts have 15-min delayed current data[/yellow]\n")
     
@@ -319,7 +319,7 @@ async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, outpu
             
             try:
                 for symbol in symbols:
-                    data = provider.get_bars(symbol, timeframe, start_date, end_date)
+                    data = provider.get_bars(symbol, timeframe, start_date)
                     if not data.empty:
                         data_dict[symbol] = data
             except Exception as e:
@@ -337,7 +337,7 @@ async def _fetch_data_async(symbols: list[str], timeframe: str, days: int, outpu
             for symbol in symbols:
                 task = progress.add_task(f"Fetching {symbol}...", total=None)
                 try:
-                    data = provider.get_bars(symbol, timeframe, start_date, end_date)
+                    data = provider.get_bars(symbol, timeframe, start_date)
                     if not data.empty:
                         data_dict[symbol] = data
                 except Exception as e:
@@ -444,15 +444,14 @@ async def _stream_data_async(symbols: list[str], live: bool, interval: int) -> N
                     data_table.add_column("Time", style="dim")
                     
                     # Use ET time for trading logic
-                    current_time = datetime.now(EASTERN)
+                    current_time = now_et()
                     
                     for symbol in symbols:
                         try:
                             # Get latest data
-                            end_date = current_time
-                            start_date = end_date - timedelta(days=1)
+                            start_date = current_time - timedelta(days=1)
                             
-                            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+                            data = provider.get_bars(symbol, '1Day', start_date)
                             
                             if not data.empty:
                                 latest = data.iloc[-1]
@@ -770,10 +769,10 @@ async def _technical_analysis_async(symbol: str, indicators: list[str], days: in
             # Fetch data
             provider = AlpacaDataProvider()
             # Use current data - ET time for trading logic
-            end_date = datetime.now(EASTERN)
-            start_date = end_date - timedelta(days=days)
+            current_time = now_et()
+            start_date = current_time - timedelta(days=days)
             
-            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+            data = provider.get_bars(symbol, '1Day', start_date)
             
             if data.empty:
                 console.print(f"[red]❌ No data found for {symbol}[/red]")

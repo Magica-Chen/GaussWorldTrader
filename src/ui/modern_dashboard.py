@@ -124,7 +124,7 @@ def initialize_session_state():
 
 @st.cache_data(ttl=300, show_spinner=False)  # Cache for 5 minutes
 def load_market_data(symbol, days=30):
-    """Load market data with smart market close detection and account-aware messaging"""
+    """Load market data"""
     try:
         # Create fresh provider each time (like simple dashboard) to avoid session state issues
         # This ensures we always have the latest VIP/IEX status
@@ -135,72 +135,18 @@ def load_market_data(symbol, days=30):
         st.session_state.data_provider = provider
         st.session_state.account_info = account_info
         
-        vip = account_info.get('vip', False)
-        using_iex = account_info.get('using_iex', False)
         current_time = now_et()
-        
-        # Smart Market Close Detection
-        # Use centralized market status detection
-        market_status = get_market_status(current_time)
-        is_weekend = current_time.weekday() >= 5
-        
-        # Determine data end date and context based on market status and account tier
-        if market_status == 'closed':
-            if is_weekend:
-                days_to_friday = current_time.weekday() - 4
-                market_close_date = current_time - timedelta(days=days_to_friday)
-                market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
-                end_date = market_close_date
-                data_context = "Weekend - showing data through Friday's close"
-            else:
-                # Weekday closed hours
-                market_close_date = current_time.replace(hour=16, minute=0, second=0, microsecond=0)
-                if current_time.hour < 16:
-                    market_close_date = (current_time - timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0)
-                end_date = market_close_date
-                if vip:
-                    data_context = "Market closed - showing today's data (SIP real-time)"
-                elif using_iex:
-                    data_context = "Market closed - showing today's data (IEX + SIP)"
-                else:
-                    data_context = "Market closed - historical data"
-        elif market_status == 'post-market':
-            end_date = current_time
-            if vip:
-                data_context = "After hours - showing today's data (SIP real-time)"
-            elif using_iex:
-                data_context = "After hours - showing today's data (IEX + SIP)"
-            else:
-                data_context = "After hours - historical data"
-        elif market_status == 'pre-market':
-            if current_time.weekday() == 0:
-                market_close_date = current_time - timedelta(days=3)
-            else:
-                market_close_date = current_time - timedelta(days=1)
-            market_close_date = market_close_date.replace(hour=16, minute=0, second=0, microsecond=0)
-            end_date = market_close_date
-            data_context = "Pre-market - showing data through previous trading day's close"
-        else:
-            # Market open
-            end_date = current_time
-            if vip:
-                data_context = "Market open - showing today's data (SIP real-time)"
-            elif using_iex:
-                data_context = "Market open - showing today's data (IEX + SIP)"
-            else:
-                data_context = "Market open - historical data"
-        
-        start_date = end_date - timedelta(days=days)
+        start_date = current_time - timedelta(days=days)
 
         # Fetch data with detailed error handling
         try:
-            data = provider.get_bars(symbol, '1Day', start_date, end_date)
+            data = provider.get_bars(symbol, '1Day', start_date)
             if data is not None and not data.empty:
-                return data, data_context
+                return data, None
             else:
                 # Log why data is empty
-                logger.warning(f"No data returned for {symbol} from {start_date} to {end_date}")
-                return None, f"No data available for {symbol} (requested: {start_date.date()} to {end_date.date()})"
+                logger.warning(f"No data returned for {symbol} from {start_date}")
+                return None, f"No data available for {symbol} (requested from: {start_date.date()})"
         except Exception as data_error:
             logger.error(f"Error fetching data for {symbol}: {data_error}")
             return None, f"Data fetch error: {data_error}"
@@ -648,20 +594,8 @@ def render_live_analysis_tab():
                 data, error = load_market_data(symbol, days_back)
             
             if error:
-                context_keywords = ["Using", "showing data through", "delayed", "Market", 
-                                  "Weekend", "After hours", "Pre-market", "historical data"]
-                if any(keyword in error for keyword in context_keywords):
-                    st.info(f"ℹ️ {error}")
-                    if data is None or data.empty:
-                        st.warning(f"⚠️ No data available for {symbol} at this time")
-                        account_info = getattr(st.session_state, 'account_info', {})
-                        vip = account_info.get('vip', 'unknown') if account_info else 'no account info'
-                        using_iex = account_info.get('using_iex', 'unknown') if account_info else 'no account info'
-                        st.write(f"Debug: VIP={vip}, Using IEX={using_iex}, Date range requested: {days_back} days")
-                        return
-                else:
-                    st.error(f"❌ Data Error: {error}")
-                    return
+                st.error(f"❌ Data Error: {error}")
+                return
             
             if data is None or data.empty:
                 st.warning(f"⚠️ No data found for {symbol}")
@@ -1558,7 +1492,10 @@ def render_quick_trading():
             # Show current price with live data
             try:
                 data, error = load_market_data(symbol, 1)
-                if data is not None and not data.empty:
+                if error:
+                    st.error(f"Error loading price data: {error}")
+                    return
+                elif data is not None and not data.empty:
                     current_price = data['close'].iloc[-1]
                     prev_price = data['open'].iloc[-1]
                     price_change = current_price - prev_price

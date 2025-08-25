@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 from typing import Annotated
+from src.utils.timezone_utils import now_et
 
 try:
     import typer
@@ -90,12 +91,12 @@ if HAS_RICH:
         """📊 Fetch market data"""
         try:
             provider = AlpacaDataProvider()
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
+            current_time = now_et()
+            start_date = current_time - timedelta(days=days)
             
             console.print(f"[blue]📊 Fetching data for {symbol.upper()}...[/blue]")
             
-            data = provider.get_bars(symbol.upper(), '1Day', start_date, end_date)
+            data = provider.get_bars(symbol.upper(), '1Day', start_date)
             
             if data.empty:
                 console.print(f"[yellow]⚠️  No data found for {symbol}[/yellow]")
@@ -155,10 +156,10 @@ Latest Price: [magenta]${latest_price:.2f}[/magenta]
             
             for symbol in symbols:
                 symbol = symbol.upper()
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=100)
+                current_time = now_et()
+                start_date = current_time - timedelta(days=100)
                 
-                data = provider.get_bars(symbol, '1Day', start_date, end_date)
+                data = provider.get_bars(symbol, '1Day', start_date)
                 if not data.empty:
                     historical_data[symbol] = data
                     current_prices[symbol] = data['close'].iloc[-1]
@@ -172,7 +173,7 @@ Latest Price: [magenta]${latest_price:.2f}[/magenta]
             portfolio = Portfolio()
             
             signals = strategy.generate_signals(
-                current_date=datetime.now(),
+                current_date=now_et(),
                 current_prices=current_prices,
                 current_data={},
                 historical_data=historical_data,
@@ -276,9 +277,9 @@ else:
             elif choice == "2":
                 symbol = input("Enter symbol: ").strip().upper()
                 provider = AlpacaDataProvider()
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=30)
-                data = provider.get_bars(symbol, '1Day', start_date, end_date)
+                current_time = now_et()
+                start_date = current_time - timedelta(days=30)
+                data = provider.get_bars(symbol, '1Day', start_date)
                 print(f"Retrieved {len(data)} records for {symbol}")
                 if not data.empty:
                     print(f"Latest price: ${data['close'].iloc[-1]:.2f}")

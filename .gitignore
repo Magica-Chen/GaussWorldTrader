@@ -89,3 +89,6 @@ coverage.xml
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+#Claude
+CLAUDE.md

@@ -269,7 +269,7 @@ def momentum_backtest_example():
         print(f"Loading data for {len(symbols)} symbols...")
         for symbol in symbols:
             try:
-                data = data_provider.get_bars(symbol, '1Day', start_date, end_date)
+                data = data_provider.get_bars(symbol, '1Day', start_date)
                 backtester.add_data(symbol, data)
                 print(f"Loaded {len(data)} bars for {symbol}")
             except Exception as e:
