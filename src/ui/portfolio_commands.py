@@ -300,8 +300,10 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                         console.print(f"[dim]🎯 {symbol} is an option [/dim]")
                     else:
                         print(f"[O] {symbol} is an option")
-                
-                data = data_provider.get_bars(symbol, '1Day', start_date, end_date)
+                # BUG, currently we cannot set up to now as end_date, but we can use None as default current time
+                data = data_provider.get_bars(symbol, '1Day', start_date)
+                # data = data_provider.get_bars(symbol, '1Day', start_date, end_date)
+
                 if data.empty:
                     if data_provider.is_option_symbol(symbol):
                         if HAS_RICH and console:

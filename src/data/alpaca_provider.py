@@ -201,11 +201,14 @@ class AlpacaProvider:
         """Get historical option bars using OptionHistoricalDataClient"""
         if start is None:
             start = now_et() - timedelta(days=30)  # Options have shorter history
-        if end is None:
-            end = now_et()
+
+        # no need to add end becuase get_option_bars can set it as default.
+        # if end is None:
+        #     end = now_et()
         
         try:
             tf = self._parse_timeframe(timeframe)
+
             feed = "opra" if self.is_pro_tier else "indicative"
             
             request = OptionBarsRequest(
@@ -216,7 +219,7 @@ class AlpacaProvider:
                 limit=limit,
                 feed=feed
             )
-            
+
             bars = self.option_historical_client.get_option_bars(request)
             return self._process_option_bars(bars, symbol)
             

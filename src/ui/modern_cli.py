@@ -689,10 +689,10 @@ async def _run_strategy_iteration(strategy, symbols: list[str], dry_run: bool) -
             data_dict[symbol] = df
         
         error = None if data_dict else "No data fetched for any symbols"
-            
-            if not handle_trading_operation_result(data_dict, error):
-                console.print("[red]❌ Failed to fetch market data[/red]")
-                return
+        
+        if not handle_trading_operation_result(data_dict, error):
+            console.print("[red]❌ Failed to fetch market data[/red]")
+            return
         
         progress.update(task, description="Generating signals...")
         
