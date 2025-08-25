@@ -55,3 +55,28 @@ def validate_api_key(api_key: str, min_length: int = 20) -> bool:
 
 def validate_percentage(value: float, min_val: float = 0.0, max_val: float = 100.0) -> bool:
     return isinstance(value, (int, float)) and min_val <= value <= max_val
+
+def convert_crypto_symbol_for_display(symbol: str) -> str:
+    """
+    Convert crypto symbols to consistent display format.
+    Converts BTCUSD (position format) to BTC/USD (display/API format).
+    """
+    if not isinstance(symbol, str):
+        return symbol
+    
+    # Known crypto symbol mappings (position format -> display format)
+    crypto_mappings = {
+        'BTCUSD': 'BTC/USD',
+        'ETHUSD': 'ETH/USD', 
+        'LTCUSD': 'LTC/USD',
+        'BCHUSD': 'BCH/USD',
+        'ADAUSD': 'ADA/USD',
+        'DOTUSD': 'DOT/USD',
+        'UNIUSD': 'UNI/USD',
+        'LINKUSD': 'LINK/USD',
+        'XLMUSD': 'XLM/USD',
+        'ALGOUSD': 'ALGO/USD'
+    }
+    
+    # Convert if it's a known crypto symbol, otherwise return as-is
+    return crypto_mappings.get(symbol.upper(), symbol)

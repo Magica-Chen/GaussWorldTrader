@@ -188,9 +188,10 @@ class TradingEngine:
     
     def get_current_positions(self) -> List[Dict[str, Any]]:
         try:
+            from src.utils.validators import convert_crypto_symbol_for_display
             positions = self.api.list_positions()
             return [{
-                'symbol': pos.symbol,
+                'symbol': convert_crypto_symbol_for_display(pos.symbol),
                 'qty': float(pos.qty),
                 'side': pos.side,
                 'market_value': float(pos.market_value),

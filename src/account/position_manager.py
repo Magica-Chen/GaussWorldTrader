@@ -20,6 +20,8 @@ class PositionManager:
     def get_all_positions(self) -> List[Dict[str, Any]]:
         """Get all current positions"""
         try:
+            from src.utils.validators import convert_crypto_symbol_for_display
+            
             response = requests.get(
                 f"{self.account_manager.base_url}/v2/positions",
                 headers=self.account_manager.headers,
@@ -28,6 +30,12 @@ class PositionManager:
             response.raise_for_status()
             
             positions = response.json()
+            
+            # Convert crypto symbols for consistent display
+            for position in positions:
+                if 'symbol' in position:
+                    position['symbol'] = convert_crypto_symbol_for_display(position['symbol'])
+            
             self.logger.info(f"Retrieved {len(positions)} positions")
             
             return positions
@@ -39,6 +47,8 @@ class PositionManager:
     def get_position(self, symbol: str) -> Dict[str, Any]:
         """Get position for specific symbol"""
         try:
+            from src.utils.validators import convert_crypto_symbol_for_display
+            
             response = requests.get(
                 f"{self.account_manager.base_url}/v2/positions/{symbol}",
                 headers=self.account_manager.headers,
@@ -47,19 +57,24 @@ class PositionManager:
             response.raise_for_status()
             
             position = response.json()
+            
+            # Convert crypto symbol for consistent display
+            if 'symbol' in position:
+                position['symbol'] = convert_crypto_symbol_for_display(position['symbol'])
+            
             self.logger.info(f"Retrieved position for {symbol}")
             
             return position
             
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
-                return {"symbol": symbol, "error": "No position found"}
+                return {"symbol": convert_crypto_symbol_for_display(symbol), "error": "No position found"}
             else:
                 self.logger.error(f"Error retrieving position for {symbol}: {e}")
-                return {"symbol": symbol, "error": str(e)}
+                return {"symbol": convert_crypto_symbol_for_display(symbol), "error": str(e)}
         except Exception as e:
             self.logger.error(f"Error retrieving position for {symbol}: {e}")
-            return {"symbol": symbol, "error": str(e)}
+            return {"symbol": convert_crypto_symbol_for_display(symbol), "error": str(e)}
     
     def close_position(self, symbol: str, qty: str = None, percentage: str = None) -> Dict[str, Any]:
         """Close position (all or partial)"""
