@@ -1,11 +1,12 @@
 {
   "watchlist": [
     "MSFT",
-    "AAPL"
+    "AAPL",
+    "RGTI"
   ],
   "metadata": {
     "created": "2025-08-21",
-    "last_updated": "2025-08-21 21:54:15",
+    "last_updated": "2025-08-26 01:06:00",
     "description": "Gauss World Trader Default Watchlist",
     "version": "1.0"
   }
