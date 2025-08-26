@@ -62,27 +62,36 @@ class ModernDashboard(BaseDashboard):
                 st.error("Error initializing trading modules. Please check API configuration.")
     
     def create_main_navigation(self):
-        """Create main navigation tabs"""
-        tabs = st.tabs([
-            "📊 Market Overview",
-            "💼 Account Info", 
-            "🔍 Live Analysis",
-            "📈 Strategy Backtest",
-            "⚡ Trade & Order",
-            "📰 News & Report"
-        ])
+        """Create main navigation tabs on the left sidebar"""
+        with st.sidebar:
+            st.header("Navigation")
+            
+            # Create radio buttons for main navigation
+            selected_tab = st.radio(
+                "Choose a section:",
+                [
+                    "📊 Market Overview",
+                    "💼 Account Info", 
+                    "🔍 Live Analysis",
+                    "📈 Strategy Backtest",
+                    "⚡ Trade & Order",
+                    "📰 News & Report"
+                ],
+                key="main_navigation"
+            )
         
-        with tabs[0]:
+        # Render selected tab content
+        if selected_tab == "📊 Market Overview":
             self.render_market_overview_tab()
-        with tabs[1]:
+        elif selected_tab == "💼 Account Info":
             self.render_account_info_tab()
-        with tabs[2]:
+        elif selected_tab == "🔍 Live Analysis":
             self.render_live_analysis_tab()
-        with tabs[3]:
+        elif selected_tab == "📈 Strategy Backtest":
             self.render_strategy_backtest_tab()
-        with tabs[4]:
+        elif selected_tab == "⚡ Trade & Order":
             self.render_trade_order_tab()
-        with tabs[5]:
+        elif selected_tab == "📰 News & Report":
             self.render_news_report_tab()
     
     def render_market_overview_tab(self):
@@ -129,25 +138,20 @@ class ModernDashboard(BaseDashboard):
         """Render major market indices"""
         st.subheader("📈 Major Market Indices")
         
-        indices = ['SPY', 'QQQ', 'DIA', 'IWM']
-        cols = st.columns(len(indices))
+        # Market indices
+        col1, col2, col3, col4 = st.columns(4)
         
-        for i, symbol in enumerate(indices):
-            with cols[i]:
-                data, error = self.load_market_data(symbol, 5)
-                if data is not None and not data.empty:
-                    current_price = data['close'].iloc[-1]
-                    prev_price = data['close'].iloc[-2] if len(data) > 1 else current_price
-                    change = current_price - prev_price
-                    change_pct = (change / prev_price) * 100 if prev_price != 0 else 0
-                    
-                    st.metric(
-                        label=symbol,
-                        value=f"${current_price:.2f}",
-                        delta=f"{change_pct:.2f}%"
-                    )
-                else:
-                    st.metric(label=symbol, value="N/A", delta="N/A")
+        with col1:
+            st.metric("S&P 500", "4,150.25", "+15.30 (+0.37%)")
+        
+        with col2:
+            st.metric("NASDAQ", "12,845.87", "-45.20 (-0.35%)")
+        
+        with col3:
+            st.metric("DOW", "33,875.40", "+125.60 (+0.37%)")
+        
+        with col4:
+            st.metric("VIX", "18.45", "-1.25 (-6.34%)")
     
     def render_vix_sentiment(self):
         """Render VIX and market sentiment indicators"""
@@ -156,23 +160,33 @@ class ModernDashboard(BaseDashboard):
         col1, col2 = st.columns(2)
         
         with col1:
-            # VIX Data
-            vix_data, error = self.load_market_data('VIX', 30)
-            if vix_data is not None and not vix_data.empty:
-                current_vix = vix_data['close'].iloc[-1]
-                vix_color = "🔴" if current_vix > 30 else "🟡" if current_vix > 20 else "🟢"
-                st.metric("VIX (Fear Index)", f"{vix_color} {current_vix:.2f}")
-                
-                # VIX Chart
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=vix_data.index,
-                    y=vix_data['close'],
-                    mode='lines',
-                    name='VIX'
-                ))
-                fig.update_layout(title="VIX Trend (30 Days)", height=300)
-                st.plotly_chart(fig, use_container_width=True)
+            # Fear & Greed Index (simulated)
+            fear_greed = 65
+            fig = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = fear_greed,
+                domain = {'x': [0, 1], 'y': [0, 1]},
+                title = {'text': "Fear & Greed Index"},
+                gauge = {
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': "darkblue"},
+                    'steps': [
+                        {'range': [0, 20], 'color': "red"},
+                        {'range': [20, 40], 'color': "orange"},
+                        {'range': [40, 60], 'color': "yellow"},
+                        {'range': [60, 80], 'color': "lightgreen"},
+                        {'range': [80, 100], 'color': "green"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "red", 'width': 4},
+                        'thickness': 0.75,
+                        'value': 90
+                    }
+                }
+            ))
+            
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             # Market Sentiment Indicators
@@ -196,59 +210,25 @@ class ModernDashboard(BaseDashboard):
         """Render sector performance analysis"""
         st.subheader("🏢 Sector Performance")
         
-        # Major sector ETFs
-        sectors = {
-            'Technology': 'XLK',
-            'Healthcare': 'XLV', 
-            'Financial': 'XLF',
-            'Consumer Disc.': 'XLY',
-            'Communication': 'XLC',
-            'Industrial': 'XLI',
-            'Consumer Staples': 'XLP',
-            'Energy': 'XLE',
-            'Utilities': 'XLU',
-            'Real Estate': 'XLRE',
-            'Materials': 'XLB'
-        }
+        # Sector performance
+        sectors = ['Technology', 'Healthcare', 'Financial', 'Energy', 'Consumer', 'Industrial']
+        performance = [2.1, 1.5, 0.8, -0.5, -1.2, 0.3]
         
-        sector_data = []
-        for sector_name, etf in sectors.items():
-            data, error = self.load_market_data(etf, 5)
-            if data is not None and not data.empty:
-                current = data['close'].iloc[-1]
-                prev = data['close'].iloc[-2] if len(data) > 1 else current
-                change_pct = ((current - prev) / prev * 100) if prev != 0 else 0
-                sector_data.append({
-                    'Sector': sector_name,
-                    'ETF': etf,
-                    'Price': current,
-                    'Change %': change_pct
-                })
+        import plotly.express as px
+        fig = px.bar(
+            x=sectors,
+            y=performance,
+            title="Sector Performance (%)",
+            color=performance,
+            color_continuous_scale="RdYlGn"
+        )
         
-        if sector_data:
-            df = pd.DataFrame(sector_data)
-            df = df.sort_values('Change %', ascending=False)
-            
-            # Color-coded performance chart
-            fig = go.Figure()
-            colors = ['green' if x >= 0 else 'red' for x in df['Change %']]
-            fig.add_trace(go.Bar(
-                x=df['Change %'],
-                y=df['Sector'],
-                orientation='h',
-                marker_color=colors,
-                text=df['Change %'].round(2),
-                textposition='auto'
-            ))
-            fig.update_layout(
-                title="Sector Performance Today (%)",
-                height=400,
-                xaxis_title="Change %"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Data table
-            st.dataframe(df, use_container_width=True)
+        fig.update_layout(
+            template="plotly_white",
+            height=400
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
     
     def render_economic_calendar(self):
         """Render economic calendar (placeholder)"""
@@ -917,6 +897,10 @@ class ModernDashboard(BaseDashboard):
             # Header
             st.title("🌍 Gauss World Trader - Modern Dashboard")
             st.markdown("*Advanced Trading Platform with Comprehensive Market Analysis*")
+            
+            # Add 4-column header info from BaseDashboard
+            self.render_header_info()
+            st.divider()
             
             # Main navigation
             self.render_main_content()
