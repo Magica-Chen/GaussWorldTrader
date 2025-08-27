@@ -9,7 +9,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 
 **🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
 **👤 Author**: Magica Chen  
-**📊 Version**: 1.1.1 - Simplified Alpaca Integration
+**📊 Version**: 1.2.0 - Dashboard Restructure & API Optimization
 
 ---
 
@@ -102,10 +102,11 @@ python main.py analysis technical AAPL --indicators rsi macd sma
 Launch with `python dashboard.py` to access:
 
 ### 📈 **Live Market Analysis**
+- **Restructured Dashboard**: New left-right panel layout for better organization
 - **Real-time Price Charts**: Live charts with automatic data updates
 - **Technical Indicators**: RSI, MACD, Bollinger Bands, Moving Averages
-- **Multi-Symbol Analysis**: Compare multiple stocks simultaneously
-- **Streamlined Interface**: Clean, focused market data presentation
+- **Multi-Asset Support**: Stocks, options, and crypto with unified display
+- **Enhanced Data Integration**: Finnhub and FRED API for comprehensive market data
 
 ### 💰 **Trading Operations**
 - **Watchlist Trading**: Automated analysis and strategy-based execution
@@ -175,7 +176,11 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
 # Financial Data (free tiers available)
 FINNHUB_API_KEY=your_finnhub_key    # finnhub.io
-FRED_API_KEY=your_fred_key        # fred.stlouisfed.org
+FRED_API_KEY=your_fred_key          # fred.stlouisfed.org
+
+# Optional: Additional data providers
+ALPHA_VANTAGE_API_KEY=your_key      # alphavantage.co
+POLYGON_API_KEY=your_key            # polygon.io
 ```
 
 ### **Data Integration**
@@ -206,7 +211,10 @@ GaussWorldTrader/
 │   │   └── technical_analysis.py # Technical indicators
 │   ├── data/             # Smart data providers
 │   │   ├── alpaca_provider.py   # Unified data provider (stocks, options, crypto)
+│   │   ├── finnhub_provider.py  # Finnhub financial data
+│   │   ├── fred_provider.py     # Federal Reserve economic data
 │   │   ├── macro_provider.py    # Macroeconomic data
+│   │   ├── market_info_provider.py # Market information
 │   │   └── news_provider.py     # News data integration
 │   ├── strategy/         # 10 trading strategies
 │   │   ├── base_strategy.py     # Abstract base class
@@ -323,13 +331,13 @@ signals = strategy.generate_signals(current_date, prices, data, historical_data,
 
 ## 📈 Recent Updates
 
-### **v1.1.1 - Simplified Alpaca Integration**
-- ✅ **Simplified Data Fetching**: Removed unnecessary end_date parameters from all Alpaca API calls
-- ✅ **Clean Dashboard Logic**: Removed complex data_context calculations from all dashboards
-- ✅ **Centralized Timezone**: Consistent Eastern Time for all market operations
-- ✅ **Enhanced Watchlist Trading**: Added `--days` and `--strategy` parameters
-- ✅ **Market Hours Awareness**: Smart order type selection (market/limit)
-- ✅ **Clean Codebase**: Streamlined data provider implementation
+### **v1.2.0 - Dashboard Restructure & API Optimization**
+- ✅ **Restructured Dashboard**: Complete dashboard reorganization with left-right panel layout
+- ✅ **Simplified Core CLI**: Streamlined core_cli.py for better maintainability
+- ✅ **Crypto Display Fixes**: Fixed crypto position and symbol display inconsistencies
+- ✅ **Alpaca API Optimization**: Removed end_date params and simplified data_context logic
+- ✅ **Enhanced Data Providers**: Added Finnhub and FRED API integration
+- ✅ **Options Trading Support**: Improved options bars with better date handling
 
 ### **v1.1.0 - Smart Data Feeds & Enhanced Trading**
 - ✅ **Automatic VIP Detection**: Uses SPY SIP feed test for tier detection

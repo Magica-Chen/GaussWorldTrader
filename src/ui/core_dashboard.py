@@ -43,7 +43,7 @@ class BaseDashboard(ABC):
     def configure_page(self):
         """Configure Streamlit page settings"""
         st.set_page_config(
-            page_title=f"{self.icon} {self.title}",
+            page_title=f"{self.title}",
             page_icon=self.icon,
             layout="wide",
             initial_sidebar_state="expanded"
@@ -358,51 +358,27 @@ class BaseDashboard(ABC):
             is_trading_day = current_time.weekday() < 5  # Monday=0, Friday=4
             
             # Create header info layout
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+            col1, col2= st.columns([1, 1])
             
             with col1:
-                st.markdown(f"**📅 Local Time:** {local_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            with col2:
                 # Account tier display
                 if vip:
                     st.success(f"✨ {account_tier}")
                 else:
                     st.info(f"🆓 {account_tier}")
-            
-            with col3:
+
+            with col2:
                 # Data source notice for free tier on trading days
                 if not vip and is_trading_day:
                     if using_iex:
                         st.info("📊 15 Mins Delay")
                     else:
                         st.info("📊 Live Data")
-            
-            with col4:
-                # Market Status Indicator
-                market_status = get_market_status(current_time)
-                is_weekend = current_time.weekday() >= 5
-                
-                if is_weekend:
-                    st.error("🔴 Weekend")
-                elif market_status == 'open':
-                    st.success("🟢 Market Open")
-                elif market_status == 'pre-market':
-                    st.warning("🟡 Pre-Market")
-                elif market_status == 'post-market':
-                    st.warning("🟡 After Hours")
-                else:
-                    st.error("🔴 Market Closed")
                     
         except Exception as e:
             # Fallback header
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.markdown(f"**📅 Local Time:** {local_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            with col2:
-                st.info("🆓 Free Tier")
+
+            st.info("🆓 Free Tier")
     
     @st.cache_data(ttl=1800)  # Cache for 30 minutes
     def run_backtest(_self, symbols: List[str], days_back: int = 365, 
