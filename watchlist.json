@@ -1,13 +1,23 @@
 {
   "watchlist": [
-    "MSFT",
-    "AAPL",
     "RGTI",
-    "AFRM"
+    "AFRM",
+    "UPST",
+    "OPFI",
+    "PGY",
+    "ETOR",
+    "MARA",
+    "CRCL",
+    "QUBT",
+    "GME",
+    "SMCI",
+    "BMNR",
+    "DFDV",
+    "CNC"
   ],
   "metadata": {
     "created": "2025-08-21",
-    "last_updated": "2025-08-28 20:40:16",
+    "last_updated": "2025-08-28 22:44:14",
     "description": "Gauss World Trader Default Watchlist",
     "version": "1.0"
   }

@@ -283,3 +283,98 @@ def format_crypto_data(crypto_response: Dict) -> Dict[str, Any]:
     }
     
     return formatted_data
+
+
+def get_default_symbols():
+    """Get default symbols from watchlist and current positions"""
+    symbols = set()
+    
+    # Add symbols from watchlist
+    try:
+        if 'watchlist_manager' in st.session_state:
+            watchlist = st.session_state.watchlist_manager.get_watchlist()
+            symbols.update(watchlist)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error getting watchlist: {e}")
+    
+    # Add symbols from current positions
+    try:
+        if 'position_manager' in st.session_state:
+            positions = st.session_state.position_manager.get_all_positions()
+            if positions and not any('error' in pos for pos in positions):
+                for pos in positions:
+                    symbol = pos.get('symbol')
+                    if symbol:
+                        symbols.add(symbol)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error getting positions: {e}")
+    
+    return list(symbols)
+
+
+def format_strategy_comparison(comparison_results, symbol):
+    """Format strategy comparison results for display"""
+    if not comparison_results:
+        return None
+    
+    valid_results = [r for r in comparison_results if r['Total Return'] != 'Error' and 'Error:' not in str(r['Total Return'])]
+    if not valid_results:
+        return None
+    
+    strategies_names = [r['Strategy'] for r in valid_results]
+    returns = [float(r['Total Return'].rstrip('%')) for r in valid_results]
+    
+    if returns and len(valid_results) > 1:
+        best_return_idx = returns.index(max(returns))
+        best_return_strategy = strategies_names[best_return_idx]
+        avg_return = sum(returns) / len(returns)
+        
+        return {
+            'chart_data': {
+                'strategies': strategies_names,
+                'returns': returns,
+                'symbol': symbol
+            },
+            'best_strategy': best_return_strategy,
+            'best_return': max(returns),
+            'average_return': avg_return
+        }
+    
+    return None
+
+
+def render_economic_data():
+    """Render economic calendar with real FRED data"""
+    st.subheader("📅 Economic Calendar")
+    
+    try:
+        if 'fred_provider' in st.session_state and st.session_state.fred_provider.client:
+            fred = st.session_state.fred_provider
+            indicators = {'UNRATE': 'Unemployment Rate', 'CPIAUCSL': 'CPI', 'FEDFUNDS': 'Fed Funds Rate'}
+            
+            col1, col2, col3 = st.columns(3)
+            for i, (series_id, name) in enumerate(indicators.items()):
+                try:
+                    data = fred.get_series_data(series_id, start_date='2024-01-01')
+                    if not data.empty:
+                        latest_value = data.iloc[-1, 0]
+                        with [col1, col2, col3][i]:
+                            st.metric(name, f"{latest_value:.2f}{'%' if 'Rate' in name else ''}")
+                except:
+                    with [col1, col2, col3][i]:
+                        st.metric(name, "N/A")
+        else:
+            st.warning("FRED API not configured")
+            from src.utils.timezone_utils import now_et
+            from datetime import timedelta
+            mock_events = [
+                {"Date": now_et().strftime('%Y-%m-%d'), "Event": "CPI", "Previous": "3.1%", "Forecast": "3.2%"},
+                {"Date": (now_et() + timedelta(days=2)).strftime('%Y-%m-%d'), "Event": "Retail Sales", "Previous": "0.3%", "Forecast": "0.4%"}
+            ]
+            st.dataframe(pd.DataFrame(mock_events), use_container_width=True)
+    except Exception as e:
+        st.error(f"Error loading economic calendar: {e}")

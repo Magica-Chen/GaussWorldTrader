@@ -469,6 +469,457 @@ class BaseDashboard(ABC):
             
         except Exception as e:
             return None, str(e)
+
+    def render_standard_market_indices(self):
+        """Render real market indices data"""
+        col1, col2, col3, col4 = st.columns(4)
+        indices = {'SPY': 'S&P 500', 'QQQ': 'NASDAQ', 'DIA': 'DOW', 'VXX': 'VXX'}
+
+        try:
+            provider = AlpacaDataProvider()
+            for i, (symbol, name) in enumerate(indices.items()):
+                with [col1, col2, col3, col4][i]:
+                    try:
+                        quote = provider.get_latest_quote(symbol)
+                        if 'error' not in quote:
+                            current_price = float(quote.get('bid_price', quote.get('ask_price', 0)))
+                            historical_data = provider.get_bars(symbol, '1Day', start=now_et() - timedelta(days=5))
+                            
+                            if not historical_data.empty:
+                                prev_close = float(historical_data['close'].iloc[-2 if len(historical_data) >= 2 else -1])
+                                change = current_price - prev_close
+                                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+                            else:
+                                change, change_pct = 0, 0
+
+                            price_fmt = f"{current_price:.2f}" if symbol == 'VXX' else f"{current_price:,.2f}"
+                            st.metric(name, price_fmt, f"{change:+.2f} ({change_pct:+.2f}%)")
+                        else:
+                            st.metric(name, "N/A", "Data unavailable")
+                    except Exception as e:
+                        st.metric(name, "N/A", f"Error: {str(e)[:20]}...")
+        except Exception as e:
+            st.error(f"Error loading market indices: {e}")
+            for i, name in enumerate(['S&P 500', 'NASDAQ', 'DOW', 'VXX']):
+                with [col1, col2, col3, col4][i]:
+                    st.metric(name, "N/A", "Data unavailable")
+
+    def render_volatility_analysis(self):
+        """Render VXX and market sentiment indicators with real data"""
+        st.subheader("📊 VXX: iPath S&P 500 VIX ST Futures ETN")
+        col1, col2 = st.columns(2)
+
+        try:
+            provider = AlpacaDataProvider()
+            vxx_data = provider.get_bars('VXX', '1Day', start=now_et() - timedelta(days=45))
+
+            if not vxx_data.empty:
+                current_vxx = float(vxx_data['close'].iloc[-1])
+                vxx_30_avg = float(vxx_data['close'].mean())
+                
+                # Calculate Fear & Greed based on VXX levels
+                fear_greed = (max(0, 30 - (current_vxx - 40) * 1.5) if current_vxx > 40 else
+                             30 + (40 - current_vxx) * 2.67 if current_vxx > 25 else
+                             70 + min(30, (25 - current_vxx) * 2))
+                fear_greed = max(0, min(100, fear_greed))
+
+                with col1:
+                    fig = go.Figure(go.Indicator(
+                        mode="gauge+number", value=fear_greed,
+                        title={'text': "Fear & Greed Index (VXX-based)"},
+                        gauge={'axis': {'range': [None, 100]}, 'bar': {'color': "darkblue"},
+                               'steps': [{'range': [0, 20], 'color': "red"}, {'range': [20, 40], 'color': "orange"},
+                                        {'range': [40, 60], 'color': "yellow"}, {'range': [60, 80], 'color': "lightgreen"},
+                                        {'range': [80, 100], 'color': "green"}],
+                               'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
+                    ))
+                    fig.update_layout(height=300)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.write("**Market Sentiment Indicators**")
+                    sentiment_color, sentiment_label = ("🔴", "Fearful") if current_vxx > 40 else ("🟡", "Neutral") if current_vxx > 25 else ("🟢", "Greedy")
+                    vxx_trend = "Rising" if current_vxx > vxx_30_avg else "Falling"
+                    
+                    st.metric("Current VXX", f"${current_vxx:.2f}", f"30-day avg: ${vxx_30_avg:.2f}")
+                    st.write(f"**Market Mood:** {sentiment_color} {sentiment_label}")
+                    st.write(f"**VXX Trend:** {vxx_trend}")
+                    st.write("**VXX Levels:** • Below $25: Low volatility (Complacency) • $25-40: Normal • Above $40: High volatility (Fear)")
+                    
+                    vxx_change = current_vxx - vxx_30_avg
+                    vxx_change_pct = (vxx_change / vxx_30_avg * 100) if vxx_30_avg != 0 else 0
+                    st.metric("VXX vs 30d Avg", f"{vxx_change_pct:+.1f}%", f"${vxx_change:+.2f}")
+                    st.write(f"**VXX Volatility (30d):** ${float(vxx_data['close'].std()):.2f}")
+            else:
+                st.error("Unable to load VXX data")
+        except Exception as e:
+            st.error(f"Error loading VXX/sentiment data: {e}")
+            st.info("Unable to load real-time VXX data. Please check API configuration.")
+
+    def render_sector_analysis(self):
+        """Render sector performance analysis with real data"""
+        st.subheader("🏢 Sector Performance")
+
+        try:
+            provider = AlpacaDataProvider()
+            sector_etfs = {'XLK': 'Technology', 'XLV': 'Healthcare', 'XLF': 'Financial', 'XLE': 'Energy', 
+                          'XLY': 'Consumer Discretionary', 'XLI': 'Industrial', 'XLB': 'Materials', 
+                          'XLRE': 'Real Estate', 'XLU': 'Utilities'}
+            sector_data = []
+
+            for etf_symbol, sector_name in sector_etfs.items():
+                try:
+                    data = provider.get_bars(etf_symbol, '1Day', start=now_et() - timedelta(days=5))
+                    if not data.empty and len(data) >= 2:
+                        current_price = float(data['close'].iloc[-1])
+                        start_price = float(data['close'].iloc[0])
+                        performance = ((current_price - start_price) / start_price) * 100
+                        sector_data.append({'sector': sector_name, 'performance': performance, 
+                                          'symbol': etf_symbol, 'current_price': current_price})
+                except:
+                    continue
+
+            if sector_data:
+                sector_data.sort(key=lambda x: x['performance'], reverse=True)
+                sectors = [item['sector'] for item in sector_data]
+                performance = [item['performance'] for item in sector_data]
+
+                import plotly.express as px
+                fig = px.bar(x=sectors, y=performance, title="Sector Performance - Day (% Change)",
+                           color=performance, color_continuous_scale="RdYlGn", 
+                           text=[f"{p:+.2f}%" for p in performance])
+                fig.update_layout(template="plotly_white", height=400, 
+                                xaxis={'categoryorder': 'total descending'}, yaxis_title="Performance (%)")
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.write("**📊 Sector Performance in Details**")
+                df = pd.DataFrame([{
+                    'Sector': item['sector'], 'ETF Symbol': item['symbol'],
+                    'Current Price': f"${item['current_price']:.2f}" if item['current_price'] > 0 else "N/A",
+                    'Day Performance': f"{item['performance']:+.2f}%"
+                } for item in sector_data])
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.error("Unable to load any sector performance data")
+        except Exception as e:
+            st.error(f"Error loading sector performance: {e}")
+            st.info("Unable to load real-time sector data. Please check API configuration.")
+
+    def render_crypto_overview(self):
+        """Render cryptocurrency information with comprehensive crypto data"""
+        st.subheader("₿ Cryptocurrency")
+
+        try:
+            provider = AlpacaDataProvider()
+            crypto_symbols = ['BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD']
+            crypto_names = {'BTC/USD': 'Bitcoin', 'ETH/USD': 'Ethereum', 'LTC/USD': 'Litecoin', 'BCH/USD': 'Bitcoin Cash'}
+            
+            cols = st.columns(len(crypto_symbols))
+            for i, symbol in enumerate(crypto_symbols):
+                with cols[i]:
+                    try:
+                        quote = provider.get_crypto_latest_quote(symbol)
+                        if 'error' not in quote:
+                            bid_price = float(quote.get('bid_price', 0))
+                            ask_price = float(quote.get('ask_price', 0))
+                            current_price = (bid_price + ask_price) / 2 if bid_price and ask_price else bid_price or ask_price
+
+                            start_date = now_et() - timedelta(days=5)
+                            hist_data = provider.get_bars(symbol, '1Day', start=start_date)
+
+                            if not hist_data.empty and len(hist_data) > 1:
+                                prev_close = float(hist_data['close'].iloc[-2])
+                                change = current_price - prev_close
+                                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+                                st.metric(crypto_names.get(symbol, symbol), f"${current_price:,.2f}", 
+                                         f"${change:+,.2f} ({change_pct:+.2f}%)")
+                            else:
+                                st.metric(crypto_names.get(symbol, symbol), f"${current_price:,.2f}")
+                        else:
+                            st.metric(crypto_names.get(symbol, symbol), "N/A", "Error loading")
+                    except:
+                        st.metric(crypto_names.get(symbol, symbol), "N/A", "Error")
+
+            st.divider()
+            st.write("**📊 Bitcoin Detailed Analysis**")
+            
+            btc_quote = provider.get_crypto_latest_quote('BTC/USD')
+            if 'error' not in btc_quote:
+                col1, col2, col3, col4 = st.columns(4)
+                bid_price = float(btc_quote.get('bid_price', 0))
+                ask_price = float(btc_quote.get('ask_price', 0))
+                spread = ask_price - bid_price if ask_price and bid_price else 0
+                
+                with col1: st.metric("Bid Price", f"${bid_price:,.2f}")
+                with col2: st.metric("Ask Price", f"${ask_price:,.2f}")
+                with col3: st.metric("Bid-Ask Spread", f"${spread:.2f}")
+                with col4: st.metric("Last Updated", btc_quote.get('timestamp', 'N/A').strftime("%H:%M:%S") 
+                                    if 'timestamp' in btc_quote else "N/A")
+
+                st.write("**📈 Bitcoin Price Chart (30 Days)**")
+                start_date = now_et() - timedelta(days=30)
+                btc_data = provider.get_bars('BTC/USD', '1Day', start=start_date)
+                
+                if not btc_data.empty:
+                    fig = go.Figure()
+                    fig.add_trace(go.Candlestick(x=btc_data.index, open=btc_data['open'], high=btc_data['high'],
+                                               low=btc_data['low'], close=btc_data['close'], name='BTC/USD'))
+                    sma_20 = btc_data['close'].rolling(window=20).mean()
+                    fig.add_trace(go.Scatter(x=btc_data.index, y=sma_20, mode='lines', name='20-day SMA',
+                                           line=dict(color='orange', width=1)))
+                    fig.update_layout(title="Bitcoin (BTC/USD) - 30 Day Chart", yaxis_title="Price (USD)",
+                                    xaxis_title="Date", height=400, showlegend=True)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    current_price = float(btc_data['close'].iloc[-1])
+                    high_30d = float(btc_data['high'].max())
+                    low_30d = float(btc_data['low'].min())
+                    volatility = btc_data['close'].pct_change().std() * np.sqrt(365) * 100
+                    range_pos = ((current_price - low_30d) / (high_30d - low_30d)) * 100 if (high_30d - low_30d) > 0 else 0
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1: st.metric("30D High", f"${high_30d:,.2f}")
+                    with col2: st.metric("30D Low", f"${low_30d:,.2f}")
+                    with col3: st.metric("30D Range Position", f"{range_pos:.1f}%")
+                    with col4: st.metric("Annualized Volatility", f"{volatility:.1f}%")
+                else:
+                    st.error("Unable to load Bitcoin historical data")
+            else:
+                st.error(f"Error loading Bitcoin data: {btc_quote.get('error', 'Unknown error')}")
+        except Exception as e:
+            st.error(f"Error loading cryptocurrency data: {e}")
+
+    def render_portfolio_allocation(self):
+        """Render asset allocation analysis"""
+        try:
+            account_info, _ = self.get_account_info()
+            positions = st.session_state.position_manager.get_all_positions() if 'position_manager' in st.session_state else []
+            
+            if not account_info or not positions or any('error' in pos for pos in positions):
+                st.info("Portfolio data unavailable")
+                return
+
+            portfolio_value = float(account_info.get('portfolio_value', 0))
+            cash = float(account_info.get('cash', 0))
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Asset Allocation**")
+                allocation_data = {'Cash': cash}
+                
+                for pos in positions:
+                    try:
+                        symbol = pos.get('symbol', 'Unknown')
+                        market_value = abs(float(pos.get('market_value', 0)))
+                        if symbol in allocation_data:
+                            allocation_data[symbol] += market_value
+                        else:
+                            allocation_data[symbol] = market_value
+                    except (ValueError, TypeError):
+                        continue
+
+                if sum(allocation_data.values()) > 0:
+                    fig = go.Figure(data=[go.Pie(labels=list(allocation_data.keys()), 
+                                                values=list(allocation_data.values()))])
+                    fig.update_layout(height=300)
+                    st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.write("**Portfolio Metrics**")
+                
+                total_pl = sum(float(pos.get('unrealized_pl', 0)) for pos in positions 
+                              if pos.get('unrealized_pl'))
+                total_pl_pct = (total_pl / portfolio_value * 100) if portfolio_value > 0 else 0
+                
+                winners = [pos for pos in positions if float(pos.get('unrealized_pl', 0)) > 0]
+                losers = [pos for pos in positions if float(pos.get('unrealized_pl', 0)) < 0]
+                win_rate = (len(winners) / len(positions) * 100) if positions else 0
+                
+                st.metric("Total P&L", f"${total_pl:+,.2f}", f"{total_pl_pct:+.2f}%")
+                st.metric("Win Rate", f"{win_rate:.1f}%")
+                st.metric("Active Positions", len(positions))
+
+        except Exception as e:
+            st.error(f"Error loading asset allocation: {e}")
+
+    def render_portfolio_metrics(self):
+        """Render performance metrics using real portfolio history"""
+        try:
+            account_info, _ = self.get_account_info()
+            if not account_info:
+                st.info("Performance data unavailable")
+                return
+
+            portfolio_value = float(account_info.get('portfolio_value', 0))
+            equity = float(account_info.get('equity', 0))
+            last_equity = float(account_info.get('last_equity', equity))
+            
+            day_pl = equity - last_equity
+            day_pl_pct = (day_pl / last_equity * 100) if last_equity > 0 else 0
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Day P&L", f"${day_pl:+,.2f}")
+            with col2:
+                st.metric("Day Return", f"{day_pl_pct:+.2f}%")
+            with col3:
+                st.metric("Portfolio Value", f"${portfolio_value:,.2f}")
+
+            try:
+                provider = AlpacaDataProvider()
+                portfolio_history = provider.get_portfolio_history()
+                
+                if portfolio_history and 'error' not in portfolio_history:
+                    equity_values = portfolio_history.get('equity', [])
+                    timestamps = portfolio_history.get('timestamp', [])
+                    
+                    if equity_values and timestamps:
+                        start_idx = 0
+                        for i, val in enumerate(equity_values):
+                            if val > 0:
+                                start_idx = i
+                                break
+                        
+                        filtered_equity = equity_values[start_idx:]
+                        filtered_timestamps = timestamps[start_idx:]
+                        
+                        if filtered_equity and filtered_timestamps:
+                            if isinstance(filtered_timestamps[0], (int, float)):
+                                from datetime import datetime
+                                dates = [datetime.fromtimestamp(ts) for ts in filtered_timestamps]
+                            else:
+                                dates = filtered_timestamps
+                            
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(
+                                x=dates, y=filtered_equity, mode='lines', 
+                                name='Portfolio Value', line=dict(color='blue', width=2)
+                            ))
+                            fig.update_layout(
+                                title="Portfolio Performance (30 Days)", 
+                                yaxis_title="Value ($)", height=400
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            if len(filtered_equity) > 1:
+                                total_return = ((filtered_equity[-1] - filtered_equity[0]) / filtered_equity[0] * 100)
+                                max_value = max(filtered_equity)
+                                min_value = min(filtered_equity)
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("30 Day Return", f"{total_return:+.2f}%")
+                                with col2:
+                                    st.metric("30 Day High", f"${max_value:,.2f}")
+                                with col3:
+                                    st.metric("30 Day Low", f"${min_value:,.2f}")
+                        else:
+                            st.info("Insufficient data for performance metrics")
+                    else:
+                        st.info("No non-zero portfolio data available")
+                else:
+                    st.info("No portfolio history data available")
+                    
+            except Exception as hist_error:
+                logger.error(f"Portfolio history error: {hist_error}")
+                st.info("Portfolio history temporarily unavailable")
+
+        except Exception as e:
+            st.error(f"Error loading performance: {e}")
+            logger.error(f"Portfolio performance error: {e}")
+
+    def render_backtest_analysis(self, results):
+        """Display backtest results with comprehensive analysis"""
+        st.subheader("📈 Backtest Results Analysis")
+
+        if results and isinstance(results, dict):
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                initial_val = results.get('initial_value', results.get('initial_cash', 0))
+                st.metric("Initial Value", f"${initial_val:,.2f}")
+
+            with col2:
+                final_val = results.get('final_value', results.get('portfolio_value', 0))
+                st.metric("Final Value", f"${final_val:,.2f}")
+
+            with col3:
+                total_return = results.get('total_return_percentage', 0)
+                if total_return == 0 and initial_val > 0:
+                    total_return = ((final_val - initial_val) / initial_val) * 100
+                st.metric("Total Return", f"{total_return:.2f}%", delta=f"{total_return:.2f}%")
+
+            with col4:
+                win_rate = results.get('win_rate', 0)
+                st.metric("Win Rate", f"{win_rate:.1f}%")
+
+            st.divider()
+
+            st.write("**📋 Detailed Performance Metrics**")
+            metrics_data = {
+                "Metric": [
+                    "Annualized Return",
+                    "Volatility",
+                    "Sharpe Ratio",
+                    "Max Drawdown",
+                    "Total Trades",
+                    "Profitable Trades"
+                ],
+                "Value": [
+                    f"{results.get('annualized_return_percentage', 0):.2f}%",
+                    f"{results.get('volatility', 0):.2f}%",
+                    f"{results.get('sharpe_ratio', 0):.2f}",
+                    f"{results.get('max_drawdown_percentage', 0):.2f}%",
+                    f"{results.get('total_trades', 0)}",
+                    f"{results.get('profitable_trades', 0)}"
+                ]
+            }
+
+            metrics_df = pd.DataFrame(metrics_data)
+            st.dataframe(metrics_df, use_container_width=True)
+
+            if 'portfolio_history' in results:
+                portfolio_history = results['portfolio_history']
+                if isinstance(portfolio_history, pd.DataFrame) and not portfolio_history.empty:
+                    st.write("**📊 Portfolio Value Over Time**")
+
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=portfolio_history.index,
+                        y=portfolio_history.get('portfolio_value', portfolio_history.iloc[:, 0]),
+                        mode='lines',
+                        name='Portfolio Value',
+                        line=dict(color='blue', width=2)
+                    ))
+
+                    fig.update_layout(
+                        title="Portfolio Performance",
+                        xaxis_title="Date",
+                        yaxis_title="Portfolio Value ($)",
+                        height=400
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+            if 'trades_history' in results:
+                trades_df = results['trades_history']
+                if isinstance(trades_df, pd.DataFrame) and not trades_df.empty:
+                    st.write("**📝 Recent Trades**")
+                    display_trades = trades_df.tail(10) if len(trades_df) > 10 else trades_df
+                    st.dataframe(display_trades, use_container_width=True)
+
+                    if st.button("💾 Download Full Trade History"):
+                        csv = trades_df.to_csv(index=False)
+                        from datetime import datetime
+                        st.download_button(
+                            label="📥 Download CSV",
+                            data=csv,
+                            file_name=f"backtest_trades_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime='text/csv'
+                        )
+        else:
+            st.error("Invalid backtest results format")
     
     @abstractmethod
     def render_main_content(self):
@@ -574,3 +1025,188 @@ class UIComponents:
                 })
             else:
                 st.error("Please fill in all required fields")
+
+    @staticmethod
+    def render_watchlist_interface():
+        """Render watchlist management interface"""
+        if 'watchlist_manager' in st.session_state:
+            wm = st.session_state.watchlist_manager
+
+            st.subheader("➕ Add Symbol")
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                new_symbol = st.text_input("Enter Symbol to Add", key="add_symbol").upper()
+            with col2:
+                if st.button("Add Symbol", type="primary") and new_symbol:
+                    if new_symbol not in wm.get_watchlist():
+                        wm.add_symbol(new_symbol)
+                        st.success(f"✅ Added {new_symbol} to watchlist")
+                        st.rerun()
+                    else:
+                        st.warning(f"⚠️ {new_symbol} is already in watchlist")
+            with col3:
+                if st.button("🔄 Refresh Data", help="Refresh all watchlist data"):
+                    st.rerun()
+
+            st.divider()
+
+            watchlist = wm.get_watchlist()
+            if watchlist:
+                st.subheader(f"👁️ Watchlist ({len(watchlist)} symbols)")
+                
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    symbol_to_delete = st.selectbox("Select Symbol to Remove", 
+                                                   options=[""] + sorted(watchlist))
+                with col2:
+                    if st.button("🗑️ Remove", type="secondary") and symbol_to_delete:
+                        wm.remove_symbol(symbol_to_delete)
+                        st.success(f"🗑️ Removed {symbol_to_delete} from watchlist")
+                        st.rerun()
+
+                st.divider()
+
+                watchlist_data = []
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                # Use the data provider directly instead of BaseDashboard
+                from src.data import AlpacaDataProvider
+                from src.utils.timezone_utils import now_et
+                from datetime import timedelta
+                
+                provider = AlpacaDataProvider()
+                
+                for i, symbol in enumerate(watchlist):
+                    status_text.text(f"Loading data for {symbol}...")
+                    progress_bar.progress((i + 1) / len(watchlist))
+                    
+                    try:
+                        data = provider.get_bars(symbol, '1Day', start=now_et() - timedelta(days=2))
+                        if data is not None and not data.empty:
+                            current = data['close'].iloc[-1]
+                            prev = data['close'].iloc[-2] if len(data) > 1 else current
+                            change = current - prev
+                            change_pct = (change / prev * 100) if prev != 0 else 0
+
+                            change_color = "🟢" if change >= 0 else "🔴"
+                            watchlist_data.append({
+                                'Symbol': symbol,
+                                'Current Price': f"${current:.2f}",
+                                'Change ($)': f"${change:+.2f}",
+                                'Change (%)': f"{change_pct:+.2f}%",
+                                'Status': f"{change_color}"
+                            })
+                        else:
+                            watchlist_data.append({
+                                'Symbol': symbol,
+                                'Current Price': "N/A",
+                                'Change ($)': "N/A", 
+                                'Change (%)': "N/A",
+                                'Status': "❌"
+                            })
+                    except Exception:
+                        watchlist_data.append({
+                            'Symbol': symbol,
+                            'Current Price': "N/A",
+                            'Change ($)': "N/A", 
+                            'Change (%)': "N/A",
+                            'Status': "❌"
+                        })
+
+                progress_bar.empty()
+                status_text.empty()
+
+                if watchlist_data:
+                    df = pd.DataFrame(watchlist_data)
+                    st.dataframe(df, use_container_width=True)
+                    
+                    valid_data = [item for item in watchlist_data if item['Current Price'] != "N/A"]
+                    if valid_data:
+                        gains = sum(1 for item in valid_data if "+" in item['Change (%)'])
+                        losses = sum(1 for item in valid_data if "-" in item['Change (%)'])
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Total Symbols", len(watchlist))
+                        with col2:
+                            st.metric("Gainers", gains, delta=f"+{gains}")
+                        with col3:
+                            st.metric("Losers", losses, delta=f"-{losses}")
+                        with col4:
+                            st.metric("Data Available", len(valid_data))
+            else:
+                st.info("📭 Watchlist is empty. Add some symbols to monitor.")
+        else:
+            st.error("❌ Watchlist manager not initialized.")
+
+    @staticmethod
+    def render_trading_interface():
+        """Render quick trading interface"""
+        st.subheader("🚀 Quick Trade")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.write("**Order Details**")
+            symbol = st.text_input("Symbol", value="AAPL", key="trade_symbol").upper()
+            side = st.selectbox("Side", ["buy", "sell"], key="trade_side")
+            quantity = st.number_input("Quantity", min_value=1, value=100, key="trade_quantity")
+            order_type = st.selectbox("Order Type", ["market", "limit", "stop"], key="trade_order_type")
+
+            if order_type in ["limit", "stop"]:
+                limit_price = st.number_input("Price", value=150.0, step=0.01, key="trade_limit_price")
+
+            time_in_force = st.selectbox("Time in Force", ["day", "gtc", "ioc", "fok"], key="trade_time_in_force")
+
+        with col2:
+            st.write("**Order Preview**")
+            if symbol:
+                # Use data provider directly instead of BaseDashboard
+                from src.data import AlpacaDataProvider
+                from src.utils.timezone_utils import now_et
+                from datetime import timedelta
+                
+                try:
+                    provider = AlpacaDataProvider()
+                    data = provider.get_bars(symbol, '1Day', start=now_et() - timedelta(days=1))
+                    if data is not None and not data.empty:
+                        current_price = data['close'].iloc[-1]
+                        st.metric("Current Price", f"${current_price:.2f}")
+
+                        estimated_cost = current_price * quantity
+                        st.metric("Estimated Cost", f"${estimated_cost:,.2f}")
+                    else:
+                        st.warning(f"Unable to get current price for {symbol}")
+                except Exception:
+                    st.warning(f"Unable to get current price for {symbol}")
+
+            if st.button("Submit Order", type="primary"):
+                st.warning("⚠️ This is a demo. Order submission is disabled.")
+
+    @staticmethod
+    def render_orders_table():
+        """Render active orders view"""
+        st.subheader("📋 Active Orders")
+
+        if 'order_manager' in st.session_state:
+            orders = st.session_state.order_manager.get_orders()
+            if orders:
+                orders_data = []
+                for order in orders:
+                    orders_data.append({
+                        'Order ID': order.get('id', 'N/A'),
+                        'Symbol': order.get('symbol', 'N/A'),
+                        'Side': order.get('side', 'N/A').upper(),
+                        'Quantity': order.get('qty', 0),
+                        'Order Type': order.get('order_type', 'N/A'),
+                        'Status': order.get('status', 'N/A'),
+                        'Submitted': order.get('submitted_at', 'N/A')
+                    })
+
+                df = pd.DataFrame(orders_data)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No active orders found.")
+        else:
+            st.error("Order manager not initialized.")
