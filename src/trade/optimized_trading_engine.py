@@ -13,7 +13,12 @@ from typing import Any, final, override
 from collections.abc import AsyncGenerator, Sequence
 import logging
 from functools import cached_property
-import alpaca_trade_api as tradeapi
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import (
+    MarketOrderRequest, LimitOrderRequest, StopOrderRequest
+)
+from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
+from alpaca.common.exceptions import APIError
 
 from config import Config
 from src.utils.error_handling import (
@@ -65,11 +70,10 @@ class OptimizedTradingEngine:
                 config_issue=True
             )
         
-        self._api = tradeapi.REST(
-            Config.ALPACA_API_KEY,
-            Config.ALPACA_SECRET_KEY,
-            Config.ALPACA_BASE_URL,
-            api_version='v2'
+        self._api = TradingClient(
+            api_key=Config.ALPACA_API_KEY,
+            secret_key=Config.ALPACA_SECRET_KEY,
+            paper=Config.ALPACA_BASE_URL != "https://api.alpaca.markets"
         )
         
         self._paper_trading = paper_trading
@@ -129,7 +133,7 @@ class OptimizedTradingEngine:
             
             result = OrderResult(
                 order_id=order.id,
-                status=order.status,
+                status=order.status.value if hasattr(order.status, 'value') else str(order.status),
                 filled_qty=float(order.filled_qty or 0),
                 filled_price=float(order.filled_avg_price) if order.filled_avg_price else None
             )
@@ -170,22 +174,42 @@ class OptimizedTradingEngine:
             'time_in_force': request.time_in_force
         }
         
-        # Add price parameters based on order type
+        # Create appropriate order request based on order type
+        side = OrderSide.BUY if request.side.lower() == 'buy' else OrderSide.SELL
+        tif = TimeInForce.GTC if request.time_in_force == 'gtc' else TimeInForce.DAY
+        
         match request.order_type:
             case 'limit':
                 if request.price is None:
                     raise ValueError("Limit orders require a price")
-                order_params['limit_price'] = request.price
+                order_request = LimitOrderRequest(
+                    symbol=request.symbol,
+                    qty=abs(request.quantity),
+                    side=side,
+                    time_in_force=tif,
+                    limit_price=request.price
+                )
             case 'stop':
                 if request.stop_price is None:
                     raise ValueError("Stop orders require a stop price")
-                order_params['stop_price'] = request.stop_price
+                order_request = StopOrderRequest(
+                    symbol=request.symbol,
+                    qty=abs(request.quantity),
+                    side=side,
+                    time_in_force=tif,
+                    stop_price=request.stop_price
+                )
             case 'market':
-                pass  # No additional parameters needed
+                order_request = MarketOrderRequest(
+                    symbol=request.symbol,
+                    qty=abs(request.quantity),
+                    side=side,
+                    time_in_force=tif
+                )
             case _:
                 raise ValueError(f"Unsupported order type: {request.order_type}")
         
-        return self._api.submit_order(**order_params)
+        return self._api.submit_order(order_request)
     
     async def batch_place_orders(
         self, 

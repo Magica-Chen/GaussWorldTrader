@@ -1,4 +1,10 @@
-import alpaca_trade_api as tradeapi
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import (
+    MarketOrderRequest, LimitOrderRequest, StopOrderRequest,
+    GetOrdersRequest, ClosePositionRequest
+)
+from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
+from alpaca.common.exceptions import APIError
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import logging
@@ -10,11 +16,10 @@ class TradingEngine:
         if not Config.validate_alpaca_config():
             raise ValueError("Alpaca API credentials not configured")
         
-        self.api = tradeapi.REST(
-            Config.ALPACA_API_KEY,
-            Config.ALPACA_SECRET_KEY,
-            Config.ALPACA_BASE_URL,
-            api_version='v2'
+        self.api = TradingClient(
+            api_key=Config.ALPACA_API_KEY,
+            secret_key=Config.ALPACA_SECRET_KEY,
+            paper=Config.ALPACA_BASE_URL != "https://api.alpaca.markets"
         )
         
         self.paper_trading = paper_trading
@@ -29,13 +34,13 @@ class TradingEngine:
     def place_market_order(self, symbol: str, qty: int, side: str = 'buy', 
                           time_in_force: str = 'gtc') -> Dict[str, Any]:
         try:
-            order = self.api.submit_order(
+            order_request = MarketOrderRequest(
                 symbol=symbol,
                 qty=abs(qty),
-                side=side.lower(),
-                type='market',
-                time_in_force=time_in_force
+                side=OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL,
+                time_in_force=TimeInForce.GTC if time_in_force == 'gtc' else TimeInForce.DAY
             )
+            order = self.api.submit_order(order_request)
             
             order_dict = {
                 'id': order.id,
@@ -60,14 +65,14 @@ class TradingEngine:
     def place_limit_order(self, symbol: str, qty: int, limit_price: float, 
                          side: str = 'buy', time_in_force: str = 'gtc') -> Dict[str, Any]:
         try:
-            order = self.api.submit_order(
+            order_request = LimitOrderRequest(
                 symbol=symbol,
                 qty=abs(qty),
-                side=side.lower(),
-                type='limit',
-                time_in_force=time_in_force,
+                side=OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL,
+                time_in_force=TimeInForce.GTC if time_in_force == 'gtc' else TimeInForce.DAY,
                 limit_price=limit_price
             )
+            order = self.api.submit_order(order_request)
             
             order_dict = {
                 'id': order.id,
@@ -93,14 +98,14 @@ class TradingEngine:
     def place_stop_loss_order(self, symbol: str, qty: int, stop_price: float,
                              side: str = 'sell', time_in_force: str = 'gtc') -> Dict[str, Any]:
         try:
-            order = self.api.submit_order(
+            order_request = StopOrderRequest(
                 symbol=symbol,
                 qty=abs(qty),
-                side=side.lower(),
-                type='stop',
-                time_in_force=time_in_force,
+                side=OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL,
+                time_in_force=TimeInForce.GTC if time_in_force == 'gtc' else TimeInForce.DAY,
                 stop_price=stop_price
             )
+            order = self.api.submit_order(order_request)
             
             order_dict = {
                 'id': order.id,
@@ -189,11 +194,11 @@ class TradingEngine:
     def get_current_positions(self) -> List[Dict[str, Any]]:
         try:
             from src.utils.validators import convert_crypto_symbol_for_display
-            positions = self.api.list_positions()
+            positions = self.api.get_all_positions()
             return [{
                 'symbol': convert_crypto_symbol_for_display(pos.symbol),
                 'qty': float(pos.qty),
-                'side': pos.side,
+                'side': pos.side.value if hasattr(pos.side, 'value') else str(pos.side),
                 'market_value': float(pos.market_value),
                 'cost_basis': float(pos.cost_basis),
                 'unrealized_pl': float(pos.unrealized_pl),

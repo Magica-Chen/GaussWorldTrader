@@ -60,6 +60,7 @@ logs/
 
 # Trading data and results
 results/
+archive/
 backtest_results/
 
 # OS generated files

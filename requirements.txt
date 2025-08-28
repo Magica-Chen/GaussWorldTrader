@@ -10,7 +10,6 @@ alpaca-py>=0.25.0
 
 # Technical Analysis
 ta-lib>=0.4.28
-TA-Lib>=0.4.28
 
 # Data Analysis and Visualization
 matplotlib>=3.8.0
