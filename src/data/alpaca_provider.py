@@ -422,8 +422,18 @@ class AlpacaProvider:
         
         return timeframe_map.get(timeframe, TimeFrame.Day)
     
-    def _process_stock_bars(self, bars_response, symbol: str) -> pd.DataFrame:
-        """Process stock bars response into DataFrame"""
+    def _process_bars(self, bars_response, symbol: str, asset_type: str = 'stock') -> pd.DataFrame:
+        """
+        Unified bar processing logic for all asset types (stock, option, crypto)
+        
+        Args:
+            bars_response: API response containing bar data
+            symbol: The asset symbol
+            asset_type: Type of asset ('stock', 'option', 'crypto') for volume type handling
+        
+        Returns:
+            DataFrame with processed bar data
+        """
         if not bars_response or not hasattr(bars_response, 'data') or symbol not in bars_response.data:
             return pd.DataFrame()
         
@@ -431,13 +441,16 @@ class AlpacaProvider:
         data = []
         
         for bar in bars:
+            # Handle volume type based on asset type (crypto uses float, others use int)
+            volume_value = float(bar.volume) if asset_type == 'crypto' else int(bar.volume)
+            
             data.append({
                 'timestamp': bar.timestamp,
                 'open': float(bar.open),
                 'high': float(bar.high),
                 'low': float(bar.low),
                 'close': float(bar.close),
-                'volume': int(bar.volume),
+                'volume': volume_value,
                 'trade_count': int(bar.trade_count) if bar.trade_count else 0,
                 'vwap': float(bar.vwap) if bar.vwap else 0
             })
@@ -449,62 +462,18 @@ class AlpacaProvider:
             df = df.dropna()
         
         return df
+    
+    def _process_stock_bars(self, bars_response, symbol: str) -> pd.DataFrame:
+        """Process stock bars response into DataFrame"""
+        return self._process_bars(bars_response, symbol, 'stock')
     
     def _process_option_bars(self, bars_response, symbol: str) -> pd.DataFrame:
         """Process option bars response into DataFrame"""
-        if not bars_response or not hasattr(bars_response, 'data') or symbol not in bars_response.data:
-            return pd.DataFrame()
-        
-        bars = bars_response.data[symbol]
-        data = []
-        
-        for bar in bars:
-            data.append({
-                'timestamp': bar.timestamp,
-                'open': float(bar.open),
-                'high': float(bar.high),
-                'low': float(bar.low),
-                'close': float(bar.close),
-                'volume': int(bar.volume),
-                'trade_count': int(bar.trade_count) if bar.trade_count else 0,
-                'vwap': float(bar.vwap) if bar.vwap else 0
-            })
-        
-        df = pd.DataFrame(data)
-        if not df.empty:
-            df.set_index('timestamp', inplace=True)
-            df.index = pd.to_datetime(df.index)
-            df = df.dropna()
-        
-        return df
+        return self._process_bars(bars_response, symbol, 'option')
     
     def _process_crypto_bars(self, bars_response, symbol: str) -> pd.DataFrame:
         """Process crypto bars response into DataFrame"""
-        if not bars_response or not hasattr(bars_response, 'data') or symbol not in bars_response.data:
-            return pd.DataFrame()
-        
-        bars = bars_response.data[symbol]
-        data = []
-        
-        for bar in bars:
-            data.append({
-                'timestamp': bar.timestamp,
-                'open': float(bar.open),
-                'high': float(bar.high),
-                'low': float(bar.low),
-                'close': float(bar.close),
-                'volume': float(bar.volume),
-                'trade_count': int(bar.trade_count) if bar.trade_count else 0,
-                'vwap': float(bar.vwap) if bar.vwap else 0
-            })
-        
-        df = pd.DataFrame(data)
-        if not df.empty:
-            df.set_index('timestamp', inplace=True)
-            df.index = pd.to_datetime(df.index)
-            df = df.dropna()
-        
-        return df
+        return self._process_bars(bars_response, symbol, 'crypto')
     
     def _process_options_chain(self, chain_response, underlying_symbol: str) -> pd.DataFrame:
         """Process options chain response into DataFrame"""
