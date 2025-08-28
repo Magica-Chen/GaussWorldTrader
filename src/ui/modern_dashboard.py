@@ -624,40 +624,54 @@ class ModernDashboard(BaseDashboard):
                     timestamps = portfolio_history.get('timestamp', [])
                     
                     if equity_values and timestamps:
-                        # Convert timestamps to datetime if needed
-                        if isinstance(timestamps[0], (int, float)):
-                            dates = [datetime.fromtimestamp(ts) for ts in timestamps]
-                        else:
-                            dates = timestamps
+                        # Filter out leading zeros
+                        start_idx = 0
+                        for i, val in enumerate(equity_values):
+                            if val > 0:
+                                start_idx = i
+                                break
                         
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(
-                            x=dates, y=equity_values, mode='lines', 
-                            name='Portfolio Value', line=dict(color='blue', width=2)
-                        ))
-                        fig.update_layout(
-                            title="Portfolio Performance (30 Days)", 
-                            yaxis_title="Value ($)", height=400
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
+                        # Use filtered data starting from first non-zero value
+                        filtered_equity = equity_values[start_idx:]
+                        filtered_timestamps = timestamps[start_idx:]
                         
-                        # Performance metrics
-                        if len(equity_values) > 1:
-                            total_return = ((equity_values[-1] - equity_values[0]) / equity_values[0] * 100)
-                            max_value = max(equity_values)
-                            min_value = min(equity_values)
+                        if filtered_equity and filtered_timestamps:
+                            # Convert timestamps to datetime if needed
+                            if isinstance(filtered_timestamps[0], (int, float)):
+                                dates = [datetime.fromtimestamp(ts) for ts in filtered_timestamps]
+                            else:
+                                dates = filtered_timestamps
                             
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("30D Return", f"{total_return:+.2f}%")
-                            with col2:
-                                st.metric("30D High", f"${max_value:,.2f}")
-                            with col3:
-                                st.metric("30D Low", f"${min_value:,.2f}")
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(
+                                x=dates, y=filtered_equity, mode='lines', 
+                                name='Portfolio Value', line=dict(color='blue', width=2)
+                            ))
+                            fig.update_layout(
+                                title="Portfolio Performance (30 Days)", 
+                                yaxis_title="Value ($)", height=400
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Performance metrics using filtered data
+                            if len(filtered_equity) > 1:
+                                total_return = ((filtered_equity[-1] - filtered_equity[0]) / filtered_equity[0] * 100)
+                                max_value = max(filtered_equity)
+                                min_value = min(filtered_equity)
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("30 Day Return", f"{total_return:+.2f}%")
+                                with col2:
+                                    st.metric("30 Day High", f"${max_value:,.2f}")
+                                with col3:
+                                    st.metric("30 Day Low", f"${min_value:,.2f}")
+                        else:
+                            st.info("Insufficient data for performance metrics")
                     else:
-                        st.info("No portfolio history data available")
+                        st.info("No non-zero portfolio data available")
                 else:
-                    st.info("Portfolio history temporarily unavailable")
+                    st.info("No portfolio history data available")
                     
             except Exception as hist_error:
                 logger.error(f"Portfolio history error: {hist_error}")
