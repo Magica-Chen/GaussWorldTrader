@@ -59,7 +59,6 @@ venv.bak/
 logs/
 
 # Trading data and results
-data/
 results/
 backtest_results/
 

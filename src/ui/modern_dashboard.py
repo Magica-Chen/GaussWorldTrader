@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-import pytz
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -26,7 +25,7 @@ from src.account.position_manager import PositionManager
 from src.agent.fundamental_analyzer import FundamentalAnalyzer
 from src.analysis import TechnicalAnalysis
 from src.data import AlpacaDataProvider, NewsDataProvider
-from src.data import FinnhubProvider, FREDProvider
+from src.data import FREDProvider
 from src.strategy.strategy_selector import get_strategy_selector
 from src.ui.core_dashboard import BaseDashboard, UIComponents
 from src.utils.timezone_utils import get_market_status, now_et
@@ -56,7 +55,6 @@ class ModernDashboard(BaseDashboard):
                 st.session_state.strategy_selector = get_strategy_selector()
                 st.session_state.watchlist_manager = WatchlistManager()
                 st.session_state.news_provider = NewsDataProvider()
-                st.session_state.finnhub_provider = FinnhubProvider()
                 st.session_state.fred_provider = FREDProvider()
                 st.session_state.modern_initialized = True
 
@@ -110,22 +108,14 @@ class ModernDashboard(BaseDashboard):
     def render_market_status_sidebar(self):
         """Render market status in sidebar"""
         st.subheader("🏛️ Market Status")
-        
-        # Time information
-        local_time = datetime.now()
-        et_time = now_et()
-        st.write(f"📅 **Local Time:** {local_time.strftime('%H:%M:%S')}")
-        st.write(f"📅 **ET Time:** {et_time.strftime('%H:%M:%S')}")
-        
-        # Market status
+        local_time, et_time = datetime.now(), now_et()
         market_status = get_market_status()
         status_color = "🟢" if market_status == 'open' else "🔴"
+        
+        st.write(f"📅 **Local Time:** {local_time.strftime('%H:%M:%S')}")
+        st.write(f"📅 **ET Time:** {et_time.strftime('%H:%M:%S')}")
         st.write(f"**Status:** {status_color} {market_status.title()}")
-        
-        # Calculate next market change
-        next_change = "Market Close" if market_status == 'open' else "Market Open"
-        st.write(f"**Next Change:** {next_change}")
-        
+        st.write(f"**Next Change:** {'Market Close' if market_status == 'open' else 'Market Open'}")
         st.divider()
     
     def render_portfolio_quick_view(self):
@@ -137,8 +127,10 @@ class ModernDashboard(BaseDashboard):
             account_info, error = self.get_account_info()
             if account_info:
                 portfolio_value = float(account_info.get('portfolio_value', 0))
-                day_pl = float(account_info.get('day_trade_pl', 0))
-                day_pl_pct = (day_pl / (portfolio_value - day_pl) * 100) if (portfolio_value - day_pl) > 0 else 0
+                equity = float(account_info.get('equity', 0))
+                last_equity = float(account_info.get('last_equity', equity))
+                day_pl = equity - last_equity
+                day_pl_pct = (day_pl / last_equity * 100) if last_equity > 0 else 0
 
                 # Portfolio value and today's change
                 st.metric(
@@ -222,7 +214,7 @@ class ModernDashboard(BaseDashboard):
         st.divider()
 
         # Sub-tabs for different market data (Indices removed and integrated above)
-        market_tabs = st.tabs(["📊 VIX & Sentiment", "🏢 Sectors", "📅 Economic Calendar", "₿ Cryptocurrency"])
+        market_tabs = st.tabs(["📊 VXX & Sentiment", "🏢 Sectors", "📅 Economic Calendar", "₿ Cryptocurrency"])
 
         with market_tabs[0]:
             self.render_vix_sentiment()
@@ -239,527 +231,258 @@ class ModernDashboard(BaseDashboard):
     def render_market_indices(self):
         """Render real market indices data"""
         col1, col2, col3, col4 = st.columns(4)
+        indices = {'SPY': 'S&P 500', 'QQQ': 'NASDAQ', 'DIA': 'DOW', 'VXX': 'VXX'}
 
         try:
             provider = AlpacaDataProvider()
-
-            # Define major indices
-            indices = {
-                'SPY': 'S&P 500',
-                'QQQ': 'NASDAQ',
-                'DIA': 'DOW',
-                'VXX': 'VXX'
-            }
-
             for i, (symbol, name) in enumerate(indices.items()):
                 with [col1, col2, col3, col4][i]:
                     try:
-                        # Get latest quote
                         quote = provider.get_latest_quote(symbol)
                         if 'error' not in quote:
                             current_price = float(quote.get('bid_price', quote.get('ask_price', 0)))
-                            # Get previous day data for change calculation  
-                            start_date = now_et() - timedelta(days=5)  # Get more days to ensure we have previous close
-                            historical_data = provider.get_bars(symbol, '1Day', start=start_date)
-                            if not historical_data.empty and len(historical_data) >= 2:
-                                # Get the second-to-last close price (previous trading day)
-                                prev_close = float(historical_data['close'].iloc[-2])
-                                change = current_price - prev_close
-                                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
-                            elif not historical_data.empty and len(historical_data) == 1:
-                                # Only one bar available, compare current price to that bar's close
-                                prev_close = float(historical_data['close'].iloc[-1])
+                            historical_data = provider.get_bars(symbol, '1Day', start=now_et() - timedelta(days=5))
+                            
+                            if not historical_data.empty:
+                                prev_close = float(historical_data['close'].iloc[-2 if len(historical_data) >= 2 else -1])
                                 change = current_price - prev_close
                                 change_pct = (change / prev_close * 100) if prev_close != 0 else 0
                             else:
-                                change = 0
-                                change_pct = 0
+                                change, change_pct = 0, 0
 
-                            if symbol == 'VIX':
-                                st.metric(name, f"{current_price:.2f}", f"{change:+.2f} ({change_pct:+.2f}%)")
-                            else:
-                                st.metric(name, f"{current_price:,.2f}", f"{change:+.2f} ({change_pct:+.2f}%)")
+                            price_fmt = f"{current_price:.2f}" if symbol == 'VXX' else f"{current_price:,.2f}"
+                            st.metric(name, price_fmt, f"{change:+.2f} ({change_pct:+.2f}%)")
                         else:
                             st.metric(name, "N/A", "Data unavailable")
                     except Exception as e:
                         st.metric(name, "N/A", f"Error: {str(e)[:20]}...")
-
         except Exception as e:
             st.error(f"Error loading market indices: {e}")
-            # Fallback to static display
-            col1.metric("S&P 500", "N/A", "Data unavailable")
-            col2.metric("NASDAQ", "N/A", "Data unavailable")
-            col3.metric("DOW", "N/A", "Data unavailable")
-            col4.metric("VIX", "N/A", "Data unavailable")
+            for i, name in enumerate(['S&P 500', 'NASDAQ', 'DOW', 'VXX']):
+                with [col1, col2, col3, col4][i]:
+                    st.metric(name, "N/A", "Data unavailable")
 
     def render_vix_sentiment(self):
-        """Render VIX and market sentiment indicators with real data"""
-        st.subheader("📊 VIX & Market Sentiment")
-        st.info("🚧 VIX sentiment analysis coming soon...")
+        """Render VXX and market sentiment indicators with real data"""
+        st.subheader("📊 VXX: iPath S&P 500 VIX ST Futures ETN")
+        col1, col2 = st.columns(2)
 
-        # col1, col2 = st.columns(2)
-        #
-        # try:
-        #     provider = AlpacaDataProvider()
-        #
-        #     # Get VIX data
-        #     vix_data = provider.get_historical_bars('VIX', '1Day', 30)
-        #
-        #     with col1:
-        #         if not vix_data.empty:
-        #             current_vix = float(vix_data['close'].iloc[-1])
-        #             vix_30_avg = float(vix_data['close'].mean())
-        #
-        #             # Calculate Fear & Greed based on VIX levels
-        #             # VIX > 30 = Fear (0-30), VIX 20-30 = Neutral (30-70), VIX < 20 = Greed (70-100)
-        #             if current_vix > 30:
-        #                 fear_greed = max(0, 30 - (current_vix - 30) * 2)
-        #             elif current_vix > 20:
-        #                 fear_greed = 30 + (30 - current_vix) * 4
-        #             else:
-        #                 fear_greed = 70 + min(30, (20 - current_vix) * 3)
-        #
-        #             fear_greed = max(0, min(100, fear_greed))  # Clamp to 0-100
-        #
-        #             fig = go.Figure(go.Indicator(
-        #                 mode = "gauge+number",
-        #                 value = fear_greed,
-        #                 domain = {'x': [0, 1], 'y': [0, 1]},
-        #                 title = {'text': "Fear & Greed Index (VIX-based)"},
-        #                 gauge = {
-        #                     'axis': {'range': [None, 100]},
-        #                     'bar': {'color': "darkblue"},
-        #                     'steps': [
-        #                         {'range': [0, 20], 'color': "red"},
-        #                         {'range': [20, 40], 'color': "orange"},
-        #                         {'range': [40, 60], 'color': "yellow"},
-        #                         {'range': [60, 80], 'color': "lightgreen"},
-        #                         {'range': [80, 100], 'color': "green"}
-        #                     ],
-        #                     'threshold': {
-        #                         'line': {'color': "red", 'width': 4},
-        #                         'thickness': 0.75,
-        #                         'value': 90
-        #                     }
-        #                 }
-        #             ))
-        #
-        #             fig.update_layout(height=300)
-        #             st.plotly_chart(fig, use_container_width=True)
-        #         else:
-        #             st.error("Unable to load VIX data for sentiment calculation")
-        #
-        #     with col2:
-        #         # Market Sentiment Indicators based on VIX
-        #         st.write("**Market Sentiment Indicators**")
-        #
-        #         if not vix_data.empty:
-        #             current_vix = float(vix_data['close'].iloc[-1])
-        #             vix_30_avg = float(vix_data['close'].mean())
-        #             vix_trend = "Rising" if current_vix > vix_30_avg else "Falling"
-        #
-        #             # Overall sentiment based on VIX
-        #             if current_vix > 30:
-        #                 sentiment_label = "Fearful"
-        #                 sentiment_color = "🔴"
-        #             elif current_vix > 20:
-        #                 sentiment_label = "Neutral"
-        #                 sentiment_color = "🟡"
-        #             else:
-        #                 sentiment_label = "Greedy"
-        #                 sentiment_color = "🟢"
-        #
-        #             st.metric("Current VIX", f"{current_vix:.2f}", f"30-day avg: {vix_30_avg:.2f}")
-        #             st.write(f"**Market Mood:** {sentiment_color} {sentiment_label}")
-        #             st.write(f"**VIX Trend:** {vix_trend}")
-        #
-        #             # VIX interpretation
-        #             st.write("**VIX Levels:**")
-        #             st.write("• Below 20: Low volatility (Complacency)")
-        #             st.write("• 20-30: Normal volatility")
-        #             st.write("• Above 30: High volatility (Fear)")
-        #
-        #             # Recent volatility analysis
-        #             vix_volatility = float(vix_data['close'].std())
-        #             st.write(f"**VIX Volatility (30d):** {vix_volatility:.2f}")
-        #         else:
-        #             st.error("Unable to load VIX data for sentiment indicators")
-        #
-        # except Exception as e:
-        #     st.error(f"Error loading VIX/sentiment data: {e}")
+        try:
+            provider = AlpacaDataProvider()
+            vxx_data = provider.get_bars('VXX', '1Day', start=now_et() - timedelta(days=45))
+
+            if not vxx_data.empty:
+                current_vxx = float(vxx_data['close'].iloc[-1])
+                vxx_30_avg = float(vxx_data['close'].mean())
+                
+                # Calculate Fear & Greed based on VXX levels
+                fear_greed = (max(0, 30 - (current_vxx - 40) * 1.5) if current_vxx > 40 else
+                             30 + (40 - current_vxx) * 2.67 if current_vxx > 25 else
+                             70 + min(30, (25 - current_vxx) * 2))
+                fear_greed = max(0, min(100, fear_greed))
+
+                with col1:
+                    fig = go.Figure(go.Indicator(
+                        mode="gauge+number", value=fear_greed,
+                        title={'text': "Fear & Greed Index (VXX-based)"},
+                        gauge={'axis': {'range': [None, 100]}, 'bar': {'color': "darkblue"},
+                               'steps': [{'range': [0, 20], 'color': "red"}, {'range': [20, 40], 'color': "orange"},
+                                        {'range': [40, 60], 'color': "yellow"}, {'range': [60, 80], 'color': "lightgreen"},
+                                        {'range': [80, 100], 'color': "green"}],
+                               'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
+                    ))
+                    fig.update_layout(height=300)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.write("**Market Sentiment Indicators**")
+                    sentiment_color, sentiment_label = ("🔴", "Fearful") if current_vxx > 40 else ("🟡", "Neutral") if current_vxx > 25 else ("🟢", "Greedy")
+                    vxx_trend = "Rising" if current_vxx > vxx_30_avg else "Falling"
+                    
+                    st.metric("Current VXX", f"${current_vxx:.2f}", f"30-day avg: ${vxx_30_avg:.2f}")
+                    st.write(f"**Market Mood:** {sentiment_color} {sentiment_label}")
+                    st.write(f"**VXX Trend:** {vxx_trend}")
+                    st.write("**VXX Levels:** • Below $25: Low volatility (Complacency) • $25-40: Normal • Above $40: High volatility (Fear)")
+                    
+                    vxx_change = current_vxx - vxx_30_avg
+                    vxx_change_pct = (vxx_change / vxx_30_avg * 100) if vxx_30_avg != 0 else 0
+                    st.metric("VXX vs 30d Avg", f"{vxx_change_pct:+.1f}%", f"${vxx_change:+.2f}")
+                    st.write(f"**VXX Volatility (30d):** ${float(vxx_data['close'].std()):.2f}")
+            else:
+                st.error("Unable to load VXX data")
+        except Exception as e:
+            st.error(f"Error loading VXX/sentiment data: {e}")
+            st.info("Unable to load real-time VXX data. Please check API configuration.")
 
     def render_sector_performance(self):
         """Render sector performance analysis with real data"""
         st.subheader("🏢 Sector Performance")
-        st.info("🚧 Sector performance analysis coming soon...")
 
-        # try:
-        #     provider = AlpacaDataProvider()
-        #
-        #     # Sector ETFs representing major sectors
-        #     sector_etfs = {
-        #         'XLK': 'Technology',
-        #         'XLV': 'Healthcare',
-        #         'XLF': 'Financial',
-        #         'XLE': 'Energy',
-        #         'XLY': 'Consumer Discretionary',
-        #         'XLI': 'Industrial',
-        #         'XLB': 'Materials',
-        #         'XLRE': 'Real Estate',
-        #         'XLU': 'Utilities'
-        #     }
-        #
-        #     sector_data = []
-        #
-        #     for etf_symbol, sector_name in sector_etfs.items():
-        #         try:
-        #             # Get 5 days of data to calculate performance
-        #             data = provider.get_historical_bars(etf_symbol, '1Day', 5)
-        #
-        #             if not data.empty and len(data) >= 2:
-        #                 current_price = float(data['close'].iloc[-1])
-        #                 start_price = float(data['close'].iloc[0])
-        #                 performance = ((current_price - start_price) / start_price) * 100
-        #
-        #                 sector_data.append({
-        #                     'sector': sector_name,
-        #                     'performance': performance,
-        #                     'symbol': etf_symbol,
-        #                     'current_price': current_price
-        #                 })
-        #             else:
-        #                 # Fallback with minimal data
-        #                 sector_data.append({
-        #                     'sector': sector_name,
-        #                     'performance': 0.0,
-        #                     'symbol': etf_symbol,
-        #                     'current_price': 0.0
-        #                 })
-        #
-        #         except Exception as e:
-        #             st.warning(f"Unable to load data for {sector_name} ({etf_symbol}): {str(e)}")
-        #             continue
-        #
-        #     if sector_data:
-        #         # Sort by performance
-        #         sector_data.sort(key=lambda x: x['performance'], reverse=True)
-        #
-        #         sectors = [item['sector'] for item in sector_data]
-        #         performance = [item['performance'] for item in sector_data]
-        #
-        #         import plotly.express as px
-        #         fig = px.bar(
-        #             x=sectors,
-        #             y=performance,
-        #             title="Sector Performance - 5 Day (% Change)",
-        #             color=performance,
-        #             color_continuous_scale="RdYlGn",
-        #             text=[f"{p:+.2f}%" for p in performance]
-        #         )
-        #
-        #         fig.update_layout(
-        #             template="plotly_white",
-        #             height=400,
-        #             xaxis={'categoryorder': 'total descending'},
-        #             yaxis_title="Performance (%)"
-        #         )
-        #
-        #         fig.update_traces(textposition="outside")
-        #         st.plotly_chart(fig, use_container_width=True)
-        #
-        #         # Show detailed table
-        #         st.write("**📊 Detailed Sector Data**")
-        #
-        #         detail_data = []
-        #         for item in sector_data:
-        #             detail_data.append({
-        #                 'Sector': item['sector'],
-        #                 'ETF Symbol': item['symbol'],
-        #                 'Current Price': f"${item['current_price']:.2f}" if item['current_price'] > 0 else "N/A",
-        #                 '5-Day Performance': f"{item['performance']:+.2f}%"
-        #             })
-        #
-        #         df = pd.DataFrame(detail_data)
-        #         st.dataframe(df, use_container_width=True)
-        #
-        #     else:
-        #         st.error("Unable to load any sector performance data")
-        #
-        # except Exception as e:
-        #     st.error(f"Error loading sector performance: {e}")
-        #     # Fallback display
-        #     st.info("Unable to load real-time sector data. Please check API configuration.")
+        try:
+            provider = AlpacaDataProvider()
+            sector_etfs = {'XLK': 'Technology', 'XLV': 'Healthcare', 'XLF': 'Financial', 'XLE': 'Energy', 
+                          'XLY': 'Consumer Discretionary', 'XLI': 'Industrial', 'XLB': 'Materials', 
+                          'XLRE': 'Real Estate', 'XLU': 'Utilities'}
+            sector_data = []
+
+            for etf_symbol, sector_name in sector_etfs.items():
+                try:
+                    data = provider.get_bars(etf_symbol, '1Day', start=now_et() - timedelta(days=5))
+                    if not data.empty and len(data) >= 2:
+                        current_price = float(data['close'].iloc[-1])
+                        start_price = float(data['close'].iloc[0])
+                        performance = ((current_price - start_price) / start_price) * 100
+                        sector_data.append({'sector': sector_name, 'performance': performance, 
+                                          'symbol': etf_symbol, 'current_price': current_price})
+                except:
+                    continue
+
+            if sector_data:
+                sector_data.sort(key=lambda x: x['performance'], reverse=True)
+                sectors = [item['sector'] for item in sector_data]
+                performance = [item['performance'] for item in sector_data]
+
+                import plotly.express as px
+                fig = px.bar(x=sectors, y=performance, title="Sector Performance - Day (% Change)",
+                           color=performance, color_continuous_scale="RdYlGn", 
+                           text=[f"{p:+.2f}%" for p in performance])
+                fig.update_layout(template="plotly_white", height=400, 
+                                xaxis={'categoryorder': 'total descending'}, yaxis_title="Performance (%)")
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.write("**📊 Sector Performance in Details**")
+                df = pd.DataFrame([{
+                    'Sector': item['sector'], 'ETF Symbol': item['symbol'],
+                    'Current Price': f"${item['current_price']:.2f}" if item['current_price'] > 0 else "N/A",
+                    'Day Performance': f"{item['performance']:+.2f}%"
+                } for item in sector_data])
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.error("Unable to load any sector performance data")
+        except Exception as e:
+            st.error(f"Error loading sector performance: {e}")
+            st.info("Unable to load real-time sector data. Please check API configuration.")
 
     def render_economic_calendar(self):
         """Render economic calendar with real FRED data"""
         st.subheader("📅 Economic Calendar")
-        st.info("🚧 Economic calendar coming soon...")
-
-        # try:
-        #     if 'fred_provider' in st.session_state and st.session_state.fred_provider.client:
-        #         fred = st.session_state.fred_provider
-        #
-        #         # Key economic indicators with FRED series IDs
-        #         economic_indicators = {
-        #             'UNRATE': {'name': 'Unemployment Rate', 'unit': '%', 'importance': 'High'},
-        #             'CPIAUCSL': {'name': 'Consumer Price Index', 'unit': 'Index', 'importance': 'High'},
-        #             'GDP': {'name': 'GDP', 'unit': 'Billions', 'importance': 'High'},
-        #             'FEDFUNDS': {'name': 'Federal Funds Rate', 'unit': '%', 'importance': 'High'},
-        #             'PAYEMS': {'name': 'Non-farm Payrolls', 'unit': 'Thousands', 'importance': 'High'},
-        #             'HOUST': {'name': 'Housing Starts', 'unit': 'Thousands', 'importance': 'Medium'},
-        #             'RSXFS': {'name': 'Retail Sales', 'unit': 'Millions', 'importance': 'Medium'},
-        #             'INDPRO': {'name': 'Industrial Production', 'unit': 'Index', 'importance': 'Medium'}
-        #         }
-        #
-        #         calendar_data = []
-        #
-        #         for series_id, info in economic_indicators.items():
-        #             try:
-        #                 # Get latest data (last 3 months to ensure we have recent data)
-        #                 data = fred.get_series_data(series_id, start_date='2024-01-01')
-        #
-        #                 if not data.empty and 'error' not in data.columns:
-        #                     # Get the latest two values for trend
-        #                     latest_date = data.index[-1] if not data.empty else None
-        #                     latest_value = data.iloc[-1, 0] if len(data) > 0 else None
-        #                     prev_value = data.iloc[-2, 0] if len(data) > 1 else None
-        #
-        #                     if latest_value is not None:
-        #                         # Calculate change
-        #                         change = ""
-        #                         if prev_value is not None and prev_value != 0:
-        #                             if info['unit'] == '%':
-        #                                 change_val = latest_value - prev_value
-        #                                 change = f"{change_val:+.2f} bps"
-        #                             else:
-        #                                 change_pct = ((latest_value - prev_value) / prev_value) * 100
-        #                                 change = f"{change_pct:+.2f}%"
-        #
-        #                         calendar_data.append({
-        #                             'Indicator': info['name'],
-        #                             'Latest Date': latest_date.strftime('%Y-%m-%d') if latest_date else 'N/A',
-        #                             'Current Value': f"{latest_value:.2f}" if info['unit'] != 'Thousands' and info['unit'] != 'Millions' and info['unit'] != 'Billions' else f"{latest_value:,.0f}",
-        #                             'Unit': info['unit'],
-        #                             'Change': change,
-        #                             'Importance': info['importance'],
-        #                             'Series ID': series_id
-        #                         })
-        #             except Exception as e:
-        #                 # Add placeholder for failed series
-        #                 calendar_data.append({
-        #                     'Indicator': info['name'],
-        #                     'Latest Date': 'N/A',
-        #                     'Current Value': 'Error loading',
-        #                     'Unit': info['unit'],
-        #                     'Change': 'N/A',
-        #                     'Importance': info['importance'],
-        #                     'Series ID': series_id
-        #                 })
-        #                 continue
-        #
-        #         if calendar_data:
-        #             df = pd.DataFrame(calendar_data)
-        #
-        #             # Sort by importance (High first, then Medium)
-        #             importance_order = {'High': 0, 'Medium': 1, 'Low': 2}
-        #             df['sort_order'] = df['Importance'].map(importance_order)
-        #             df = df.sort_values('sort_order').drop('sort_order', axis=1)
-        #
-        #             st.dataframe(df, use_container_width=True)
-        #
-        #             # Add some key metrics as cards
-        #             st.write("**📈 Key Economic Highlights**")
-        #
-        #             if len(calendar_data) >= 4:
-        #                 col1, col2, col3, col4 = st.columns(4)
-        #
-        #                 # Find key indicators
-        #                 unemployment = next((item for item in calendar_data if 'Unemployment' in item['Indicator']), None)
-        #                 fed_funds = next((item for item in calendar_data if 'Federal Funds' in item['Indicator']), None)
-        #                 cpi = next((item for item in calendar_data if 'Consumer Price' in item['Indicator']), None)
-        #                 payrolls = next((item for item in calendar_data if 'Payrolls' in item['Indicator']), None)
-        #
-        #                 if unemployment:
-        #                     with col1:
-        #                         st.metric("Unemployment Rate", f"{unemployment['Current Value']}%", unemployment['Change'])
-        #
-        #                 if fed_funds:
-        #                     with col2:
-        #                         st.metric("Fed Funds Rate", f"{fed_funds['Current Value']}%", fed_funds['Change'])
-        #
-        #                 if cpi:
-        #                     with col3:
-        #                         st.metric("CPI", cpi['Current Value'], cpi['Change'])
-        #
-        #                 if payrolls:
-        #                     with col4:
-        #                         st.metric("Non-farm Payrolls", f"{payrolls['Current Value']}K", payrolls['Change'])
-        #         else:
-        #             st.error("Unable to load economic calendar data from FRED")
-        #
-        #     else:
-        #         st.warning("FRED API not configured. Please set FRED_API_KEY environment variable.")
-        #
-        #         # Fallback to mock data
-        #         st.info("Showing sample economic calendar data:")
-        #         mock_events = [
-        #             {"Date": now_et().strftime('%Y-%m-%d'), "Event": "Consumer Price Index", "Importance": "High", "Previous": "3.1%", "Forecast": "3.2%"},
-        #             {"Date": (now_et() + timedelta(days=2)).strftime('%Y-%m-%d'), "Event": "Retail Sales", "Importance": "Medium", "Previous": "0.3%", "Forecast": "0.4%"},
-        #             {"Date": (now_et() + timedelta(days=3)).strftime('%Y-%m-%d'), "Event": "Housing Starts", "Importance": "Medium", "Previous": "1.56M", "Forecast": "1.52M"},
-        #         ]
-        #
-        #         df = pd.DataFrame(mock_events)
-        #         st.dataframe(df, use_container_width=True)
-        #
-        # except Exception as e:
-        #     st.error(f"Error loading economic calendar: {e}")
-        #     st.info("Unable to load economic data. Please check FRED API configuration.")
+        
+        try:
+            if 'fred_provider' in st.session_state and st.session_state.fred_provider.client:
+                fred = st.session_state.fred_provider
+                indicators = {'UNRATE': 'Unemployment Rate', 'CPIAUCSL': 'CPI', 'FEDFUNDS': 'Fed Funds Rate'}
+                
+                col1, col2, col3 = st.columns(3)
+                for i, (series_id, name) in enumerate(indicators.items()):
+                    try:
+                        data = fred.get_series_data(series_id, start_date='2024-01-01')
+                        if not data.empty:
+                            latest_value = data.iloc[-1, 0]
+                            with [col1, col2, col3][i]:
+                                st.metric(name, f"{latest_value:.2f}{'%' if 'Rate' in name else ''}")
+                    except:
+                        with [col1, col2, col3][i]:
+                            st.metric(name, "N/A")
+            else:
+                st.warning("FRED API not configured")
+                mock_events = [
+                    {"Date": now_et().strftime('%Y-%m-%d'), "Event": "CPI", "Previous": "3.1%", "Forecast": "3.2%"},
+                    {"Date": (now_et() + timedelta(days=2)).strftime('%Y-%m-%d'), "Event": "Retail Sales", "Previous": "0.3%", "Forecast": "0.4%"}
+                ]
+                st.dataframe(pd.DataFrame(mock_events), use_container_width=True)
+        except Exception as e:
+            st.error(f"Error loading economic calendar: {e}")
 
     def render_cryptocurrency_data(self):
         """Render cryptocurrency information with comprehensive crypto data"""
         st.subheader("₿ Cryptocurrency")
-        st.info("🚧 Cryptocurrency data coming soon...")
 
-        # try:
-        #     provider = AlpacaDataProvider()
-        #
-        #     # Multiple cryptocurrencies
-        #     crypto_symbols = ['BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD']
-        #     crypto_names = {'BTC/USD': 'Bitcoin', 'ETH/USD': 'Ethereum', 'LTC/USD': 'Litecoin', 'BCH/USD': 'Bitcoin Cash'}
-        #
-        #     # Display top cryptos in columns
-        #     cols = st.columns(len(crypto_symbols))
-        #
-        #     for i, symbol in enumerate(crypto_symbols):
-        #         with cols[i]:
-        #             try:
-        #                 quote = provider.get_crypto_latest_quote(symbol)
-        #                 if 'error' not in quote:
-        #                     bid_price = float(quote.get('bid_price', 0))
-        #                     ask_price = float(quote.get('ask_price', 0))
-        #                     current_price = (bid_price + ask_price) / 2 if bid_price and ask_price else bid_price or ask_price
-        #
-        #                     # Get historical data for change calculation
-        #                     hist_data = provider.get_crypto_historical_bars(symbol, '1Day', 2)
-        #                     if not hist_data.empty and len(hist_data) > 1:
-        #                         prev_close = float(hist_data['close'].iloc[-2])
-        #                         change = current_price - prev_close
-        #                         change_pct = (change / prev_close * 100) if prev_close != 0 else 0
-        #
-        #                         st.metric(
-        #                             crypto_names.get(symbol, symbol),
-        #                             f"${current_price:,.2f}",
-        #                             f"${change:+,.2f} ({change_pct:+.2f}%)"
-        #                         )
-        #                     else:
-        #                         st.metric(crypto_names.get(symbol, symbol), f"${current_price:,.2f}")
-        #                 else:
-        #                     st.metric(crypto_names.get(symbol, symbol), "N/A", "Error loading")
-        #             except Exception as e:
-        #                 st.metric(crypto_names.get(symbol, symbol), "N/A", "Error")
-        #
-        #     st.divider()
-        #
-        #     # Detailed Bitcoin analysis
-        #     st.write("**📊 Bitcoin Detailed Analysis**")
-        #
-        #     try:
-        #         btc_quote = provider.get_crypto_latest_quote('BTC/USD')
-        #         if 'error' not in btc_quote:
-        #             col1, col2, col3, col4 = st.columns(4)
-        #
-        #             with col1:
-        #                 bid_price = float(btc_quote.get('bid_price', 0))
-        #                 st.metric("Bid Price", f"${bid_price:,.2f}")
-        #
-        #             with col2:
-        #                 ask_price = float(btc_quote.get('ask_price', 0))
-        #                 st.metric("Ask Price", f"${ask_price:,.2f}")
-        #
-        #             with col3:
-        #                 spread = ask_price - bid_price if ask_price and bid_price else 0
-        #                 st.metric("Bid-Ask Spread", f"${spread:.2f}")
-        #
-        #             with col4:
-        #                 if 'timestamp' in btc_quote:
-        #                     timestamp = btc_quote['timestamp']
-        #                     st.metric("Last Updated", timestamp.strftime("%H:%M:%S"))
-        #                 else:
-        #                     st.metric("Last Updated", "N/A")
-        #
-        #             # Bitcoin price history chart
-        #             st.write("**📈 Bitcoin Price Chart (30 Days)**")
-        #             btc_data = provider.get_crypto_historical_bars('BTC/USD', '1Day', 30)
-        #
-        #             if not btc_data.empty:
-        #                 fig = go.Figure()
-        #
-        #                 # Add candlestick chart
-        #                 fig.add_trace(go.Candlestick(
-        #                     x=btc_data.index,
-        #                     open=btc_data['open'],
-        #                     high=btc_data['high'],
-        #                     low=btc_data['low'],
-        #                     close=btc_data['close'],
-        #                     name='BTC/USD'
-        #                 ))
-        #
-        #                 # Add moving average
-        #                 sma_20 = btc_data['close'].rolling(window=20).mean()
-        #                 fig.add_trace(go.Scatter(
-        #                     x=btc_data.index,
-        #                     y=sma_20,
-        #                     mode='lines',
-        #                     name='20-day SMA',
-        #                     line=dict(color='orange', width=1)
-        #                 ))
-        #
-        #                 fig.update_layout(
-        #                     title="Bitcoin (BTC/USD) - 30 Day Chart",
-        #                     yaxis_title="Price (USD)",
-        #                     xaxis_title="Date",
-        #                     height=400,
-        #                     showlegend=True
-        #                 )
-        #
-        #                 st.plotly_chart(fig, use_container_width=True)
-        #
-        #                 # Bitcoin statistics
-        #                 col1, col2, col3, col4 = st.columns(4)
-        #
-        #                 current_price = float(btc_data['close'].iloc[-1])
-        #                 high_30d = float(btc_data['high'].max())
-        #                 low_30d = float(btc_data['low'].min())
-        #                 volatility = btc_data['close'].pct_change().std() * np.sqrt(365) * 100
-        #
-        #                 with col1:
-        #                     st.metric("30D High", f"${high_30d:,.2f}")
-        #
-        #                 with col2:
-        #                     st.metric("30D Low", f"${low_30d:,.2f}")
-        #
-        #                 with col3:
-        #                     range_pos = ((current_price - low_30d) / (high_30d - low_30d)) * 100 if (high_30d - low_30d) > 0 else 0
-        #                     st.metric("30D Range Position", f"{range_pos:.1f}%")
-        #
-        #                 with col4:
-        #                     st.metric("Annualized Volatility", f"{volatility:.1f}%")
-        #             else:
-        #                 st.error("Unable to load Bitcoin historical data")
-        #         else:
-        #             st.error(f"Error loading Bitcoin data: {btc_quote.get('error', 'Unknown error')}")
-        #
-        #     except Exception as e:
-        #         st.error(f"Error in Bitcoin detailed analysis: {e}")
-        #
-        # except Exception as e:
-        #     st.error(f"Error loading cryptocurrency data: {e}")
+        try:
+            provider = AlpacaDataProvider()
+            crypto_symbols = ['BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD']
+            crypto_names = {'BTC/USD': 'Bitcoin', 'ETH/USD': 'Ethereum', 'LTC/USD': 'Litecoin', 'BCH/USD': 'Bitcoin Cash'}
+            
+            cols = st.columns(len(crypto_symbols))
+            for i, symbol in enumerate(crypto_symbols):
+                with cols[i]:
+                    try:
+                        quote = provider.get_crypto_latest_quote(symbol)
+                        if 'error' not in quote:
+                            bid_price = float(quote.get('bid_price', 0))
+                            ask_price = float(quote.get('ask_price', 0))
+                            current_price = (bid_price + ask_price) / 2 if bid_price and ask_price else bid_price or ask_price
+
+                            start_date = now_et() - timedelta(days=5)  # Get more days to ensure we have previous close
+                            hist_data = provider.get_bars(symbol, '1Day', start=start_date)
+
+                            if not hist_data.empty and len(hist_data) > 1:
+                                prev_close = float(hist_data['close'].iloc[-2])
+                                change = current_price - prev_close
+                                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+                                st.metric(crypto_names.get(symbol, symbol), f"${current_price:,.2f}", 
+                                         f"${change:+,.2f} ({change_pct:+.2f}%)")
+                            else:
+                                st.metric(crypto_names.get(symbol, symbol), f"${current_price:,.2f}")
+                        else:
+                            st.metric(crypto_names.get(symbol, symbol), "N/A", "Error loading")
+                    except:
+                        st.metric(crypto_names.get(symbol, symbol), "N/A", "Error")
+
+            st.divider()
+            st.write("**📊 Bitcoin Detailed Analysis**")
+            
+            btc_quote = provider.get_crypto_latest_quote('BTC/USD')
+            if 'error' not in btc_quote:
+                col1, col2, col3, col4 = st.columns(4)
+                bid_price = float(btc_quote.get('bid_price', 0))
+                ask_price = float(btc_quote.get('ask_price', 0))
+                spread = ask_price - bid_price if ask_price and bid_price else 0
+                
+                with col1: st.metric("Bid Price", f"${bid_price:,.2f}")
+                with col2: st.metric("Ask Price", f"${ask_price:,.2f}")
+                with col3: st.metric("Bid-Ask Spread", f"${spread:.2f}")
+                with col4: st.metric("Last Updated", btc_quote.get('timestamp', 'N/A').strftime("%H:%M:%S") 
+                                    if 'timestamp' in btc_quote else "N/A")
+
+                st.write("**📈 Bitcoin Price Chart (30 Days)**")
+                start_date = now_et() - timedelta(days=30)  # Get more days to ensure we have previous close
+                btc_data = provider.get_bars('BTC/USD', '1Day', start=start_date)
+                
+                if not btc_data.empty:
+                    fig = go.Figure()
+                    fig.add_trace(go.Candlestick(x=btc_data.index, open=btc_data['open'], high=btc_data['high'],
+                                               low=btc_data['low'], close=btc_data['close'], name='BTC/USD'))
+                    sma_20 = btc_data['close'].rolling(window=20).mean()
+                    fig.add_trace(go.Scatter(x=btc_data.index, y=sma_20, mode='lines', name='20-day SMA',
+                                           line=dict(color='orange', width=1)))
+                    fig.update_layout(title="Bitcoin (BTC/USD) - 30 Day Chart", yaxis_title="Price (USD)",
+                                    xaxis_title="Date", height=400, showlegend=True)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    current_price = float(btc_data['close'].iloc[-1])
+                    high_30d = float(btc_data['high'].max())
+                    low_30d = float(btc_data['low'].min())
+                    volatility = btc_data['close'].pct_change().std() * np.sqrt(365) * 100
+                    range_pos = ((current_price - low_30d) / (high_30d - low_30d)) * 100 if (high_30d - low_30d) > 0 else 0
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1: st.metric("30D High", f"${high_30d:,.2f}")
+                    with col2: st.metric("30D Low", f"${low_30d:,.2f}")
+                    with col3: st.metric("30D Range Position", f"{range_pos:.1f}%")
+                    with col4: st.metric("Annualized Volatility", f"{volatility:.1f}%")
+                else:
+                    st.error("Unable to load Bitcoin historical data")
+            else:
+                st.error(f"Error loading Bitcoin data: {btc_quote.get('error', 'Unknown error')}")
+        except Exception as e:
+            st.error(f"Error loading cryptocurrency data: {e}")
 
     def render_account_info_tab(self):
         """Account Info: Account, Positions, Portfolio, Performance, Risk Management"""
         st.header("💼 Account Information")
 
-        account_tabs = st.tabs(["📊 Account", "📈 Positions", "💰 Portfolio", "📉 Performance", "⚙️ Configuration"])
+        account_tabs = st.tabs(["📊 Account", "📈 Positions", "💰 Portfolio", "⚙️ Configuration"])
 
         with account_tabs[0]:
             self.render_account_overview()
@@ -771,38 +494,30 @@ class ModernDashboard(BaseDashboard):
             self.render_portfolio_analytics()
 
         with account_tabs[3]:
-            self.render_performance_metrics()
-
-        with account_tabs[4]:
             self.render_risk_configuration()
 
     def render_account_overview(self):
         """Render account overview"""
         st.subheader("📊 Account Overview")
-
         account_info, error = self.get_account_info()
+        
         if account_info:
             col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric("Account Value", f"${float(account_info.get('portfolio_value', 0)):,.2f}")
-
-            with col2:
-                st.metric("Buying Power", f"${float(account_info.get('buying_power', 0)):,.2f}")
-
-            with col3:
-                st.metric("Cash", f"${float(account_info.get('cash', 0)):,.2f}")
-
-            with col4:
-                day_pl = float(account_info.get('day_trade_pl', 0))
-                st.metric("Day P&L", f"${day_pl:,.2f}", delta=f"{day_pl:,.2f}")
+            equity = float(account_info.get('equity', 0))
+            last_equity = float(account_info.get('last_equity', equity))
+            day_pl = equity - last_equity
+            
+            with col1: st.metric("Account Value", f"${float(account_info.get('portfolio_value', 0)):,.2f}")
+            with col2: st.metric("Buying Power", f"${float(account_info.get('buying_power', 0)):,.2f}")
+            with col3: st.metric("Cash", f"${float(account_info.get('cash', 0)):,.2f}")
+            with col4: st.metric("Day P&L", f"${day_pl:,.2f}", delta=f"{day_pl:,.2f}")
         else:
             st.error(f"Unable to load account information: {error}")
 
     def render_positions_view(self):
         """Render current positions"""
         st.subheader("📈 Current Positions")
-
+        
         if 'position_manager' in st.session_state:
             positions = st.session_state.position_manager.get_all_positions()
             if positions and not any('error' in pos for pos in positions):
@@ -813,39 +528,145 @@ class ModernDashboard(BaseDashboard):
             st.error("Position manager not initialized.")
 
     def render_portfolio_analytics(self):
-        """Render portfolio analytics"""
+        """Render portfolio analytics with real data"""
         st.subheader("💰 Portfolio Analytics")
-        st.info("🚧 Advanced portfolio analytics coming soon...")
 
-        # Placeholder analytics
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**Asset Allocation**")
-            # Mock pie chart
-            labels = ['Stocks', 'Cash', 'Options']
-            values = [70, 25, 5]
-            fig = go.Figure(data=[go.Pie(labels=labels, values=values)])
-            st.plotly_chart(fig, use_container_width=True)
+        self.render_asset_allocation()
+        self.render_portfolio_performance()
 
-        with col2:
-            st.write("**Risk Metrics**")
-            st.metric("Portfolio Beta", "1.2")
-            st.metric("Sharpe Ratio", "1.8")
-            st.metric("Max Drawdown", "-5.2%")
+    def render_asset_allocation(self):
+        """Render asset allocation analysis"""
+        try:
+            account_info, _ = self.get_account_info()
+            positions = st.session_state.position_manager.get_all_positions() if 'position_manager' in st.session_state else []
+            
+            if not account_info or not positions or any('error' in pos for pos in positions):
+                st.info("Portfolio data unavailable")
+                return
 
-    def render_performance_metrics(self):
-        """Render performance metrics"""
-        st.subheader("📉 Performance Analysis")
-        st.info("🚧 Detailed performance analysis coming soon...")
+            portfolio_value = float(account_info.get('portfolio_value', 0))
+            cash = float(account_info.get('cash', 0))
 
-        # Mock performance chart
-        dates = pd.date_range(start='2024-01-01', end=now_et().date(), freq='D')
-        performance = np.cumsum(np.random.normal(0.001, 0.02, len(dates))) + 1
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Asset Allocation**")
+                allocation_data = {'Cash': cash}
+                
+                for pos in positions:
+                    try:
+                        symbol = pos.get('symbol', 'Unknown')
+                        market_value = abs(float(pos.get('market_value', 0)))
+                        if symbol in allocation_data:
+                            allocation_data[symbol] += market_value
+                        else:
+                            allocation_data[symbol] = market_value
+                    except (ValueError, TypeError):
+                        continue
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=dates, y=performance, mode='lines', name='Portfolio'))
-        fig.update_layout(title="Portfolio Performance", yaxis_title="Cumulative Returns")
-        st.plotly_chart(fig, use_container_width=True)
+                if sum(allocation_data.values()) > 0:
+                    fig = go.Figure(data=[go.Pie(labels=list(allocation_data.keys()), 
+                                                values=list(allocation_data.values()))])
+                    fig.update_layout(height=300)
+                    st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.write("**Portfolio Metrics**")
+                
+                total_pl = sum(float(pos.get('unrealized_pl', 0)) for pos in positions 
+                              if pos.get('unrealized_pl'))
+                total_pl_pct = (total_pl / portfolio_value * 100) if portfolio_value > 0 else 0
+                
+                winners = [pos for pos in positions if float(pos.get('unrealized_pl', 0)) > 0]
+                losers = [pos for pos in positions if float(pos.get('unrealized_pl', 0)) < 0]
+                win_rate = (len(winners) / len(positions) * 100) if positions else 0
+                
+                st.metric("Total P&L", f"${total_pl:+,.2f}", f"{total_pl_pct:+.2f}%")
+                st.metric("Win Rate", f"{win_rate:.1f}%")
+                st.metric("Active Positions", len(positions))
+
+        except Exception as e:
+            st.error(f"Error loading asset allocation: {e}")
+
+    def render_portfolio_performance(self):
+        """Render performance metrics using real portfolio history"""
+        try:
+            account_info, _ = self.get_account_info()
+            if not account_info:
+                st.info("Performance data unavailable")
+                return
+
+            # Use correct account fields
+            portfolio_value = float(account_info.get('portfolio_value', 0))
+            equity = float(account_info.get('equity', 0))
+            last_equity = float(account_info.get('last_equity', equity))
+            
+            # Calculate daily P&L from equity change
+            day_pl = equity - last_equity
+            day_pl_pct = (day_pl / last_equity * 100) if last_equity > 0 else 0
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Day P&L", f"${day_pl:+,.2f}")
+            with col2:
+                st.metric("Day Return", f"{day_pl_pct:+.2f}%")
+            with col3:
+                st.metric("Portfolio Value", f"${portfolio_value:,.2f}")
+
+            # Get portfolio history using data provider
+            try:
+                
+                # Get portfolio history from data provider
+                provider = AlpacaDataProvider()
+                portfolio_history = provider.get_portfolio_history()
+                
+                if portfolio_history and 'error' not in portfolio_history:
+                    equity_values = portfolio_history.get('equity', [])
+                    timestamps = portfolio_history.get('timestamp', [])
+                    
+                    if equity_values and timestamps:
+                        # Convert timestamps to datetime if needed
+                        if isinstance(timestamps[0], (int, float)):
+                            dates = [datetime.fromtimestamp(ts) for ts in timestamps]
+                        else:
+                            dates = timestamps
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=dates, y=equity_values, mode='lines', 
+                            name='Portfolio Value', line=dict(color='blue', width=2)
+                        ))
+                        fig.update_layout(
+                            title="Portfolio Performance (30 Days)", 
+                            yaxis_title="Value ($)", height=400
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Performance metrics
+                        if len(equity_values) > 1:
+                            total_return = ((equity_values[-1] - equity_values[0]) / equity_values[0] * 100)
+                            max_value = max(equity_values)
+                            min_value = min(equity_values)
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("30D Return", f"{total_return:+.2f}%")
+                            with col2:
+                                st.metric("30D High", f"${max_value:,.2f}")
+                            with col3:
+                                st.metric("30D Low", f"${min_value:,.2f}")
+                    else:
+                        st.info("No portfolio history data available")
+                else:
+                    st.info("Portfolio history temporarily unavailable")
+                    
+            except Exception as hist_error:
+                logger.error(f"Portfolio history error: {hist_error}")
+                st.info("Portfolio history temporarily unavailable")
+
+        except Exception as e:
+            st.error(f"Error loading performance: {e}")
+            logger.error(f"Portfolio performance error: {e}")
+
 
     def render_risk_configuration(self):
         """Render risk management configuration"""

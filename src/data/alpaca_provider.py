@@ -32,7 +32,10 @@ try:
     )
     from alpaca.data.timeframe import TimeFrame
     from alpaca.trading.client import TradingClient
-    from alpaca.trading.requests import GetAssetsRequest
+    from alpaca.trading.requests import (
+        GetAssetsRequest,
+        GetPortfolioHistoryRequest,
+    )
     from alpaca.common.exceptions import APIError
     ALPACA_PY_AVAILABLE = True
 except ImportError:
@@ -346,6 +349,30 @@ class AlpacaProvider:
         except Exception as e:
             logging.error(f"Error getting positions: {e}")
             return []
+
+    def get_portfolio_history(self, period: str = '1M') -> Dict[str, Any]:
+        """Get portfolio history from trading client"""
+        try:
+
+            # Create request with proper parameters
+            request = GetPortfolioHistoryRequest(
+                period=period,
+            )
+            
+            portfolio_history = self.trading_client.get_portfolio_history(request)
+            
+            # Convert to dict format for easier handling
+            return {
+                'equity': portfolio_history.equity if hasattr(portfolio_history, 'equity') else [],
+                'timestamp': portfolio_history.timestamp if hasattr(portfolio_history, 'timestamp') else [],
+                'profit_loss': portfolio_history.profit_loss if hasattr(portfolio_history, 'profit_loss') else [],
+                'profit_loss_pct': portfolio_history.profit_loss_pct if hasattr(portfolio_history, 'profit_loss_pct') else [],
+                'base_value': portfolio_history.base_value if hasattr(portfolio_history, 'base_value') else 0,
+                'timeframe': portfolio_history.timeframe if hasattr(portfolio_history, 'timeframe') else "1D"
+            }
+        except Exception as e:
+            logging.error(f"Error getting portfolio history: {e}")
+            return {'error': str(e)}
     
     def is_option_symbol(self, symbol: str) -> bool:
         """Check if symbol is an options contract"""
