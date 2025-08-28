@@ -25,6 +25,7 @@ from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 from src.data import AlpacaDataProvider
 from src.trade import TradingEngine, Backtester, Portfolio
 from src.strategy import MomentumStrategy
+from src.strategy.strategy_selector import get_strategy_selector
 from src.analysis import TechnicalAnalysis
 
 logger = logging.getLogger(__name__)
@@ -397,9 +398,24 @@ class BaseDashboard(ABC):
                 if not data.empty:
                     backtester.add_data(symbol, data)
             
-            # Create strategy based on selection
+            # Create strategy using strategy selector
+            strategy_selector = get_strategy_selector()
+            
+            # Map display names to registry names
+            strategy_name_mapping = {
+                "Momentum": "momentum",
+                "Mean Reversion": "momentum",  # Use momentum with mean reversion config
+                "Trend Following": "trend_following",
+                "Scalping": "scalping",
+                "Statistical Arbitrage": "statistical_arbitrage",
+                "Value Investment": "value_investment",
+                "XGBoost": "xgboost",
+                "Deep Learning": "deep_learning",
+                "Gaussian Process": "gaussian_process"
+            }
+            
+            # Special configs for specific strategies
             strategy_configs = {
-                "Momentum": {},
                 "Mean Reversion": {
                     'lookback_period': 10,
                     'rsi_period': 14,
@@ -420,10 +436,21 @@ class BaseDashboard(ABC):
                 }
             }
             
-            if strategy_type not in strategy_configs:
-                raise ValueError(f"Unknown strategy type: {strategy_type}")
-                
-            strategy = MomentumStrategy(strategy_configs[strategy_type])
+            # Get the actual strategy registry name
+            registry_name = strategy_name_mapping.get(strategy_type, strategy_type.lower().replace(' ', '_'))
+            
+            # Check if strategy exists in registry
+            available_strategies = strategy_selector.list_strategies()
+            if registry_name not in available_strategies:
+                raise ValueError(f"Unknown strategy type: {strategy_type}. Available: {available_strategies}")
+            
+            # Get strategy-specific config or use empty dict
+            config = strategy_configs.get(strategy_type, {})
+            
+            # Create strategy instance
+            strategy = strategy_selector.create_strategy(registry_name, config)
+            if not strategy:
+                raise ValueError(f"Failed to create strategy: {registry_name}")
             
             def strategy_func(current_date, current_prices, current_data, historical_data, portfolio):
                 return strategy.generate_signals(

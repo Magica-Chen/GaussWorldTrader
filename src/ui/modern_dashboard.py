@@ -79,6 +79,7 @@ class ModernDashboard(BaseDashboard):
                     "📊 Market Overview",
                     "💼 Account Info",
                     "🔍 Live Analysis",
+                    "👁️ Watchlist",
                     "📈 Strategy Backtest",
                     "⚡ Trade & Order",
                     "📰 News & Report"
@@ -98,6 +99,8 @@ class ModernDashboard(BaseDashboard):
             self.render_account_info_tab()
         elif selected_tab == "🔍 Live Analysis":
             self.render_live_analysis_tab()
+        elif selected_tab == "👁️ Watchlist":
+            self.render_watchlist_tab()
         elif selected_tab == "📈 Strategy Backtest":
             self.render_strategy_backtest_tab()
         elif selected_tab == "⚡ Trade & Order":
@@ -115,7 +118,7 @@ class ModernDashboard(BaseDashboard):
         st.write(f"📅 **Local Time:** {local_time.strftime('%H:%M:%S')}")
         st.write(f"📅 **ET Time:** {et_time.strftime('%H:%M:%S')}")
         st.write(f"**Status:** {status_color} {market_status.title()}")
-        st.write(f"**Next Change:** {'Market Close' if market_status == 'open' else 'Market Open'}")
+        # st.write(f"**Next Change:** {'Market Close' if market_status == 'open' else 'Market Open'}")
         st.divider()
     
     def render_portfolio_quick_view(self):
@@ -690,38 +693,33 @@ class ModernDashboard(BaseDashboard):
 
         with col1:
             st.write("**Position Sizing**")
-            max_position = st.slider("Max Position Size (%)", 1, 20, 10)
-            max_portfolio_risk = st.slider("Max Portfolio Risk (%)", 1, 10, 2)
+            max_position = st.slider("Max Position Size (%)", 1, 20, 10, key="max_position_size")
+            max_portfolio_risk = st.slider("Max Portfolio Risk (%)", 1, 10, 2, key="max_portfolio_risk")
 
         with col2:
             st.write("**Stop Loss Settings**")
-            default_stop_loss = st.slider("Default Stop Loss (%)", 1, 20, 5)
+            default_stop_loss = st.slider("Default Stop Loss (%)", 1, 20, 5, key="default_stop_loss")
             trailing_stop = st.checkbox("Enable Trailing Stop")
 
         if st.button("Save Risk Settings"):
             st.success("Risk settings saved successfully!")
 
     def render_live_analysis_tab(self):
-        """Live Analysis: Symbol Analysis, Watchlist"""
-        st.header("🔍 Live Analysis")
+        """Live Analysis: Symbol Analysis"""
+        st.header("🔍 Live Analysis (Symbol)")
 
-        analysis_tabs = st.tabs(["📊 Symbol Analysis", "👁️ Watchlist"])
-
-        with analysis_tabs[0]:
-            self.render_symbol_analysis()
-
-        with analysis_tabs[1]:
-            self.render_watchlist_management()
+        # Only symbol analysis remains in this tab
+        self.render_symbol_analysis()
 
     def render_symbol_analysis(self):
         """Render symbol analysis"""
-        st.subheader("📊 Symbol Analysis")
+        # st.subheader("📊 Symbol Analysis")
 
         col1, col2 = st.columns([1, 3])
 
         with col1:
             symbol = st.text_input("Enter Symbol", value="AAPL", key="analysis_symbol").upper()
-            days = st.selectbox("Analysis Period", [30, 60, 90, 180, 365], index=2)
+            days = st.selectbox("Analysis Period", [30, 60, 90, 180, 365], index=2, key="analysis_period")
 
             if st.button("Analyze"):
                 st.session_state.analyze_symbol = symbol
@@ -763,25 +761,55 @@ class ModernDashboard(BaseDashboard):
 
     def render_watchlist_management(self):
         """Render watchlist management"""
-        st.subheader("👁️ Watchlist Management")
-
         if 'watchlist_manager' in st.session_state:
             wm = st.session_state.watchlist_manager
 
-            # Add symbol to watchlist
-            col1, col2 = st.columns([2, 1])
+            # Add symbol section
+            st.subheader("➕ Add Symbol")
+            col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
-                new_symbol = st.text_input("Add Symbol to Watchlist").upper()
+                new_symbol = st.text_input("Enter Symbol to Add", key="add_symbol").upper()
             with col2:
-                if st.button("Add") and new_symbol:
-                    wm.add_symbol(new_symbol)
-                    st.success(f"Added {new_symbol} to watchlist")
+                if st.button("Add Symbol", type="primary") and new_symbol:
+                    if new_symbol not in wm.get_watchlist():
+                        wm.add_symbol(new_symbol)
+                        st.success(f"✅ Added {new_symbol} to watchlist")
+                        st.rerun()
+                    else:
+                        st.warning(f"⚠️ {new_symbol} is already in watchlist")
+            with col3:
+                if st.button("🔄 Refresh Data", help="Refresh all watchlist data"):
+                    st.rerun()
+
+            st.divider()
 
             # Display watchlist
             watchlist = wm.get_watchlist()
             if watchlist:
+                st.subheader(f"👁️ Watchlist ({len(watchlist)} symbols)")
+                
+                # Delete symbol section
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    symbol_to_delete = st.selectbox("Select Symbol to Remove", 
+                                                   options=[""] + sorted(watchlist))
+                with col2:
+                    if st.button("🗑️ Remove", type="secondary") and symbol_to_delete:
+                        wm.remove_symbol(symbol_to_delete)
+                        st.success(f"🗑️ Removed {symbol_to_delete} from watchlist")
+                        st.rerun()
+
+                st.divider()
+
+                # Watchlist data table
                 watchlist_data = []
-                for symbol in watchlist:
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                for i, symbol in enumerate(watchlist):
+                    status_text.text(f"Loading data for {symbol}...")
+                    progress_bar.progress((i + 1) / len(watchlist))
+                    
                     data, error = self.load_market_data(symbol, 2)
                     if data is not None and not data.empty:
                         current = data['close'].iloc[-1]
@@ -789,20 +817,56 @@ class ModernDashboard(BaseDashboard):
                         change = current - prev
                         change_pct = (change / prev * 100) if prev != 0 else 0
 
+                        # Add color coding for gains/losses
+                        change_color = "🟢" if change >= 0 else "🔴"
                         watchlist_data.append({
                             'Symbol': symbol,
-                            'Price': f"${current:.2f}",
-                            'Change': f"${change:.2f}",
-                            'Change %': f"{change_pct:.2f}%"
+                            'Current Price': f"${current:.2f}",
+                            'Change ($)': f"${change:+.2f}",
+                            'Change (%)': f"{change_pct:+.2f}%",
+                            'Status': f"{change_color}"
                         })
+                    else:
+                        watchlist_data.append({
+                            'Symbol': symbol,
+                            'Current Price': "N/A",
+                            'Change ($)': "N/A", 
+                            'Change (%)': "N/A",
+                            'Status': "❌"
+                        })
+
+                # Clear progress indicators
+                progress_bar.empty()
+                status_text.empty()
 
                 if watchlist_data:
                     df = pd.DataFrame(watchlist_data)
                     st.dataframe(df, use_container_width=True)
+                    
+                    # Summary stats
+                    valid_data = [item for item in watchlist_data if item['Current Price'] != "N/A"]
+                    if valid_data:
+                        gains = sum(1 for item in valid_data if "+" in item['Change (%)'])
+                        losses = sum(1 for item in valid_data if "-" in item['Change (%)'])
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Total Symbols", len(watchlist))
+                        with col2:
+                            st.metric("Gainers", gains, delta=f"+{gains}")
+                        with col3:
+                            st.metric("Losers", losses, delta=f"-{losses}")
+                        with col4:
+                            st.metric("Data Available", len(valid_data))
             else:
-                st.info("Watchlist is empty. Add some symbols to monitor.")
+                st.info("📭 Watchlist is empty. Add some symbols to monitor.")
         else:
-            st.error("Watchlist manager not initialized.")
+            st.error("❌ Watchlist manager not initialized.")
+
+    def render_watchlist_tab(self):
+        """Watchlist: Watchlist Management"""
+        st.header("👁️ Watchlist")
+        self.render_watchlist_management()
 
     def render_strategy_backtest_tab(self):
         """Strategy Backtest: Quick Backtest, Strategy Comparison"""
@@ -816,6 +880,32 @@ class ModernDashboard(BaseDashboard):
         with backtest_tabs[1]:
             self.render_strategy_comparison()
 
+    def get_default_symbols(self):
+        """Get default symbols from watchlist and current positions"""
+        symbols = set()
+        
+        # Add symbols from watchlist
+        try:
+            if 'watchlist_manager' in st.session_state:
+                watchlist = st.session_state.watchlist_manager.get_watchlist()
+                symbols.update(watchlist)
+        except Exception as e:
+            logger.error(f"Error getting watchlist: {e}")
+        
+        # Add symbols from current positions
+        try:
+            if 'position_manager' in st.session_state:
+                positions = st.session_state.position_manager.get_all_positions()
+                if positions and not any('error' in pos for pos in positions):
+                    for pos in positions:
+                        symbol = pos.get('symbol')
+                        if symbol:
+                            symbols.add(symbol)
+        except Exception as e:
+            logger.error(f"Error getting positions: {e}")
+        
+        return list(symbols)
+
     def render_quick_backtest(self):
         """Render quick backtesting interface"""
         st.subheader("⚡ Quick Backtest")
@@ -823,13 +913,34 @@ class ModernDashboard(BaseDashboard):
         col1, col2 = st.columns([1, 2])
 
         with col1:
-            symbols = st.text_area("Symbols (one per line)", "AAPL\nMSFT\nGOOGL").strip().split('\n')
+            # Get default symbols from watchlist and current positions
+            default_symbols = self.get_default_symbols()
+            default_symbols_text = '\n'.join(default_symbols) if default_symbols else "AAPL\nMSFT\nGOOGL"
+            
+            symbols = st.text_area("Symbols (one per line)", default_symbols_text).strip().split('\n')
             symbols = [s.strip().upper() for s in symbols if s.strip()]
 
-            days_back = st.slider("Backtest Period (days)", 30, 365, 90)
-            initial_cash = st.number_input("Initial Cash", value=100000, step=10000)
+            days_back = st.slider("Backtest Period (days)", 30, 365, 90, key="backtest_period")
+            initial_cash = st.number_input("Initial Cash", value=100000, step=10000, key="backtest_initial_cash")
 
-            strategy_type = st.selectbox("Strategy", ["Momentum", "Mean Reversion", "Breakout"])
+            # Get all available strategies from strategy_selector
+            display_strategies = []
+            strategy_mapping = {}
+            if 'strategy_selector' in st.session_state:
+                strategy_names = st.session_state.strategy_selector.list_strategies()
+                for name in strategy_names:
+                    # Create display name
+                    display_name = name.replace('_', ' ').title()
+                    display_strategies.append(display_name)
+                    strategy_mapping[display_name] = name
+            
+            # Add fallback strategies if none available
+            if not display_strategies:
+                display_strategies = ["Momentum", "Mean Reversion", "Trend Following"]
+            
+            strategy_display = st.selectbox("Strategy", display_strategies, key="backtest_strategy")
+            # Pass the display name to core_dashboard (it will handle the mapping)
+            strategy_type = strategy_display
 
             if st.button("Run Backtest"):
                 st.session_state.run_backtest = True
@@ -956,35 +1067,192 @@ class ModernDashboard(BaseDashboard):
     def render_strategy_comparison(self):
         """Render strategy comparison interface"""
         st.subheader("🔀 Strategy Comparison")
-        st.info("🚧 Strategy comparison feature coming soon...")
 
-        # Placeholder for strategy comparison
-        strategies = ['Momentum', 'Mean Reversion', 'Breakout', 'Buy & Hold']
-        mock_results = {
-            'Strategy': strategies,
-            'Total Return': ['15.2%', '8.7%', '12.4%', '10.1%'],
-            'Sharpe Ratio': [1.8, 1.2, 1.6, 1.4],
-            'Max Drawdown': ['-5.2%', '-3.1%', '-4.8%', '-6.2%'],
-            'Win Rate': ['65%', '58%', '62%', '100%']
-        }
+        col1, col2 = st.columns([1, 2])
 
-        df = pd.DataFrame(mock_results)
-        st.dataframe(df, use_container_width=True)
+        with col1:
+            st.write("**Configuration**")
+            
+            # Symbol selection
+            default_symbols = self.get_default_symbols()
+            if default_symbols:
+                default_symbol = default_symbols[0]
+            else:
+                default_symbol = "AAPL"
+            
+            symbol = st.selectbox("Select Symbol", 
+                                options=default_symbols + ["AAPL", "MSFT", "GOOGL", "TSLA"] if default_symbols 
+                                else ["AAPL", "MSFT", "GOOGL", "TSLA"],
+                                index=0 if default_symbols else 0)
+            
+            # Strategy pool management
+            st.write("**Strategy Pool**")
+            
+            # Get all available strategies from strategy_selector
+            available_strategies = []
+            if 'strategy_selector' in st.session_state:
+                strategy_names = st.session_state.strategy_selector.list_strategies()
+                for name in strategy_names:
+                    # Create display name
+                    display_name = name.replace('_', ' ').title()
+                    available_strategies.append(display_name)
+            
+            # Add fallback strategies if none available
+            if not available_strategies:
+                available_strategies = ["Momentum", "Mean Reversion", "Trend Following"]
+            
+            # Initialize selected strategies in session state
+            if 'comparison_strategies' not in st.session_state:
+                st.session_state.comparison_strategies = available_strategies[:3]  # First 3 by default
+            
+            # Display current strategy pool
+            for strategy in st.session_state.comparison_strategies:
+                col_a, col_b = st.columns([3, 1])
+                with col_a:
+                    st.write(f"• {strategy}")
+                with col_b:
+                    if st.button("❌", key=f"remove_{strategy}"):
+                        st.session_state.comparison_strategies.remove(strategy)
+                        st.rerun()
+            
+            # Add strategy dropdown
+            remaining_strategies = [s for s in available_strategies 
+                                 if s not in st.session_state.comparison_strategies]
+            if remaining_strategies:
+                add_strategy = st.selectbox("Add Strategy", [""] + remaining_strategies)
+                if st.button("➕ Add Strategy") and add_strategy:
+                    st.session_state.comparison_strategies.append(add_strategy)
+                    st.rerun()
+            
+            st.divider()
+            
+            # Backtest parameters
+            st.write("**Backtest Parameters**")
+            days_back = st.slider("Period (days)", 30, 365, 90, key="comparison_period")
+            initial_cash = st.number_input("Initial Cash", value=100000, step=10000, key="comparison_initial_cash")
+            
+            # Run comparison button
+            if st.button("🚀 Run Strategy Comparison", type="primary"):
+                if len(st.session_state.comparison_strategies) >= 2:
+                    st.session_state.run_comparison = True
+                    st.session_state.comparison_params = {
+                        'symbol': symbol,
+                        'strategies': st.session_state.comparison_strategies,
+                        'days_back': days_back,
+                        'initial_cash': initial_cash
+                    }
+                else:
+                    st.error("Please select at least 2 strategies for comparison")
+
+        with col2:
+            if hasattr(st.session_state, 'run_comparison') and st.session_state.run_comparison:
+                self.render_strategy_comparison_results()
+            else:
+                st.info("Configure strategies and click 'Run Strategy Comparison' to see results")
+
+    def render_strategy_comparison_results(self):
+        """Render strategy comparison results"""
+        st.write("**📈 Strategy Comparison Results**")
+        
+        params = st.session_state.comparison_params
+        symbol = params['symbol']
+        strategies = params['strategies']
+        days_back = params['days_back']
+        initial_cash = params['initial_cash']
+        
+        with st.spinner(f"Running comparison for {symbol} with {len(strategies)} strategies..."):
+            comparison_results = []
+            
+            for strategy_name in strategies:
+                try:
+                    # Run backtest for each strategy
+                    results, error = self.run_backtest([symbol], days_back, initial_cash, strategy_name)
+                    
+                    if results and not error:
+                        comparison_results.append({
+                            'Strategy': strategy_name,
+                            'Total Return': f"{results.get('total_return_percentage', 0):.2f}%",
+                            'Sharpe Ratio': f"{results.get('sharpe_ratio', 0):.2f}",
+                            'Max Drawdown': f"{results.get('max_drawdown_percentage', 0):.2f}%",
+                            'Win Rate': f"{results.get('win_rate', 0):.1f}%",
+                            'Total Trades': results.get('total_trades', 0),
+                            'Final Value': f"${results.get('final_value', initial_cash):,.2f}",
+                            'Volatility': f"{results.get('volatility', 0):.2f}%"
+                        })
+                    else:
+                        comparison_results.append({
+                            'Strategy': strategy_name,
+                            'Total Return': 'Error',
+                            'Sharpe Ratio': 'N/A',
+                            'Max Drawdown': 'N/A',
+                            'Win Rate': 'N/A',
+                            'Total Trades': 'N/A',
+                            'Final Value': 'N/A',
+                            'Volatility': 'N/A'
+                        })
+                
+                except Exception as e:
+                    logger.error(f"Error running backtest for {strategy_name}: {e}")
+                    comparison_results.append({
+                        'Strategy': strategy_name,
+                        'Total Return': f'Error: {str(e)[:20]}...',
+                        'Sharpe Ratio': 'N/A',
+                        'Max Drawdown': 'N/A',
+                        'Win Rate': 'N/A',
+                        'Total Trades': 'N/A',
+                        'Final Value': 'N/A',
+                        'Volatility': 'N/A'
+                    })
+        
+        if comparison_results:
+            df = pd.DataFrame(comparison_results)
+            st.dataframe(df, use_container_width=True)
+            
+            # Performance metrics chart
+            valid_results = [r for r in comparison_results if r['Total Return'] != 'Error' and 'Error:' not in str(r['Total Return'])]
+            if valid_results:
+                st.write("**📊 Performance Comparison Chart**")
+                
+                strategies_names = [r['Strategy'] for r in valid_results]
+                returns = [float(r['Total Return'].rstrip('%')) for r in valid_results]
+                sharpe_ratios = [float(r['Sharpe Ratio']) for r in valid_results if r['Sharpe Ratio'] != 'N/A']
+                
+                if returns:
+                    import plotly.express as px
+                    fig = px.bar(x=strategies_names, y=returns, title=f"Total Return Comparison - {symbol}",
+                               color=returns, color_continuous_scale="RdYlGn",
+                               text=[f"{r:.1f}%" for r in returns])
+                    fig.update_layout(yaxis_title="Total Return (%)", height=400)
+                    fig.update_traces(textposition="outside")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Summary stats
+                if len(valid_results) > 1:
+                    best_return_idx = returns.index(max(returns))
+                    best_return_strategy = strategies_names[best_return_idx]
+                    
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.metric("Best Strategy", best_return_strategy)
+                    with col_b:
+                        st.metric("Best Return", f"{max(returns):.2f}%")
+                    with col_c:
+                        avg_return = sum(returns) / len(returns)
+                        st.metric("Average Return", f"{avg_return:.2f}%")
+        else:
+            st.error("No valid results to display")
 
     def render_trade_order_tab(self):
         """Trade & Order: Quick Trade, Active Orders, Order History"""
         st.header("⚡ Trade & Order Management")
 
-        trade_tabs = st.tabs(["🚀 Quick Trade", "📋 Active Orders", "📜 Order History"])
+        trade_tabs = st.tabs(["🚀 Quick Trade", "📋 Recent Orders"])
 
         with trade_tabs[0]:
             self.render_quick_trade()
 
         with trade_tabs[1]:
-            self.render_active_orders()
-
-        with trade_tabs[2]:
-            self.render_order_history()
+            self.render_recent_orders()
 
     def render_quick_trade(self):
         """Render quick trading interface"""
@@ -994,15 +1262,15 @@ class ModernDashboard(BaseDashboard):
 
         with col1:
             st.write("**Order Details**")
-            symbol = st.text_input("Symbol", value="AAPL").upper()
-            side = st.selectbox("Side", ["buy", "sell"])
-            quantity = st.number_input("Quantity", min_value=1, value=100)
-            order_type = st.selectbox("Order Type", ["market", "limit", "stop"])
+            symbol = st.text_input("Symbol", value="AAPL", key="trade_symbol").upper()
+            side = st.selectbox("Side", ["buy", "sell"], key="trade_side")
+            quantity = st.number_input("Quantity", min_value=1, value=100, key="trade_quantity")
+            order_type = st.selectbox("Order Type", ["market", "limit", "stop"], key="trade_order_type")
 
             if order_type in ["limit", "stop"]:
-                limit_price = st.number_input("Price", value=150.0, step=0.01)
+                limit_price = st.number_input("Price", value=150.0, step=0.01, key="trade_limit_price")
 
-            time_in_force = st.selectbox("Time in Force", ["day", "gtc", "ioc", "fok"])
+            time_in_force = st.selectbox("Time in Force", ["day", "gtc", "ioc", "fok"], key="trade_time_in_force")
 
         with col2:
             st.write("**Order Preview**")
@@ -1022,7 +1290,7 @@ class ModernDashboard(BaseDashboard):
                 # In a real implementation, this would submit the order
                 # st.session_state.order_manager.submit_order(...)
 
-    def render_active_orders(self):
+    def render_recent_orders(self):
         """Render active orders view"""
         st.subheader("📋 Active Orders")
 
@@ -1049,21 +1317,6 @@ class ModernDashboard(BaseDashboard):
         else:
             st.error("Order manager not initialized.")
 
-    def render_order_history(self):
-        """Render order history"""
-        st.subheader("📜 Order History")
-        st.info("🚧 Order history feature coming soon...")
-
-        # Placeholder order history
-        mock_history = [
-            {"Date": "2024-01-15", "Symbol": "AAPL", "Side": "BUY", "Qty": 100, "Price": 185.50, "Status": "FILLED"},
-            {"Date": "2024-01-14", "Symbol": "MSFT", "Side": "SELL", "Qty": 50, "Price": 412.25, "Status": "FILLED"},
-            {"Date": "2024-01-13", "Symbol": "GOOGL", "Side": "BUY", "Qty": 25, "Price": 142.80, "Status": "FILLED"},
-        ]
-
-        df = pd.DataFrame(mock_history)
-        st.dataframe(df, use_container_width=True)
-
     def render_news_report_tab(self):
         """News & Report: Company News, Insider Transactions, AI Report"""
         st.header("📰 News & Reports")
@@ -1086,7 +1339,7 @@ class ModernDashboard(BaseDashboard):
         col1, col2 = st.columns([1, 3])
 
         with col1:
-            news_symbol = st.text_input("Symbol for News", value="AAPL").upper()
+            news_symbol = st.text_input("Symbol for News", value="AAPL", key="news_symbol").upper()
             if st.button("Get News"):
                 st.session_state.news_symbol = news_symbol
 
@@ -1121,7 +1374,7 @@ class ModernDashboard(BaseDashboard):
         col1, col2 = st.columns([1, 3])
 
         with col1:
-            insider_symbol = st.text_input("Symbol for Insider Data", value="AAPL").upper()
+            insider_symbol = st.text_input("Symbol for Insider Data", value="AAPL", key="insider_symbol").upper()
             if st.button("Get Insider Data"):
                 st.session_state.insider_symbol = insider_symbol
 

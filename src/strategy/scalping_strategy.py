@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import logging
 
 from .base_strategy import BaseStrategy
+from src.utils.timezone_utils import now_et
 
 class ScalpingStrategy(BaseStrategy):
     """
@@ -73,7 +74,8 @@ class ScalpingStrategy(BaseStrategy):
                                     current_price: float, current_bar: Dict[str, Any],
                                     portfolio: Any = None) -> Optional[Dict[str, Any]]:
         """Analyze scalping opportunity for a single symbol"""
-        
+        current_date = now_et()
+
         if len(data) < self.parameters['vwap_period'] + 10:
             return None
         
