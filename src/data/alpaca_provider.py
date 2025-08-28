@@ -367,7 +367,7 @@ class AlpacaProvider:
                 'timestamp': portfolio_history.timestamp if hasattr(portfolio_history, 'timestamp') else [],
                 'profit_loss': portfolio_history.profit_loss if hasattr(portfolio_history, 'profit_loss') else [],
                 'profit_loss_pct': portfolio_history.profit_loss_pct if hasattr(portfolio_history, 'profit_loss_pct') else [],
-                'base_value': portfolio_history.base_value if hasattr(portfolio_history, 'base_value') else 0,
+                'base_value': portfolio_history.base_value if hasattr(portfolio_history, 'base_value') else 100000,
                 'timeframe': portfolio_history.timeframe if hasattr(portfolio_history, 'timeframe') else "1D"
             }
         except Exception as e:
