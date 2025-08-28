@@ -248,8 +248,7 @@ GaussWorldTrader/
 │       ├── validators.py        # Data validation
 │       └── watchlist_manager.py # Watchlist management
 ├── config/               # Configuration management
-│   ├── config.py                # Base configuration
-│   └── optimized_config.py      # Performance optimized config
+│   └── config.py                # Performance optimized config (Python 3.12+)
 ├── examples/             # Usage examples and tutorials
 │   ├── simple_example.py        # Basic usage
 │   ├── run_backtest_example.py  # Backtesting example

@@ -18,8 +18,7 @@ GaussWorldTrader/
 │
 ├── config/                # Configuration management
 │   ├── __init__.py
-│   ├── config.py          # Legacy configuration (backward compatibility)
-│   └── optimized_config.py # Modern Python 3.12+ configuration
+│   └── config.py          # Modern Python 3.12+ configuration with legacy compatibility
 │
 ├── src/                   # Main source code
 │   ├── __init__.py

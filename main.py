@@ -19,7 +19,7 @@ if sys.version_info < (3, 12):
     print("💡 Please upgrade to Python 3.12 for optimal performance")
     sys.exit(1)
 
-from config.optimized_config import get_config
+from config.config import get_config
 
 # Import new modules
 try:
