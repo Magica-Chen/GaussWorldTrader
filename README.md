@@ -41,7 +41,6 @@ python dashboard.py
 
 # Or choose specific dashboard
 python dashboard.py --modern    # Full-featured modern UI
-python dashboard.py --advanced  # Advanced trading features  
 python dashboard.py --simple    # Basic analysis tools
 
 # Opens at http://localhost:3721
