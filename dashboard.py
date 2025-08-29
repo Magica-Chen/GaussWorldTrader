@@ -3,7 +3,7 @@
 Gauss World Trader - Dashboard Launcher
 
 Root-level dashboard launcher for easy access alongside main.py
-Supports simple, advanced, and modern dashboard interfaces
+Supports simple and modern dashboard interfaces
 All dashboard implementations are in src/ui/ directory
 """
 
@@ -16,7 +16,7 @@ import subprocess
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-def run_dashboard(mode="advanced"):
+def run_dashboard(mode="modern"):
     """Launch dashboard using streamlit run command"""
     # Set the project root
     project_root = Path(__file__).parent
@@ -62,7 +62,7 @@ def run_dashboard(mode="advanced"):
         print(f"❌ Error running dashboard: {e}")
         sys.exit(1)
 
-def launch_dashboard(mode="advanced"):
+def launch_dashboard(mode="modern"):
     """Launch the dashboard with proper configuration"""
     # Set the project root
     project_root = Path(__file__).parent

@@ -9,7 +9,7 @@ A high-performance, **Python 3.12+ optimized** quantitative trading system featu
 
 **🔗 Repository**: [https://github.com/Magica-Chen/GaussWorldTrader](https://github.com/Magica-Chen/GaussWorldTrader)  
 **👤 Author**: Magica Chen  
-**📊 Version**: 1.2.0 - Dashboard Restructure & API Optimization
+**📊 Version**: 1.1.0 - API Optimization & Crypto Integration
 
 ---
 
@@ -71,15 +71,15 @@ python main.py analysis technical AAPL --indicators rsi macd sma
 
 ## ✨ Key Features
 
-### 🎯 **Streamlined Data Integration (NEW v1.1.1)**
-- **Simplified Alpaca API**: Unified data provider for stocks, options, and crypto
-- **Automatic Data Updates**: Real-time data fetching without manual end_date parameters
+### 🎯 **Streamlined Data Integration (v1.1.0)**
+- **Alpaca API Integration**: Unified data provider for stocks, options, and crypto via alpaca-py
+- **Automatic Data Updates**: Real-time data fetching with intelligent caching
 - **Eastern Time Consistency**: All market operations use ET timezone for accuracy
-- **Clean Data Context**: Removed unnecessary market status calculations for better performance
+- **Clean Data Architecture**: Streamlined data sources with focused Alpaca integration
 
 ### 🧠 **Advanced Trading Strategies**
-- **8 Built-in Strategies**: Momentum, Value, Trend Following, Scalping, Arbitrage
-- **Machine Learning**: XGBoost, Deep Learning (LSTM/CNN), Gaussian Process
+- **8 Built-in Strategies**: Momentum, Value, Trend Following, Scalping, Arbitrage, XGBoost, Deep Learning, Gaussian Process
+- **Machine Learning**: Advanced ML models with feature engineering
 - **Strategy Selector**: Intelligent recommendations based on market conditions
 - **Market Hours Awareness**: Automatic market/limit order selection based on trading hours
 
@@ -154,7 +154,7 @@ python main.py watchlist-trade                         # Default: 30 days, momen
 python main.py watchlist-trade --days 60 --strategy value
 python main.py watchlist-trade -d 14 -s scalping
 
-# Available strategies: momentum, value, trend, scalping, arbitrage, gaussian, xgboost, deep
+# Available strategies: momentum, value, trend_following, scalping, arbitrage, gaussian_process, xgboost, deep_learning
 ```
 
 ### **Portfolio Management**
@@ -204,13 +204,13 @@ GaussWorldTrader/
 │   ├── agent/            # AI-powered analysis (multi-LLM)
 │   │   ├── agent_manager.py     # AI agent coordination
 │   │   ├── fundamental_analyzer.py # Fundamental analysis
-│   │   └── llm_providers.py     # LLM integration
+│   │   └── llm_providers.py     # Multi-provider LLM integration
 │   ├── analysis/         # Technical analysis & metrics
 │   │   ├── financial_metrics.py # Financial calculations
 │   │   ├── performance_analyzer.py # Performance analysis
 │   │   └── technical_analysis.py # Technical indicators
 │   ├── data/             # Smart data providers
-│   │   ├── alpaca_provider.py   # Unified data provider (stocks, options, crypto)
+│   │   ├── alpaca_provider.py   # Primary data provider (stocks, options, crypto)
 │   │   ├── finnhub_provider.py  # Finnhub financial data
 │   │   ├── fred_provider.py     # Federal Reserve economic data
 │   │   ├── macro_provider.py    # Macroeconomic data
@@ -234,8 +234,8 @@ GaussWorldTrader/
 │   │   └── portfolio.py         # Portfolio management
 │   ├── ui/               # Multiple interface options
 │   │   ├── core_cli.py          # Base CLI functionality (shared)
+│   │   ├── core_dashboard.py    # Core dashboard functionality
 │   │   ├── modern_dashboard.py  # Modern web interface
-│   │   ├── advanced_dashboard.py # Advanced features
 │   │   ├── simple_dashboard.py  # Simple interface
 │   │   ├── modern_cli.py        # Rich CLI interface (primary)
 │   │   ├── simple_cli.py        # Basic CLI (fallback)
@@ -281,9 +281,9 @@ GaussWorldTrader/
 8. **Gaussian Process**: Bayesian approach with uncertainty quantification
 
 ### **Strategy Components**
-- **Base Strategy**: Abstract foundation for all trading strategies
+- **Base Strategy**: Abstract foundation with signal validation
 - **Strategy Selector**: Intelligent strategy recommendation system
-- **10 Total Strategies**: Complete suite for different market conditions
+- **8 Core Strategies**: Comprehensive suite for various market conditions
 
 ### **Usage Example**
 ```python
@@ -330,18 +330,13 @@ signals = strategy.generate_signals(current_date, prices, data, historical_data,
 
 ## 📈 Recent Updates
 
-### **v1.2.0 - Dashboard Restructure & API Optimization**
-- ✅ **Restructured Dashboard**: Complete dashboard reorganization with left-right panel layout
-- ✅ **Simplified Core CLI**: Streamlined core_cli.py for better maintainability
-- ✅ **Crypto Display Fixes**: Fixed crypto position and symbol display inconsistencies
-- ✅ **Alpaca API Optimization**: Removed end_date params and simplified data_context logic
-- ✅ **Enhanced Data Providers**: Added Finnhub and FRED API integration
-- ✅ **Options Trading Support**: Improved options bars with better date handling
-
-### **v1.1.0 - Smart Data Feeds & Enhanced Trading**
-- ✅ **Automatic VIP Detection**: Uses SPY SIP feed test for tier detection
-- ✅ **Data Source Notifications**: Clear indicators for SIP vs IEX usage
-- ✅ **Fallback Logic**: Robust data retrieval with intelligent fallbacks
+### **v1.1.0 - API Migration & Crypto Integration**
+- ✅ **Alpaca API Migration**: Complete migration from alpaca-trade-api to alpaca-py
+- ✅ **Cryptocurrency Support**: Full integration for crypto trading and analysis
+- ✅ **Options Trading**: Enhanced options support with better data handling
+- ✅ **Watchlist Trading**: Automated analysis and strategy execution
+- ✅ **Data Source Optimization**: Streamlined to focus on Alpaca as primary provider
+- ✅ **Performance Improvements**: Reduced complexity and improved execution speed
 
 ### **v1.0.0 - AI & Portfolio Management**
 - 🤖 Multi-LLM AI analysis (OpenAI, DeepSeek, Claude, Moonshot)
