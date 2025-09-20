@@ -1,0 +1,23 @@
+{
+  "max_risk": 80000,
+  "position_size_pct": 0.08,
+  "put_delta_min": 0.15,
+  "put_delta_max": 0.3,
+  "call_delta_min": 0.15,
+  "call_delta_max": 0.3,
+  "min_yield": 0.04,
+  "max_yield": 1.0,
+  "dte_min": 7,
+  "dte_max": 45,
+  "preferred_dte": 21,
+  "min_open_interest": 100,
+  "min_daily_volume": 50,
+  "min_score": 0.05,
+  "max_options_per_underlying": 1,
+  "assignment_tolerance": 0.8,
+  "profit_target": 0.5,
+  "management_dte": 7,
+  "max_positions": 10,
+  "min_stock_price": 10.0,
+  "max_stock_price": 500.0
+}
