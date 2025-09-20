@@ -28,7 +28,7 @@ from src.ui.core_cli import handle_portfolio_command, print_error
 try:
     from src.data import AlpacaDataProvider
     from src.trade.optimized_trading_engine import OptimizedTradingEngine, OrderRequest
-    from src.strategy.momentum_strategy import MomentumStrategy
+    from src.stock_strategy.momentum_strategy import MomentumStrategy
     from src.utils.error_handling import safe_execute_async, handle_trading_operation_result
 except ImportError as e:
     # Fallback to basic imports for compatibility
@@ -36,7 +36,7 @@ except ImportError as e:
     console.print(f"[yellow]⚠️  Some advanced features unavailable: {e}[/yellow]")
     from src.data import AlpacaDataProvider
     from src.trade import TradingEngine as OptimizedTradingEngine
-    from src.strategy import MomentumStrategy
+    from src.stock_strategy import MomentumStrategy
 
 # Initialize rich console
 console = Console()

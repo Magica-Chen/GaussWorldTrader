@@ -94,7 +94,7 @@ def test_strategy(data):
     print("\n🧠 Testing momentum strategy...")
     
     try:
-        from src.strategy import MomentumStrategy
+        from src.stock_strategy import MomentumStrategy
         from src.trade import Portfolio
         
         strategy = MomentumStrategy()
@@ -144,7 +144,7 @@ def test_backtesting(data):
     
     try:
         from src.trade import Backtester
-        from src.strategy import MomentumStrategy
+        from src.stock_strategy import MomentumStrategy
         
         # Create backtester
         backtester = Backtester(initial_cash=10000, commission=0.01)

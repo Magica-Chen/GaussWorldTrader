@@ -24,7 +24,7 @@ except ImportError:
 from config import Config
 from src.data import AlpacaDataProvider
 from src.trade import TradingEngine
-from src.strategy import MomentumStrategy
+from src.stock_strategy import MomentumStrategy
 
 
 class BaseCLI(ABC):

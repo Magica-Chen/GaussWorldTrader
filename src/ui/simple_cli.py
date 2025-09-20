@@ -11,7 +11,7 @@ from src.ui.core_cli import BaseCLI, SimpleFallbackConcrete, HAS_RICH
 if HAS_RICH:
     import typer
     from src.trade import Portfolio
-    from src.strategy import MomentumStrategy
+    from src.stock_strategy import MomentumStrategy
     from src.utils.timezone_utils import now_et
     from datetime import timedelta
     from src.data import AlpacaDataProvider

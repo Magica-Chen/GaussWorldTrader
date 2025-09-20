@@ -16,7 +16,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.strategy.strategy_selector import StrategySelector, get_strategy_selector
+from src.stock_strategy.strategy_selector import StrategySelector, get_strategy_selector
 from src.data import AlpacaDataProvider
 from src.trade import Backtester
 

@@ -26,7 +26,7 @@ from src.agent.fundamental_analyzer import FundamentalAnalyzer
 from src.analysis import TechnicalAnalysis
 from src.data import AlpacaDataProvider, NewsDataProvider
 from src.data import FREDProvider
-from src.strategy.strategy_selector import get_strategy_selector
+from src.stock_strategy.strategy_selector import get_strategy_selector
 from src.ui.core_dashboard import BaseDashboard, UIComponents
 from src.utils.timezone_utils import get_market_status, now_et
 from src.utils.watchlist_manager import WatchlistManager

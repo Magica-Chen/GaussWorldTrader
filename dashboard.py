@@ -21,14 +21,17 @@ def run_dashboard(mode="modern"):
     # Set the project root
     project_root = Path(__file__).parent
     os.chdir(project_root)
-    
+
     # Add project to Python path
     sys.path.insert(0, str(project_root))
-    
+
     # Mode-specific configurations
     if mode == "simple":
         dashboard_file = "src/ui/simple_dashboard.py"
         print("🔹 Starting Simple Dashboard via Streamlit...")
+    elif mode == "wheel":
+        dashboard_file = "src/ui/wheel_dashboard.py"
+        print("🎯 Starting Wheel Strategy Dashboard via Streamlit...")
     else:  # modern (default)
         dashboard_file = "src/ui/modern_dashboard.py"
         print("🌍 Starting Modern Dashboard via Streamlit...")
@@ -67,10 +70,10 @@ def launch_dashboard(mode="modern"):
     # Set the project root
     project_root = Path(__file__).parent
     os.chdir(project_root)
-    
+
     # Add project to Python path
     sys.path.insert(0, str(project_root))
-    
+
     # Mode-specific configurations
     if mode == "simple":
         dashboard_file = "src/ui/simple_dashboard.py"
@@ -83,6 +86,18 @@ def launch_dashboard(mode="modern"):
         print("• 🔄 Trading Interface")
         print("• 📰 News & Sentiment Analysis")
         print("• ₿ Cryptocurrency Data")
+        print("=" * 60)
+    elif mode == "wheel":
+        dashboard_file = "src/ui/wheel_dashboard.py"
+        print("🎯 Starting Gauss World Trader - Wheel Strategy Dashboard")
+        print("=" * 60)
+        print("Dashboard Features:")
+        print("• 🎯 Wheel Strategy Overview & Cycle Monitoring")
+        print("• 📊 Real-time Signal Generation & Analysis")
+        print("• 📈 Option Position Management & Risk Assessment")
+        print("• ⚙️ Strategy Configuration & Parameter Tuning")
+        print("• 📚 Educational Content & Strategy Explanation")
+        print("• 🛡️ Risk Management & Assignment Monitoring")
         print("=" * 60)
     else:  # modern (default)
         dashboard_file = "src/ui/modern_dashboard.py"
@@ -129,21 +144,35 @@ def launch_dashboard(mode="modern"):
 
 if __name__ == "__main__":
     import argparse
-    
+
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Gauss World Trader Dashboard')
+    parser = argparse.ArgumentParser(
+        description='Gauss World Trader Dashboard',
+        epilog="""
+Examples:
+  python dashboard.py                    # Launch modern dashboard (default)
+  python dashboard.py --simple          # Launch simple dashboard
+  python dashboard.py --wheel           # Launch wheel strategy dashboard
+  python dashboard.py launch --wheel    # Launch wheel dashboard with enhanced config
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument('command', nargs='?', default='run', choices=['launch', 'run'],
                        help='Command to execute (launch or run)')
-    parser.add_argument('--simple', action='store_true', 
+    parser.add_argument('--simple', action='store_true',
                        help='Use simple dashboard interface (includes crypto, news, and technical analysis)')
-    parser.add_argument('--modern', action='store_true', 
+    parser.add_argument('--modern', action='store_true',
                        help='Use modern dashboard interface (default - redesigned navigation structure)')
-    
+    parser.add_argument('--wheel', action='store_true',
+                       help='Use wheel strategy dashboard interface (options trading focus)')
+
     args = parser.parse_args()
-    
+
     # Determine dashboard mode
     if args.simple:
         mode = "simple"
+    elif args.wheel:
+        mode = "wheel"
     else:
         mode = "modern"  # default
     

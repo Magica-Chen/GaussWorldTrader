@@ -21,7 +21,7 @@ import pandas as pd
 import streamlit as st
 from src.utils.timezone_utils import now_et
 from src.data import AlpacaDataProvider
-from src.strategy import MomentumStrategy
+from src.stock_strategy import MomentumStrategy
 from src.trade import Backtester
 from typing import Dict, List, Any, Optional, Tuple
 

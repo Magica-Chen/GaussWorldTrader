@@ -24,8 +24,8 @@ sys.path.insert(0, str(project_root))
 from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 from src.data import AlpacaDataProvider
 from src.trade import TradingEngine, Backtester, Portfolio
-from src.strategy import MomentumStrategy
-from src.strategy.strategy_selector import get_strategy_selector
+from src.stock_strategy import MomentumStrategy
+from src.stock_strategy.strategy_selector import get_strategy_selector
 from src.analysis import TechnicalAnalysis
 
 logger = logging.getLogger(__name__)

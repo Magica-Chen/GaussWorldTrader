@@ -72,7 +72,7 @@ def test_project_modules():
         print(f"⚠️  OrderManager import warning: {e}")
     
     try:
-        from src.strategy.strategy_selector import get_strategy_selector
+        from src.stock_strategy.strategy_selector import get_strategy_selector
         print("✅ StrategySelector imported successfully")
     except ImportError as e:
         print(f"⚠️  StrategySelector import warning: {e}")
@@ -90,7 +90,7 @@ def test_strategy_framework():
     print("\n🎯 Testing Strategy Framework...")
     
     try:
-        from src.strategy.strategy_selector import get_strategy_selector
+        from src.stock_strategy.strategy_selector import get_strategy_selector
         
         selector = get_strategy_selector()
         strategies = selector.list_strategies()

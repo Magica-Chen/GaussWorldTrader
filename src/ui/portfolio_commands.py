@@ -143,32 +143,32 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
         strategy_name = strategy.lower()
         try:
             if strategy_name == "momentum":
-                from src.strategy import MomentumStrategy
+                from src.stock_strategy import MomentumStrategy
                 strategy_obj = MomentumStrategy()
             elif strategy_name == "value":
-                from src.strategy import ValueStrategy
+                from src.stock_strategy import ValueStrategy
                 strategy_obj = ValueStrategy()
             elif strategy_name == "trend":
-                from src.strategy import TrendFollowingStrategy
+                from src.stock_strategy import TrendFollowingStrategy
                 strategy_obj = TrendFollowingStrategy()
             elif strategy_name == "scalping":
-                from src.strategy import ScalpingStrategy
+                from src.stock_strategy import ScalpingStrategy
                 strategy_obj = ScalpingStrategy()
             elif strategy_name == "arbitrage":
-                from src.strategy import ArbitrageStrategy
+                from src.stock_strategy import ArbitrageStrategy
                 strategy_obj = ArbitrageStrategy()
             elif strategy_name == "gaussian":
-                from src.strategy import GaussianProcessStrategy
+                from src.stock_strategy import GaussianProcessStrategy
                 strategy_obj = GaussianProcessStrategy()
             elif strategy_name == "xgboost":
-                from src.strategy import XGBoostStrategy
+                from src.stock_strategy import XGBoostStrategy
                 strategy_obj = XGBoostStrategy()
             elif strategy_name == "deep":
-                from src.strategy import DeepLearningStrategy
+                from src.stock_strategy import DeepLearningStrategy
                 strategy_obj = DeepLearningStrategy()
             else:
                 # Default to momentum if unknown strategy
-                from src.strategy import MomentumStrategy
+                from src.stock_strategy import MomentumStrategy
                 strategy_obj = MomentumStrategy()
                 if HAS_RICH and console:
                     console.print(f"[yellow]Unknown strategy '{strategy}', using Momentum strategy[/yellow]")
@@ -176,7 +176,7 @@ def get_watchlists_and_trade(days: int = 30, strategy: str = "momentum") -> None
                     print(f"Unknown strategy '{strategy}', using Momentum strategy")
         except ImportError as e:
             # Fallback to momentum strategy
-            from src.strategy import MomentumStrategy
+            from src.stock_strategy import MomentumStrategy
             strategy_obj = MomentumStrategy()
             if HAS_RICH and console:
                 console.print(f"[yellow]Could not load {strategy} strategy ({e}), using Momentum strategy[/yellow]")

@@ -15,7 +15,7 @@ import matplotlib.dates as mdates
 import pandas as pd
 from src.data.alpaca_provider import AlpacaDataProvider
 from src.trade.backtester import Backtester
-from src.strategy.momentum_strategy import MomentumStrategy
+from src.stock_strategy.momentum_strategy import MomentumStrategy
 
 def generate_pnl_plot(results):
     """Generate Profit & Loss plot from backtest results"""
