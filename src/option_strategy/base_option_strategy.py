@@ -74,23 +74,20 @@ class BaseOptionStrategy(StrategyBase):
 
     def _load_watchlist_symbols(self) -> List[str]:
         """
-        Load symbols from watchlist.json instead of config/symbol_list.txt.
+        Load symbols from watchlist.json.
 
         Returns:
             List of symbols from the watchlist
+
+        Raises:
+            FileNotFoundError: If watchlist.json does not exist
+            json.JSONDecodeError: If watchlist.json is not valid JSON
         """
-        try:
-            with open('watchlist.json', 'r') as f:
-                watchlist_data = json.load(f)
-                symbols = watchlist_data.get('watchlist', [])
-                self.logger.info(f"Loaded {len(symbols)} symbols from watchlist.json")
-                return symbols
-        except Exception as e:
-            self.logger.error(f"Failed to load watchlist.json: {e}")
-            # Fallback to a few default symbols if watchlist fails
-            default_symbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN']
-            self.logger.warning(f"Using default symbols: {default_symbols}")
-            return default_symbols
+        with open('watchlist.json', 'r') as f:
+            watchlist_data = json.load(f)
+            symbols = watchlist_data.get('watchlist', [])
+            self.logger.info(f"Loaded {len(symbols)} symbols from watchlist.json")
+            return symbols
 
     @abstractmethod
     def filter_underlying_stocks(self, client: Any) -> List[str]:

@@ -14,10 +14,17 @@ import matplotlib.pyplot as plt
 
 class PortfolioTracker:
     """Advanced portfolio tracking and analysis"""
-    
+
     def __init__(self, account_manager):
         self.account_manager = account_manager
         self.logger = logging.getLogger(__name__)
+
+    @staticmethod
+    def _calc_return_pct(equity):
+        """Calculate return percentage from equity list"""
+        if len(equity) > 1 and equity[0] > 0:
+            return ((equity[-1] - equity[0]) / equity[0] * 100)
+        return 0
     
     def get_portfolio_performance(self, period: str = '1D', 
                                 timeframe: str = '1Min') -> Dict[str, Any]:
@@ -51,7 +58,7 @@ class PortfolioTracker:
             'start_equity': equity[0] if equity else 0,
             'end_equity': equity[-1] if equity else 0,
             'total_return': equity[-1] - equity[0] if len(equity) > 1 else 0,
-            'total_return_pct': ((equity[-1] - equity[0]) / equity[0] * 100) if len(equity) > 1 and equity[0] > 0 else 0,
+            'total_return_pct': self._calc_return_pct(equity),
             'max_equity': max(equity) if equity else 0,
             'min_equity': min(equity) if equity else 0,
             'current_drawdown': 0,
@@ -128,13 +135,14 @@ class PortfolioTracker:
             except (ValueError, TypeError):
                 continue
         
+        pct = lambda x: (x / portfolio_value * 100) if portfolio_value > 0 else 0
         allocation = {
             'total_portfolio_value': portfolio_value,
             'cash': cash,
-            'cash_percentage': (cash / portfolio_value * 100) if portfolio_value > 0 else 0,
+            'cash_percentage': pct(cash),
             'equity_positions': len(positions),
             'equity_value': equity_value,
-            'equity_percentage': (equity_value / portfolio_value * 100) if portfolio_value > 0 else 0,
+            'equity_percentage': pct(equity_value),
             'position_count': len(positions)
         }
         
@@ -229,10 +237,15 @@ PORTFOLIO OVERVIEW:
 """
         
         if 'error' not in account_status:
-            report += f"""• Portfolio Value: ${account_status.get('portfolio_value', 0):,.2f}
-• Cash Available: ${account_status.get('cash', 0):,.2f}
-• Buying Power: ${account_status.get('buying_power', 0):,.2f}
-• Daily P&L: ${account_status.get('equity_change', 0):,.2f} ({account_status.get('equity_change_percentage', 0):+.2f}%)
+            pv = account_status.get('portfolio_value', 0)
+            cash = account_status.get('cash', 0)
+            bp = account_status.get('buying_power', 0)
+            eq_change = account_status.get('equity_change', 0)
+            eq_pct = account_status.get('equity_change_percentage', 0)
+            report += f"""* Portfolio Value: ${pv:,.2f}
+* Cash Available: ${cash:,.2f}
+* Buying Power: ${bp:,.2f}
+* Daily P&L: ${eq_change:,.2f} ({eq_pct:+.2f}%)
 """
         
         # Performance metrics

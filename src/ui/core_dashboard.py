@@ -106,8 +106,10 @@ class BaseDashboard(ABC):
         except Exception as e:
             return None, str(e)
     
-    @st.cache_data(ttl=900)  # Cache for 15 minutes
-    def load_market_data(_self, symbol: str, days: int = 30) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    @st.cache_data(ttl=900)
+    def load_market_data(
+        _self, symbol: str, days: int = 30
+    ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         """Load market data with caching"""
         try:
             provider = AlpacaDataProvider()
@@ -125,7 +127,9 @@ class BaseDashboard(ABC):
             return None, str(e)
     
     @st.cache_data(ttl=60)
-    def generate_trading_signals(_self, symbol: str, data: pd.DataFrame) -> Tuple[List[Dict], Optional[str]]:
+    def generate_trading_signals(
+        _self, symbol: str, data: pd.DataFrame
+    ) -> Tuple[List[Dict], Optional[str]]:
         """Generate trading signals with caching"""
         try:
             if data is None or data.empty:
@@ -381,9 +385,14 @@ class BaseDashboard(ABC):
 
             st.info("🆓 Free Tier")
     
-    @st.cache_data(ttl=1800)  # Cache for 30 minutes
-    def run_backtest(_self, symbols: List[str], days_back: int = 365, 
-                    initial_cash: float = 100000, strategy_type: str = "Momentum") -> Tuple[Optional[Dict], Optional[str]]:
+    @st.cache_data(ttl=1800)
+    def run_backtest(
+        _self,
+        symbols: List[str],
+        days_back: int = 365,
+        initial_cash: float = 100000,
+        strategy_type: str = "Momentum"
+    ) -> Tuple[Optional[Dict], Optional[str]]:
         """Run backtest with caching and strategy selection"""
         try:
             provider = AlpacaDataProvider()
@@ -417,12 +426,14 @@ class BaseDashboard(ABC):
             strategy_configs = {}
             
             # Get the actual strategy registry name
-            registry_name = strategy_name_mapping.get(strategy_type, strategy_type.lower().replace(' ', '_'))
+            default_name = strategy_type.lower().replace(' ', '_')
+            registry_name = strategy_name_mapping.get(strategy_type, default_name)
             
             # Check if strategy exists in registry
             available_strategies = registry.list_strategies()
             if registry_name not in available_strategies:
-                raise ValueError(f"Unknown strategy type: {strategy_type}. Available: {available_strategies}")
+                msg = f"Unknown strategy: {strategy_type}. Available: {available_strategies}"
+                raise ValueError(msg)
             
             # Get strategy-specific config or use empty dict
             config = strategy_configs.get(strategy_type, {})
@@ -452,21 +463,25 @@ class BaseDashboard(ABC):
         """Render real market indices data"""
         col1, col2, col3, col4 = st.columns(4)
         indices = {'SPY': 'S&P 500', 'QQQ': 'NASDAQ', 'DIA': 'DOW', 'VXX': 'VXX'}
+        columns = [col1, col2, col3, col4]
 
         try:
             provider = AlpacaDataProvider()
             for i, (symbol, name) in enumerate(indices.items()):
-                with [col1, col2, col3, col4][i]:
+                with columns[i]:
                     try:
                         quote = provider.get_latest_quote(symbol)
                         if 'error' not in quote:
-                            current_price = float(quote.get('bid_price', quote.get('ask_price', 0)))
-                            historical_data = provider.get_bars(symbol, '1Day', start=now_et() - timedelta(days=5))
-                            
+                            bid = quote.get('bid_price', quote.get('ask_price', 0))
+                            current_price = float(bid)
+                            start = now_et() - timedelta(days=5)
+                            historical_data = provider.get_bars(symbol, '1Day', start=start)
+
                             if not historical_data.empty:
-                                prev_close = float(historical_data['close'].iloc[-2 if len(historical_data) >= 2 else -1])
+                                idx = -2 if len(historical_data) >= 2 else -1
+                                prev_close = float(historical_data['close'].iloc[idx])
                                 change = current_price - prev_close
-                                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+                                change_pct = (change / prev_close * 100) if prev_close else 0
                             else:
                                 change, change_pct = 0, 0
 
@@ -494,40 +509,63 @@ class BaseDashboard(ABC):
             if not vxx_data.empty:
                 current_vxx = float(vxx_data['close'].iloc[-1])
                 vxx_30_avg = float(vxx_data['close'].mean())
-                
+
                 # Calculate Fear & Greed based on VXX levels
-                fear_greed = (max(0, 30 - (current_vxx - 40) * 1.5) if current_vxx > 40 else
-                             30 + (40 - current_vxx) * 2.67 if current_vxx > 25 else
-                             70 + min(30, (25 - current_vxx) * 2))
+                if current_vxx > 40:
+                    fear_greed = max(0, 30 - (current_vxx - 40) * 1.5)
+                elif current_vxx > 25:
+                    fear_greed = 30 + (40 - current_vxx) * 2.67
+                else:
+                    fear_greed = 70 + min(30, (25 - current_vxx) * 2)
                 fear_greed = max(0, min(100, fear_greed))
 
                 with col1:
+                    gauge_steps = [
+                        {'range': [0, 20], 'color': "red"},
+                        {'range': [20, 40], 'color': "orange"},
+                        {'range': [40, 60], 'color': "yellow"},
+                        {'range': [60, 80], 'color': "lightgreen"},
+                        {'range': [80, 100], 'color': "green"}
+                    ]
+                    gauge_config = {
+                        'axis': {'range': [None, 100]},
+                        'bar': {'color': "darkblue"},
+                        'steps': gauge_steps,
+                        'threshold': {
+                            'line': {'color': "red", 'width': 4},
+                            'thickness': 0.75,
+                            'value': 90
+                        }
+                    }
                     fig = go.Figure(go.Indicator(
-                        mode="gauge+number", value=fear_greed,
+                        mode="gauge+number",
+                        value=fear_greed,
                         title={'text': "Fear & Greed Index (VXX-based)"},
-                        gauge={'axis': {'range': [None, 100]}, 'bar': {'color': "darkblue"},
-                               'steps': [{'range': [0, 20], 'color': "red"}, {'range': [20, 40], 'color': "orange"},
-                                        {'range': [40, 60], 'color': "yellow"}, {'range': [60, 80], 'color': "lightgreen"},
-                                        {'range': [80, 100], 'color': "green"}],
-                               'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
+                        gauge=gauge_config
                     ))
                     fig.update_layout(height=300)
                     st.plotly_chart(fig, use_container_width=True)
 
                 with col2:
                     st.write("**Market Sentiment Indicators**")
-                    sentiment_color, sentiment_label = ("🔴", "Fearful") if current_vxx > 40 else ("🟡", "Neutral") if current_vxx > 25 else ("🟢", "Greedy")
+                    if current_vxx > 40:
+                        sentiment_color, sentiment_label = "🔴", "Fearful"
+                    elif current_vxx > 25:
+                        sentiment_color, sentiment_label = "🟡", "Neutral"
+                    else:
+                        sentiment_color, sentiment_label = "🟢", "Greedy"
+
                     vxx_trend = "Rising" if current_vxx > vxx_30_avg else "Falling"
-                    
-                    st.metric("Current VXX", f"${current_vxx:.2f}", f"30-day avg: ${vxx_30_avg:.2f}")
+                    st.metric("Current VXX", f"${current_vxx:.2f}", f"30d avg: ${vxx_30_avg:.2f}")
                     st.write(f"**Market Mood:** {sentiment_color} {sentiment_label}")
                     st.write(f"**VXX Trend:** {vxx_trend}")
-                    st.write("**VXX Levels:** • Below $25: Low volatility (Complacency) • $25-40: Normal • Above $40: High volatility (Fear)")
-                    
+                    st.write("**VXX Levels:** Below $25: Low | $25-40: Normal | Above $40: High")
+
                     vxx_change = current_vxx - vxx_30_avg
-                    vxx_change_pct = (vxx_change / vxx_30_avg * 100) if vxx_30_avg != 0 else 0
+                    vxx_change_pct = (vxx_change / vxx_30_avg * 100) if vxx_30_avg else 0
                     st.metric("VXX vs 30d Avg", f"{vxx_change_pct:+.1f}%", f"${vxx_change:+.2f}")
-                    st.write(f"**VXX Volatility (30d):** ${float(vxx_data['close'].std()):.2f}")
+                    vxx_vol = float(vxx_data['close'].std())
+                    st.write(f"**VXX Volatility (30d):** ${vxx_vol:.2f}")
             else:
                 st.error("Unable to load VXX data")
         except Exception as e:
@@ -540,20 +578,25 @@ class BaseDashboard(ABC):
 
         try:
             provider = AlpacaDataProvider()
-            sector_etfs = {'XLK': 'Technology', 'XLV': 'Healthcare', 'XLF': 'Financial', 'XLE': 'Energy', 
-                          'XLY': 'Consumer Discretionary', 'XLI': 'Industrial', 'XLB': 'Materials', 
-                          'XLRE': 'Real Estate', 'XLU': 'Utilities'}
+            sector_etfs = {
+                'XLK': 'Technology', 'XLV': 'Healthcare', 'XLF': 'Financial',
+                'XLE': 'Energy', 'XLY': 'Consumer Discretionary', 'XLI': 'Industrial',
+                'XLB': 'Materials', 'XLRE': 'Real Estate', 'XLU': 'Utilities'
+            }
             sector_data = []
 
             for etf_symbol, sector_name in sector_etfs.items():
                 try:
-                    data = provider.get_bars(etf_symbol, '1Day', start=now_et() - timedelta(days=5))
+                    start = now_et() - timedelta(days=5)
+                    data = provider.get_bars(etf_symbol, '1Day', start=start)
                     if not data.empty and len(data) >= 2:
                         current_price = float(data['close'].iloc[-1])
                         start_price = float(data['close'].iloc[0])
-                        performance = ((current_price - start_price) / start_price) * 100
-                        sector_data.append({'sector': sector_name, 'performance': performance, 
-                                          'symbol': etf_symbol, 'current_price': current_price})
+                        perf = ((current_price - start_price) / start_price) * 100
+                        sector_data.append({
+                            'sector': sector_name, 'performance': perf,
+                            'symbol': etf_symbol, 'current_price': current_price
+                        })
                 except:
                     continue
 
@@ -563,11 +606,17 @@ class BaseDashboard(ABC):
                 performance = [item['performance'] for item in sector_data]
 
                 import plotly.express as px
-                fig = px.bar(x=sectors, y=performance, title="Sector Performance - Day (% Change)",
-                           color=performance, color_continuous_scale="RdYlGn", 
-                           text=[f"{p:+.2f}%" for p in performance])
-                fig.update_layout(template="plotly_white", height=400, 
-                                xaxis={'categoryorder': 'total descending'}, yaxis_title="Performance (%)")
+                fig = px.bar(
+                    x=sectors, y=performance,
+                    title="Sector Performance - Day (% Change)",
+                    color=performance, color_continuous_scale="RdYlGn",
+                    text=[f"{p:+.2f}%" for p in performance]
+                )
+                fig.update_layout(
+                    template="plotly_white", height=400,
+                    xaxis={'categoryorder': 'total descending'},
+                    yaxis_title="Performance (%)"
+                )
                 fig.update_traces(textposition="outside")
                 st.plotly_chart(fig, use_container_width=True)
 

@@ -1,19 +1,5 @@
 """
-Dashboard utilities - Deprecated in favor of core_dashboard.py
-
-NOTICE: This file has been largely superseded by src/ui/core_dashboard.py
-The functionality has been moved to the BaseDashboard and UIComponents classes 
-which provide better abstraction and inheritance patterns.
-
-Legacy functions kept for backward compatibility with any external code.
-New development should use the core_dashboard module instead.
-
-Migration Guide:
-- get_shared_market_data() -> BaseDashboard.load_market_data()  
-- run_shared_backtest() -> BaseDashboard.run_backtest()
-- render_shared_positions_table() -> UIComponents.render_positions_table()
-- create_shared_price_chart() -> BaseDashboard.create_price_chart()
-- get_shared_account_info() -> BaseDashboard.get_account_info()
+Dashboard utilities for data processing and formatting.
 """
 
 from datetime import datetime, timedelta
@@ -21,68 +7,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from src.utils.timezone_utils import now_et
-from src.data import AlpacaDataProvider
-from src.trade import Backtester
-from typing import Dict, List, Any, Optional, Tuple
-
-# Deprecated: Use BaseDashboard.load_market_data() instead
-def get_shared_market_data(symbol: str, days: int = 30) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    """
-    DEPRECATED: Use BaseDashboard.load_market_data() instead
-    
-    Centralized market data loading with consistent error handling
-    """
-    from src.ui.core_dashboard import BaseDashboard
-    dashboard = BaseDashboard("Legacy", "⚠️")
-    return dashboard.load_market_data(symbol, days)
-
-# Deprecated: Use BaseDashboard.run_backtest() instead  
-def run_shared_backtest(symbols: List[str], days_back: int = 365, 
-                       initial_cash: float = 100000, 
-                       strategy_type: str = "Momentum") -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """
-    DEPRECATED: Use BaseDashboard.run_backtest() instead
-    
-    Centralized backtesting function to eliminate duplication
-    """
-    from src.ui.core_dashboard import BaseDashboard
-    dashboard = BaseDashboard("Legacy", "⚠️")
-    return dashboard.run_backtest(symbols, days_back, initial_cash, strategy_type)
-
-# Deprecated: Use UIComponents.render_positions_table() instead
-def render_shared_positions_table(positions: List[Dict]) -> None:
-    """
-    DEPRECATED: Use UIComponents.render_positions_table() instead
-    
-    Shared position table rendering with consistent formatting
-    """
-    from src.ui.core_dashboard import UIComponents
-    UIComponents.render_positions_table(positions)
-
-# Deprecated: Use BaseDashboard.create_price_chart() instead
-def create_shared_price_chart(symbol: str, data: pd.DataFrame) -> object:
-    """
-    DEPRECATED: Use BaseDashboard.create_price_chart() instead
-    
-    Shared chart creation function
-    """
-    from src.ui.core_dashboard import BaseDashboard
-    dashboard = BaseDashboard("Legacy", "⚠️")
-    return dashboard.create_price_chart(symbol, data)
-
-# Deprecated: Use BaseDashboard.get_account_info() instead
-def get_shared_account_info() -> Tuple[Optional[Dict], Optional[str]]:
-    """
-    DEPRECATED: Use BaseDashboard.get_account_info() instead
-    
-    Shared account info retrieval with caching
-    """
-    from src.ui.core_dashboard import BaseDashboard
-    dashboard = BaseDashboard("Legacy", "⚠️")
-    return dashboard.get_account_info()
+from typing import Dict, List, Any, Optional
 
 
-# Modern Dashboard Utilities
+# Dashboard Utilities
 def generate_transaction_log(results: Dict[str, Any], symbols: List[str]) -> Optional[str]:
     """
     Generate enhanced transaction log for dashboard download
@@ -166,7 +94,6 @@ def generate_transaction_log(results: Dict[str, Any], symbols: List[str]) -> Opt
         
         # Create DataFrame and save
         transactions_df = pd.DataFrame(enhanced_trades)
-        from src.utils.timezone_utils import now_et
         timestamp = now_et().strftime('%Y%m%d_%H%M%S')
         filename = f"dashboard_transactions_{timestamp}.csv"
         
@@ -369,11 +296,11 @@ def render_economic_data():
                         st.metric(name, "N/A")
         else:
             st.warning("FRED API not configured")
-            from src.utils.timezone_utils import now_et
-            from datetime import timedelta
+            today = now_et().strftime('%Y-%m-%d')
+            future = (now_et() + timedelta(days=2)).strftime('%Y-%m-%d')
             mock_events = [
-                {"Date": now_et().strftime('%Y-%m-%d'), "Event": "CPI", "Previous": "3.1%", "Forecast": "3.2%"},
-                {"Date": (now_et() + timedelta(days=2)).strftime('%Y-%m-%d'), "Event": "Retail Sales", "Previous": "0.3%", "Forecast": "0.4%"}
+                {"Date": today, "Event": "CPI", "Previous": "3.1%", "Forecast": "3.2%"},
+                {"Date": future, "Event": "Retail Sales", "Previous": "0.3%", "Forecast": "0.4%"}
             ]
             st.dataframe(pd.DataFrame(mock_events), use_container_width=True)
     except Exception as e:
