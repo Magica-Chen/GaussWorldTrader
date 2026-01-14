@@ -8,9 +8,6 @@ from .stock import (
     TrendFollowingStrategy,
     ScalpingStrategy,
     StatisticalArbitrageStrategy,
-    GaussianProcessStrategy,
-    XGBoostStrategy,
-    DeepLearningStrategy,
 )
 
 __all__ = [
@@ -27,8 +24,5 @@ __all__ = [
     "TrendFollowingStrategy",
     "ScalpingStrategy",
     "StatisticalArbitrageStrategy",
-    "GaussianProcessStrategy",
-    "XGBoostStrategy",
-    "DeepLearningStrategy",
     "WheelStrategy",
 ]

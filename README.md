@@ -21,7 +21,6 @@
 
 - **🚀 Modern Async Architecture** — Built for Python 3.12+ with async/await patterns
 - **📊 Multiple Trading Strategies** — Momentum, Value, Trend Following, Statistical Arbitrage, and more
-- **🤖 ML-Powered Strategies** — Gaussian Process, XGBoost, and Deep Learning templates
 - **📈 Real-time Dashboard** — Interactive Streamlit interface for monitoring and analysis
 - **💼 Portfolio Management** — Advanced position tracking and risk management
 - **🔌 Multi-source Data Feeds** — Alpaca, Finnhub, FRED, and News integrations
@@ -77,9 +76,6 @@ python main_cli.py account-info                 # View account details
 | 📉 Trend Following | Signal | ✅ |
 | ⚡ Scalping | Signal | ✅ |
 | 📐 Statistical Arbitrage | Signal | ✅ |
-| 🔮 Gaussian Process | ML | ✅ |
-| 🌲 XGBoost | ML | ✅ |
-| 🧠 Deep Learning | ML | ✅ |
 | 🎡 Wheel (Options) | Options | ❌ |
 
 ---
@@ -95,8 +91,7 @@ GaussWorldTrader/
 │   ├── 📁 ui/              # Dashboard components
 │   ├── 📁 trade/           # Trading engine & backtester
 │   ├── 📁 data/            # Market data providers
-│   ├── 📁 account/         # Portfolio & position tracking
-│   └── 📁 option_strategy/ # Options strategies
+│   └── 📁 account/         # Portfolio & position tracking
 └── 📁 docs/                # Documentation
 ```
 
@@ -105,7 +100,7 @@ GaussWorldTrader/
 ## 🧩 Adding a Strategy
 
 ```python
-from src.strategy.template import StrategyBase, StrategyMeta, StrategySignal
+from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
 
 class MyStrategy(StrategyBase):
     meta = StrategyMeta(
@@ -116,6 +111,7 @@ class MyStrategy(StrategyBase):
         visible_in_dashboard=True,
         default_params={"lookback": 20}
     )
+    summary = "Brief intro + formulas/logic for this strategy."
 
     def generate_signals(self, current_date, current_prices, current_data,
                          historical_data, portfolio=None):

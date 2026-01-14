@@ -417,9 +417,6 @@ class BaseDashboard(ABC):
                 "Scalping": "scalping",
                 "Statistical Arbitrage": "statistical_arbitrage",
                 "Value": "value",
-                "XGBoost": "xgboost",
-                "Deep Learning": "deep_learning",
-                "Gaussian Process": "gaussian_process"
             }
             
             # Special configs for specific strategies

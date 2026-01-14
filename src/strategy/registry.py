@@ -14,9 +14,6 @@ from .stock import (
     TrendFollowingStrategy,
     ScalpingStrategy,
     StatisticalArbitrageStrategy,
-    GaussianProcessStrategy,
-    XGBoostStrategy,
-    DeepLearningStrategy,
 )
 
 
@@ -28,9 +25,6 @@ class StrategyRegistry:
             "trend_following": TrendFollowingStrategy,
             "scalping": ScalpingStrategy,
             "statistical_arbitrage": StatisticalArbitrageStrategy,
-            "gaussian_process": GaussianProcessStrategy,
-            "xgboost": XGBoostStrategy,
-            "deep_learning": DeepLearningStrategy,
             "crypto_momentum": CryptoMomentumStrategy,
             "wheel": WheelStrategy,
         }
