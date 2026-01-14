@@ -60,6 +60,7 @@ class Dashboard(BaseDashboard):
                 st.session_state.news_provider = NewsDataProvider()
                 st.session_state.fred_provider = FREDProvider()
                 self._initialize_stream_state()
+                self._initialize_news_stream_state()
                 st.session_state.dashboard_initialized = True
 
             except Exception as e:
@@ -68,6 +69,8 @@ class Dashboard(BaseDashboard):
 
         if 'stream_state_initialized' not in st.session_state:
             self._initialize_stream_state()
+        if 'news_stream_state_initialized' not in st.session_state:
+            self._initialize_news_stream_state()
 
     def _initialize_stream_state(self):
         """Initialize Alpaca stream state for the dashboard."""
@@ -79,6 +82,17 @@ class Dashboard(BaseDashboard):
         st.session_state.stream_error = None
         st.session_state.stream_config = {}
         st.session_state.stream_obj = None
+
+    def _initialize_news_stream_state(self):
+        """Initialize Alpaca news stream state for the dashboard."""
+        st.session_state.news_stream_state_initialized = True
+        st.session_state.news_stream_running = False
+        st.session_state.news_stream_thread = None
+        st.session_state.news_stream_queue = queue.Queue()
+        st.session_state.news_stream_messages = []
+        st.session_state.news_stream_error = None
+        st.session_state.news_stream_config = {}
+        st.session_state.news_stream_obj = None
 
     def create_main_navigation(self):
         """Create main navigation tabs on the left sidebar"""
@@ -400,6 +414,19 @@ class Dashboard(BaseDashboard):
         col1, col2 = st.columns([2, 3])
 
         with col1:
+            asset_type = st.selectbox(
+                "Asset Type",
+                ["stock", "crypto"],
+                key="stream_asset_type",
+            )
+            crypto_loc = "eu-1"
+            if asset_type == "crypto":
+                crypto_loc = st.selectbox(
+                    "Crypto Location",
+                    ["us", "us-1", "eu-1"],
+                    index=2,
+                    key="stream_crypto_loc",
+                )
             symbols_input = st.text_input(
                 "Symbols (comma-separated, max 30)",
                 value="AAPL, MSFT, NVDA",
@@ -421,7 +448,9 @@ class Dashboard(BaseDashboard):
             with col_a:
                 if st.button("Start Stream", disabled=st.session_state.stream_running):
                     if symbols and len(symbols) <= 30:
-                        self._start_stream(symbols, stream_type, raw_output)
+                        self._start_stream(
+                            symbols, stream_type, raw_output, asset_type, crypto_loc
+                        )
             with col_b:
                 if st.button("Stop Stream", disabled=not st.session_state.stream_running):
                     self._stop_stream()
@@ -451,7 +480,7 @@ class Dashboard(BaseDashboard):
             else:
                 st.experimental_rerun()
 
-    def _start_stream(self, symbols, stream_type, raw_output):
+    def _start_stream(self, symbols, stream_type, raw_output, asset_type, crypto_loc):
         """Start Alpaca WebSocket stream in a background thread."""
         if st.session_state.stream_running:
             return
@@ -462,11 +491,18 @@ class Dashboard(BaseDashboard):
             "symbols": symbols,
             "stream_type": stream_type,
             "raw_output": raw_output,
+            "asset_type": asset_type,
+            "crypto_loc": crypto_loc,
         }
 
         try:
             provider = AlpacaDataProvider()
-            stream = provider.create_stock_stream(raw_data=raw_output)
+            if asset_type == "crypto":
+                stream = provider.create_crypto_stream(
+                    raw_data=raw_output, loc=crypto_loc
+                )
+            else:
+                stream = provider.create_stock_stream(raw_data=raw_output)
         except Exception as exc:
             st.session_state.stream_error = f"Unable to start stream: {exc}"
             return
@@ -871,7 +907,7 @@ class Dashboard(BaseDashboard):
         """News & Report: Company News, Insider Transactions, AI Report"""
         st.header("📰 News & Reports")
 
-        news_tabs = st.tabs(["📰 Company News", "👔 Insider Activity", "🤖 AI Reports"])
+        news_tabs = st.tabs(["📰 Company News", "👔 Insider Activity", "🤖 AI Reports", "🛰️ Live News"])
 
         with news_tabs[0]:
             self.render_company_news()
@@ -881,6 +917,169 @@ class Dashboard(BaseDashboard):
 
         with news_tabs[2]:
             self.render_ai_reports()
+
+        with news_tabs[3]:
+            self.render_news_stream()
+
+    def render_news_stream(self):
+        """Render live news stream controls and output."""
+        st.subheader("🛰️ Live News Stream")
+
+        col1, col2 = st.columns([2, 3])
+
+        with col1:
+            symbols_input = st.text_input(
+                "Symbols (comma-separated or * for all)",
+                value="*",
+                key="news_stream_symbols_input",
+            )
+            raw_output = st.checkbox("Raw Payload", value=False, key="news_stream_raw")
+            max_rows = st.slider("Rows to Display", 20, 200, 100, key="news_stream_rows")
+
+            symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
+            if "*" in symbols and len(symbols) > 1:
+                st.warning("Using '*' subscribes to all news. Remove other symbols to avoid conflicts.")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Start Stream", disabled=st.session_state.news_stream_running, key="news_stream_start"):
+                    self._start_news_stream(symbols, raw_output)
+            with col_b:
+                if st.button("Stop Stream", disabled=not st.session_state.news_stream_running, key="news_stream_stop"):
+                    self._stop_news_stream()
+
+            if st.session_state.news_stream_error:
+                st.error(st.session_state.news_stream_error)
+
+            auto_refresh = st.checkbox("Auto-refresh", value=True, key="news_stream_auto_refresh")
+            refresh_interval = st.slider(
+                "Refresh Interval (sec)", 1, 10, 2, key="news_stream_refresh_interval"
+            )
+
+        with col2:
+            self._drain_news_stream_queue(max_rows)
+            if st.session_state.news_stream_messages:
+                st.dataframe(
+                    pd.DataFrame(st.session_state.news_stream_messages).tail(max_rows),
+                    use_container_width=True,
+                )
+            else:
+                st.info("No news messages yet. Start the stream to receive updates.")
+
+        if auto_refresh and st.session_state.news_stream_running:
+            time.sleep(refresh_interval)
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+
+    def _start_news_stream(self, symbols, raw_output):
+        """Start Alpaca news WebSocket stream in a background thread."""
+        if st.session_state.news_stream_running:
+            return
+
+        st.session_state.news_stream_error = None
+        st.session_state.news_stream_messages = []
+        st.session_state.news_stream_config = {
+            "symbols": symbols,
+            "raw_output": raw_output,
+        }
+
+        try:
+            provider = AlpacaDataProvider()
+            stream = provider.create_news_stream(raw_data=raw_output)
+        except Exception as exc:
+            st.session_state.news_stream_error = f"Unable to start news stream: {exc}"
+            return
+
+        message_queue = st.session_state.news_stream_queue
+
+        def _get_field(data, attr: str, raw_key: str):
+            if hasattr(data, attr):
+                return getattr(data, attr)
+            if isinstance(data, dict):
+                return data.get(raw_key)
+            return None
+
+        def _format_timestamp(value):
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            return value
+
+        def _format_raw(data):
+            return data if isinstance(data, (dict, list, str, int, float)) else repr(data)
+
+        async def handle_news(data):
+            if raw_output:
+                message_queue.put({"type": "raw", "payload": _format_raw(data)})
+                return
+
+            message_queue.put(
+                {
+                    "type": "news",
+                    "headline": _get_field(data, "headline", "headline"),
+                    "summary": _get_field(data, "summary", "summary"),
+                    "source": _get_field(data, "source", "source"),
+                    "symbols": _get_field(data, "symbols", "symbols"),
+                    "url": _get_field(data, "url", "url"),
+                    "created_at": _format_timestamp(_get_field(data, "created_at", "created_at")),
+                }
+            )
+
+        subscribe_symbols = symbols or ["*"]
+        if "*" in subscribe_symbols:
+            subscribe_symbols = ["*"]
+        stream.subscribe_news(handle_news, *subscribe_symbols)
+
+        def _run_stream():
+            try:
+                stream.run()
+            except Exception as exc:
+                message_queue.put({"type": "error", "message": str(exc)})
+            finally:
+                message_queue.put({"type": "status", "message": "stopped"})
+
+        stream_thread = threading.Thread(target=_run_stream, name="alpaca_news_stream", daemon=True)
+        st.session_state.news_stream_obj = stream
+        st.session_state.news_stream_thread = stream_thread
+        st.session_state.news_stream_running = True
+        stream_thread.start()
+
+    def _stop_news_stream(self):
+        """Stop Alpaca news WebSocket stream."""
+        stream = st.session_state.get("news_stream_obj")
+        if stream:
+            try:
+                stream.stop()
+            except Exception as exc:
+                st.session_state.news_stream_error = f"Unable to stop news stream: {exc}"
+        st.session_state.news_stream_running = False
+
+    def _drain_news_stream_queue(self, max_rows):
+        """Drain news stream messages into session state."""
+        message_queue = st.session_state.news_stream_queue
+        updated = False
+
+        while True:
+            try:
+                item = message_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            item_type = item.get("type")
+            if item_type == "error":
+                st.session_state.news_stream_error = item.get("message", "Stream error")
+                st.session_state.news_stream_running = False
+            elif item_type == "status":
+                st.session_state.news_stream_running = False
+            else:
+                st.session_state.news_stream_messages.append(item)
+                updated = True
+
+        if updated:
+            max_keep = max_rows * 3
+            if len(st.session_state.news_stream_messages) > max_keep:
+                st.session_state.news_stream_messages = st.session_state.news_stream_messages[-max_keep:]
 
     def render_company_news(self):
         """Render company news section"""

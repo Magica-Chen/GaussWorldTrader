@@ -169,6 +169,16 @@ def stream_market(
         "-s",
         help="Symbols to stream (repeatable or space-separated)",
     ),
+    asset_type: str = typer.Option(
+        "stock",
+        "--asset-type",
+        help="Asset type to stream: stock or crypto",
+    ),
+    crypto_loc: str = typer.Option(
+        "eu-1",
+        "--crypto-loc",
+        help="Crypto feed location: us, us-1, eu-1",
+    ),
     stream_type: str = typer.Option("trades", help="trades, quotes, or bars"),
     max_messages: int = typer.Option(0, help="Stop after N messages (0 = unlimited)"),
     raw: bool = typer.Option(False, help="Print raw stream payloads"),
@@ -180,12 +190,24 @@ def stream_market(
         print("Alpaca basic accounts support up to 30 symbols per websocket.")
         raise typer.Exit(1)
 
+    asset_type = asset_type.strip().lower()
+    if asset_type not in {"stock", "crypto"}:
+        print("asset-type must be one of: stock, crypto")
+        raise typer.Exit(1)
+
     stream_type = stream_type.strip().lower()
     if stream_type not in {"trades", "quotes", "bars"}:
         print("stream-type must be one of: trades, quotes, bars")
         raise typer.Exit(1)
 
-    stream = provider.create_stock_stream(raw_data=raw)
+    if asset_type == "crypto":
+        try:
+            stream = provider.create_crypto_stream(raw_data=raw, loc=crypto_loc)
+        except ValueError as exc:
+            print(exc)
+            raise typer.Exit(1)
+    else:
+        stream = provider.create_stock_stream(raw_data=raw)
     max_messages = max_messages if max_messages > 0 else None
     message_count = {"count": 0}
 
@@ -250,7 +272,7 @@ def stream_market(
         stream.subscribe_bars(handle_bar, *symbols_list)
 
     print(
-        f"Streaming {stream_type} for {', '.join(symbols_list)}. Ctrl+C to stop.",
+        f"Streaming {asset_type} {stream_type} for {', '.join(symbols_list)}. Ctrl+C to stop.",
         flush=True,
     )
     try:

@@ -15,7 +15,8 @@ try:
     from alpaca.data.live import (
         StockDataStream, 
         CryptoDataStream, 
-        OptionDataStream
+        OptionDataStream,
+        NewsDataStream
     )
     from alpaca.data.requests import (
         StockBarsRequest, 
@@ -113,6 +114,37 @@ class AlpacaProvider:
             api_key=Config.ALPACA_API_KEY,
             secret_key=Config.ALPACA_SECRET_KEY,
             feed=feed,
+            raw_data=raw_data
+        )
+
+    def create_crypto_stream(self, raw_data: bool = False, loc: str = "eu-1"):
+        """Create a real-time crypto data stream (quotes/trades/bars)."""
+        if not ALPACA_PY_AVAILABLE:
+            raise ImportError(
+                "alpaca-py is required. Install with: pip install alpaca-py"
+            )
+
+        loc = loc.strip().lower()
+        if loc not in {"us", "us-1", "eu-1"}:
+            raise ValueError("crypto loc must be one of: us, us-1, eu-1")
+
+        return CryptoDataStream(
+            api_key=Config.ALPACA_API_KEY,
+            secret_key=Config.ALPACA_SECRET_KEY,
+            raw_data=raw_data,
+            feed=loc,
+        )
+
+    def create_news_stream(self, raw_data: bool = False):
+        """Create a real-time news data stream."""
+        if not ALPACA_PY_AVAILABLE:
+            raise ImportError(
+                "alpaca-py is required. Install with: pip install alpaca-py"
+            )
+
+        return NewsDataStream(
+            api_key=Config.ALPACA_API_KEY,
+            secret_key=Config.ALPACA_SECRET_KEY,
             raw_data=raw_data
         )
     
