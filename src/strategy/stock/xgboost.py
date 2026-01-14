@@ -1,4 +1,7 @@
-"""XGBoost strategy template."""
+"""XGBoost strategy template.
+
+Uses a momentum-style rule set until a trained gradient boosting model is wired in.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -19,6 +22,10 @@ class XGBoostStrategy(StrategyBase):
         asset_type="stock",
         default_params={"lookback": 10, "threshold": 0.015, "risk_pct": 0.04},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Template ML strategy that currently uses momentum-style rules. "
+        "Return = (P_t - P_{t-L}) / P_{t-L} with threshold-based BUY/SELL."
     )
 
     def generate_signals(

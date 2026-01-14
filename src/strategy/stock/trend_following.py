@@ -1,4 +1,7 @@
-"""Trend following strategy."""
+"""Trend following strategy.
+
+Signals are generated from fast/slow SMA crossovers to capture trend direction.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -23,6 +26,11 @@ class TrendFollowingStrategy(StrategyBase):
         asset_type="stock",
         default_params={"fast": 20, "slow": 50, "risk_pct": 0.05},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Captures trend direction using moving average crossovers. "
+        "Fast SMA vs slow SMA crossover. BUY when SMA_fast > SMA_slow, "
+        "SELL when SMA_fast < SMA_slow. Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(

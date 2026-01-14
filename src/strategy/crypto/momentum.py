@@ -1,4 +1,7 @@
-"""Crypto momentum starter strategy."""
+"""Crypto momentum starter strategy.
+
+Uses lookback returns to trigger buy/sell signals for crypto pairs.
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -19,6 +22,11 @@ class CryptoMomentumStrategy(BaseCryptoStrategy):
         asset_type="crypto",
         default_params={"lookback": 20, "threshold": 0.02, "risk_pct": 0.05},
         visible_in_dashboard=False,
+    )
+    summary = (
+        "Uses lookback returns to trigger buy/sell signals for crypto pairs. "
+        "Return = (P_t - P_{t-L}) / P_{t-L}. BUY if return >= threshold, "
+        "SELL if return <= -threshold. Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(

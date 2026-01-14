@@ -83,8 +83,13 @@ class StrategyBase:
     """
 
     meta: StrategyMeta
+    summary: str = ""
 
     def __init__(self, params: Optional[Dict[str, Any]] = None) -> None:
+        if not self.meta.description.strip():
+            raise ValueError(f"{self.__class__.__name__} must define a non-empty meta.description.")
+        if not self._skip_summary_check() and not self.summary.strip():
+            raise ValueError(f"{self.__class__.__name__} must define a non-empty summary.")
         self.params = {**self.meta.default_params, **(params or {})}
         self.parameters = self.params
         self.positions: Dict[str, Any] = {}
@@ -165,9 +170,13 @@ class StrategyBase:
             "type": self.meta.category,
             "asset_type": self.meta.asset_type,
             "description": self.meta.description,
+            "summary": self.summary,
             "parameters": self.params,
             "signals_generated": len(self.signals),
         }
+
+    def _skip_summary_check(self) -> bool:
+        return isinstance(self, (BaseCryptoStrategy, BaseOptionStrategy)) or self.__class__ is StrategyBase
 
 
 class BaseCryptoStrategy(StrategyBase):

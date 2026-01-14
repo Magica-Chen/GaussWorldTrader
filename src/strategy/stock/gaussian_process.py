@@ -1,4 +1,7 @@
-"""Gaussian process strategy."""
+"""Gaussian process strategy.
+
+Uses a rolling return z-score as a proxy for uncertainty-aware mean reversion.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -19,6 +22,12 @@ class GaussianProcessStrategy(StrategyBase):
         asset_type="stock",
         default_params={"window": 30, "zscore": 1.0, "risk_pct": 0.03},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Uses return z-scores as a proxy for uncertainty-aware mean reversion. "
+        "z = (r_t - mean(r)) / std(r). "
+        "BUY if z <= -zscore, SELL if z >= zscore. "
+        "Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(

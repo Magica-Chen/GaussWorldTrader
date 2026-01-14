@@ -1,4 +1,7 @@
-"""Statistical arbitrage strategy."""
+"""Statistical arbitrage strategy.
+
+Uses a rolling z-score of recent returns to trade mean reversion extremes.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -19,6 +22,12 @@ class StatisticalArbitrageStrategy(StrategyBase):
         asset_type="stock",
         default_params={"window": 20, "zscore": 1.5, "risk_pct": 0.03},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Uses rolling return z-scores to trade mean reversion extremes. "
+        "Compute returns r over window; z = (r_t - mean(r)) / std(r). "
+        "BUY if z <= -zscore, SELL if z >= zscore. "
+        "Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(

@@ -1,4 +1,8 @@
-"""Momentum strategy."""
+"""Momentum strategy.
+
+Buys when the lookback return exceeds a threshold and sells on weakness.
+Position sizing is based on the configured risk percentage.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -19,6 +23,11 @@ class MomentumStrategy(StrategyBase):
         asset_type="stock",
         default_params={"lookback": 20, "threshold": 0.02, "risk_pct": 0.05},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Buys strength and sells weakness using recent returns. "
+        "Return = (P_t - P_{t-L}) / P_{t-L}. BUY if return >= threshold, "
+        "SELL if return <= -threshold. Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(

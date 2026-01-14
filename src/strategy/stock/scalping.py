@@ -1,4 +1,7 @@
-"""Scalping strategy."""
+"""Scalping strategy.
+
+Trades short-term mean reversion around a fast EMA using a tight deviation band.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -23,6 +26,12 @@ class ScalpingStrategy(StrategyBase):
         asset_type="stock",
         default_params={"ema_period": 5, "band_pct": 0.003, "risk_pct": 0.02},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Trades short-term mean reversion around a fast EMA using a tight band. "
+        "EMA_p defines the mean. Deviation = (price - EMA_p) / EMA_p. "
+        "BUY if deviation <= -band_pct, SELL if deviation >= band_pct. "
+        "Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(

@@ -1,22 +1,8 @@
 """
-Wheel Options Strategy Implementation
+Wheel options strategy.
 
-The Wheel Strategy is a systematic options trading approach designed to generate
-consistent income while potentially acquiring quality stocks at favorable prices.
-
-Strategy Overview:
-1. CASH-SECURED PUTS: Sell put options on stocks you're willing to own
-   - Collect premium income
-   - If assigned, purchase shares at predetermined strike price
-
-2. COVERED CALLS: After assignment, sell covered calls on owned shares
-   - Generate additional premium income
-   - If called away, sell shares at strike price and restart cycle
-
-3. WHEEL CONTINUATION: Repeat the process with new put options
-
-This implementation integrates with the GaussWorldTrader system and uses
-symbols from watchlist.json instead of a separate configuration file.
+Sells cash-secured puts, then sells covered calls after assignment to collect premiums.
+Repeats the cycle to generate income while managing share ownership.
 """
 
 from datetime import datetime, timedelta
@@ -43,6 +29,12 @@ class WheelStrategy(BaseOptionStrategy):
         asset_type="option",
         visible_in_dashboard=False,
         default_params={},
+    )
+    summary = (
+        "Income-focused options cycle with cash-secured puts and covered calls. "
+        "Sell puts in target delta range to collect premium; if assigned, sell covered calls "
+        "in target delta range to collect premium; if called away, return to puts. "
+        "Filters enforce DTE and yield constraints."
     )
 
     def __init__(self, parameters: Dict[str, Any] = None):

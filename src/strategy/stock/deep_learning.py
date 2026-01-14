@@ -1,4 +1,7 @@
-"""Deep learning strategy template."""
+"""Deep learning strategy template.
+
+Currently delegates to a momentum-style rule set as a placeholder for a trained model.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -19,6 +22,10 @@ class DeepLearningStrategy(StrategyBase):
         asset_type="stock",
         default_params={"lookback": 15, "threshold": 0.02, "risk_pct": 0.04},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Template DL strategy that delegates to momentum logic for now. "
+        "Return = (P_t - P_{t-L}) / P_{t-L} with threshold-based BUY/SELL."
     )
 
     def generate_signals(

@@ -1,4 +1,8 @@
-"""Value strategy."""
+"""Value strategy.
+
+Compares the current price to a long-term SMA and trades when the discount
+or premium crosses the configured threshold.
+"""
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -23,6 +27,12 @@ class ValueStrategy(StrategyBase):
         asset_type="stock",
         default_params={"sma_period": 50, "discount_pct": 0.03, "risk_pct": 0.04},
         visible_in_dashboard=True,
+    )
+    summary = (
+        "Trades when price discounts or premiums to a long-term average are extreme. "
+        "SMA_L = mean(close[-L:]); deviation = (price - SMA_L) / SMA_L. "
+        "BUY if deviation <= -discount_pct, SELL if >= discount_pct. "
+        "Size = portfolio_value * risk_pct / price."
     )
 
     def generate_signals(
