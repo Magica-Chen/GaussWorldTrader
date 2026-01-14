@@ -96,11 +96,9 @@ def test_wheel_strategy():
 
     print(f"📊 Strategy Info:")
     info = strategy.get_strategy_info()
-    print(f"  Name: {info['name']}")
-    print(f"  Type: {info['type']}")
-    print(f"  Risk Level: {info['risk_level']}")
-    print(f"  Timeframe: {info['timeframe']}")
-    print(f"  Watchlist Symbols: {info['watchlist_symbols']}")
+    print(f"  Name: {info.get('name')}")
+    print(f"  Type: {info.get('type')}")
+    print(f"  Watchlist Symbols: {info.get('watchlist_symbols')}")
 
     print(f"\n💰 Portfolio Status:")
     print(f"  Cash: ${portfolio.cash:,.2f}")

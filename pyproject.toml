@@ -30,6 +30,7 @@ dependencies = [
     "numpy>=1.26.0",
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
+    "alpaca-py>=0.25.0",
     "ta-lib>=0.4.28",
     "matplotlib>=3.8.0",
     "plotly>=5.17.0",
@@ -79,11 +80,23 @@ Repository = "https://github.com/Magica-Chen/GaussWorldTrader.git"
 Issues = "https://github.com/Magica-Chen/GaussWorldTrader/issues"
 
 [project.scripts]
-trading-cli = "main:main"
+trading-cli = "main_cli:main"
 trading-dashboard = "dashboard:main"
 
 [tool.setuptools]
-packages = ["src", "config"]
+packages = [
+    "config",
+    "src",
+    "src.account",
+    "src.agent",
+    "src.analysis",
+    "src.data",
+    "src.option_strategy",
+    "src.strategy",
+    "src.trade",
+    "src.ui",
+    "src.utils"
+]
 
 [tool.setuptools.package-data]
 "*" = ["*.toml", "*.yaml", "*.yml", "*.json"]

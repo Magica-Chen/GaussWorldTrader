@@ -24,8 +24,7 @@ sys.path.insert(0, str(project_root))
 from src.utils.timezone_utils import EASTERN, now_et, get_market_status
 from src.data import AlpacaDataProvider
 from src.trade import TradingEngine, Backtester, Portfolio
-from src.stock_strategy import MomentumStrategy
-from src.stock_strategy.strategy_selector import get_strategy_selector
+from src.strategy import get_strategy_registry
 from src.analysis import TechnicalAnalysis
 
 logger = logging.getLogger(__name__)
@@ -132,7 +131,8 @@ class BaseDashboard(ABC):
             if data is None or data.empty:
                 return [], "No data available"
             
-            strategy = MomentumStrategy()
+            registry = get_strategy_registry()
+            strategy = registry.create("momentum")
             portfolio = Portfolio()
             
             current_prices = {symbol: data['close'].iloc[-1]}
@@ -398,49 +398,29 @@ class BaseDashboard(ABC):
                 if not data.empty:
                     backtester.add_data(symbol, data)
             
-            # Create strategy using strategy selector
-            strategy_selector = get_strategy_selector()
+            # Create strategy using registry
+            registry = get_strategy_registry()
             
             # Map display names to registry names
             strategy_name_mapping = {
                 "Momentum": "momentum",
-                "Mean Reversion": "momentum",  # Use momentum with mean reversion config
                 "Trend Following": "trend_following",
                 "Scalping": "scalping",
                 "Statistical Arbitrage": "statistical_arbitrage",
-                "Value Investment": "value_investment",
+                "Value": "value",
                 "XGBoost": "xgboost",
                 "Deep Learning": "deep_learning",
                 "Gaussian Process": "gaussian_process"
             }
             
             # Special configs for specific strategies
-            strategy_configs = {
-                "Mean Reversion": {
-                    'lookback_period': 10,
-                    'rsi_period': 14,
-                    'rsi_oversold': 30,
-                    'rsi_overbought': 70,
-                    'position_size_pct': 0.1,
-                    'stop_loss_pct': 0.05,
-                    'take_profit_pct': 0.15
-                },
-                "Trend Following": {
-                    'lookback_period': 50,
-                    'rsi_period': 21,
-                    'rsi_oversold': 40,
-                    'rsi_overbought': 60,
-                    'position_size_pct': 0.15,
-                    'stop_loss_pct': 0.08,
-                    'take_profit_pct': 0.25
-                }
-            }
+            strategy_configs = {}
             
             # Get the actual strategy registry name
             registry_name = strategy_name_mapping.get(strategy_type, strategy_type.lower().replace(' ', '_'))
             
             # Check if strategy exists in registry
-            available_strategies = strategy_selector.list_strategies()
+            available_strategies = registry.list_strategies()
             if registry_name not in available_strategies:
                 raise ValueError(f"Unknown strategy type: {strategy_type}. Available: {available_strategies}")
             
@@ -448,9 +428,7 @@ class BaseDashboard(ABC):
             config = strategy_configs.get(strategy_type, {})
             
             # Create strategy instance
-            strategy = strategy_selector.create_strategy(registry_name, config)
-            if not strategy:
-                raise ValueError(f"Failed to create strategy: {registry_name}")
+            strategy = registry.create(registry_name, config)
             
             def strategy_func(current_date, current_prices, current_data, historical_data, portfolio):
                 return strategy.generate_signals(

@@ -10,12 +10,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta
+from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
 from src.data.alpaca_provider import AlpacaDataProvider
 from src.trade.backtester import Backtester
-from src.stock_strategy.momentum_strategy import MomentumStrategy
+from src.strategy import MomentumStrategy
 
 def generate_pnl_plot(results):
     """Generate Profit & Loss plot from backtest results"""
@@ -85,7 +86,9 @@ Sharpe Ratio: {results.get('sharpe_ratio', 0):.2f}
         plt.tight_layout()
         
         # Save the plot
-        plot_filename = f"results/backtest_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        output_dir = Path("results")
+        output_dir.mkdir(exist_ok=True)
+        plot_filename = output_dir / f"backtest_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
         print(f"✅ P&L plot saved as: {plot_filename}")
         
@@ -204,8 +207,10 @@ def generate_transaction_log(results, symbols):
         
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"results/transactions_{timestamp}.csv"
-        
+        output_dir = Path("results")
+        output_dir.mkdir(exist_ok=True)
+        filename = output_dir / f"transactions_{timestamp}.csv"
+
         transactions_df.to_csv(filename, index=False)
         
         # Display summary

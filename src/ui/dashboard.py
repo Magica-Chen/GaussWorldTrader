@@ -26,7 +26,7 @@ from src.agent.fundamental_analyzer import FundamentalAnalyzer
 from src.analysis import TechnicalAnalysis
 from src.data import AlpacaDataProvider, NewsDataProvider
 from src.data import FREDProvider
-from src.stock_strategy.strategy_selector import get_strategy_selector
+from src.strategy import get_strategy_registry
 from src.ui.core_dashboard import BaseDashboard, UIComponents
 from src.utils.timezone_utils import get_market_status, now_et
 from src.utils.watchlist_manager import WatchlistManager
@@ -34,11 +34,11 @@ from src.utils.watchlist_manager import WatchlistManager
 logger = logging.getLogger(__name__)
 
 
-class ModernDashboard(BaseDashboard):
-    """Modern dashboard with reorganized navigation structure"""
+class Dashboard(BaseDashboard):
+    """Unified dashboard with reorganized navigation structure"""
 
     def __init__(self):
-        super().__init__("Gauss World Trader - Modern Dashboard", "🌍")
+        super().__init__("Gauss World Trader Dashboard", "🌍")
         self.initialize_modern_modules()
 
     def initialize_modern_modules(self):
@@ -46,17 +46,17 @@ class ModernDashboard(BaseDashboard):
         if 'current_main_tab' not in st.session_state:
             st.session_state.current_main_tab = 'Market Overview'
 
-        if 'modern_initialized' not in st.session_state:
+        if 'dashboard_initialized' not in st.session_state:
             try:
                 st.session_state.account_manager = AccountManager()
                 st.session_state.position_manager = PositionManager(st.session_state.account_manager)
                 st.session_state.order_manager = OrderManager(st.session_state.account_manager)
                 st.session_state.fundamental_analyzer = FundamentalAnalyzer()
-                st.session_state.strategy_selector = get_strategy_selector()
+                st.session_state.strategy_registry = get_strategy_registry()
                 st.session_state.watchlist_manager = WatchlistManager()
                 st.session_state.news_provider = NewsDataProvider()
                 st.session_state.fred_provider = FREDProvider()
-                st.session_state.modern_initialized = True
+                st.session_state.dashboard_initialized = True
 
             except Exception as e:
                 logger.error(f"Error initializing modern modules: {e}")
@@ -408,20 +408,18 @@ class ModernDashboard(BaseDashboard):
             days_back = st.slider("Backtest Period (days)", 30, 365, 90, key="backtest_period")
             initial_cash = st.number_input("Initial Cash", value=100000, step=10000, key="backtest_initial_cash")
 
-            # Get all available strategies from strategy_selector
+            # Get all available strategies from registry
             display_strategies = []
-            strategy_mapping = {}
-            if 'strategy_selector' in st.session_state:
-                strategy_names = st.session_state.strategy_selector.list_strategies()
+            if 'strategy_registry' in st.session_state:
+                strategy_names = st.session_state.strategy_registry.list_strategies(dashboard_only=True)
                 for name in strategy_names:
                     # Create display name
                     display_name = name.replace('_', ' ').title()
                     display_strategies.append(display_name)
-                    strategy_mapping[display_name] = name
             
             # Add fallback strategies if none available
             if not display_strategies:
-                display_strategies = ["Momentum", "Mean Reversion", "Trend Following"]
+                display_strategies = ["Momentum", "Value", "Trend Following"]
             
             strategy_display = st.selectbox("Strategy", display_strategies, key="backtest_strategy")
             # Pass the display name to core_dashboard (it will handle the mapping)
@@ -479,10 +477,10 @@ class ModernDashboard(BaseDashboard):
             # Strategy pool management
             st.write("**Strategy Pool**")
             
-            # Get all available strategies from strategy_selector
+            # Get all available strategies from registry
             available_strategies = []
-            if 'strategy_selector' in st.session_state:
-                strategy_names = st.session_state.strategy_selector.list_strategies()
+            if 'strategy_registry' in st.session_state:
+                strategy_names = st.session_state.strategy_registry.list_strategies(dashboard_only=True)
                 for name in strategy_names:
                     # Create display name
                     display_name = name.replace('_', ' ').title()
@@ -490,7 +488,7 @@ class ModernDashboard(BaseDashboard):
             
             # Add fallback strategies if none available
             if not available_strategies:
-                available_strategies = ["Momentum", "Mean Reversion", "Trend Following"]
+                available_strategies = ["Momentum", "Value", "Trend Following"]
             
             # Initialize selected strategies in session state
             if 'comparison_strategies' not in st.session_state:
@@ -815,8 +813,8 @@ class ModernDashboard(BaseDashboard):
 
 
 def main():
-    """Main function to run the modern dashboard"""
-    dashboard = ModernDashboard()
+    """Main function to run the dashboard"""
+    dashboard = Dashboard()
     dashboard.run_dashboard()
 
 

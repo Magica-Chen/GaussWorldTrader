@@ -1,12 +1,7 @@
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import (
-    MarketOrderRequest, LimitOrderRequest, StopOrderRequest,
-    GetOrdersRequest, ClosePositionRequest
-)
-from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
-from alpaca.common.exceptions import APIError
-from typing import Dict, Any, Optional, List
-from datetime import datetime
+from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
+from typing import Dict, Any, List
 import logging
 from config import Config
 from .portfolio import Portfolio

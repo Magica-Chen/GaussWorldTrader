@@ -17,11 +17,11 @@ Migration Guide:
 """
 
 from datetime import datetime, timedelta
+import numpy as np
 import pandas as pd
 import streamlit as st
 from src.utils.timezone_utils import now_et
 from src.data import AlpacaDataProvider
-from src.stock_strategy import MomentumStrategy
 from src.trade import Backtester
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -168,7 +168,7 @@ def generate_transaction_log(results: Dict[str, Any], symbols: List[str]) -> Opt
         transactions_df = pd.DataFrame(enhanced_trades)
         from src.utils.timezone_utils import now_et
         timestamp = now_et().strftime('%Y%m%d_%H%M%S')
-        filename = f"modern_dashboard_transactions_{timestamp}.csv"
+        filename = f"dashboard_transactions_{timestamp}.csv"
         
         transactions_df.to_csv(filename, index=False)
         return filename

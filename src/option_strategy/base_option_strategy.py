@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING, Dict, List, Any, Optional, Tuple
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-from src.stock_strategy.base_strategy import BaseStrategy
+from src.strategy import StrategyBase, StrategyMeta
 
 
-class BaseOptionStrategy(BaseStrategy):
+class BaseOptionStrategy(StrategyBase):
     """
     Abstract base class for option trading strategies.
 
@@ -28,6 +28,15 @@ class BaseOptionStrategy(BaseStrategy):
     such as option filtering, scoring, and management of option positions
     alongside stock positions.
     """
+
+    meta = StrategyMeta(
+        name="option_base",
+        label="Option Base",
+        category="options",
+        description="Base class for option strategies.",
+        visible_in_dashboard=False,
+        default_params={},
+    )
 
     def __init__(self, parameters: Dict[str, Any] = None) -> None:
         """
