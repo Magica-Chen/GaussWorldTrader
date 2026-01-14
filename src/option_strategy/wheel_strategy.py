@@ -21,7 +21,6 @@ symbols from watchlist.json instead of a separate configuration file.
 
 from datetime import datetime, timedelta
 import pandas as pd
-import numpy as np
 from typing import Dict, List, Any, Optional
 import logging
 
@@ -471,10 +470,7 @@ class WheelStrategy(BaseOptionStrategy):
 
     def _get_put_options_for_symbol(self, symbol: str, current_price: float) -> List[Dict[str, Any]]:
         """
-        Get suitable put options for a given symbol.
-
-        This is a simulation method. In production, this would query the Alpaca API
-        for actual option chains.
+        Get suitable put options for a given symbol from the live options chain.
 
         Args:
             symbol: Stock symbol
@@ -486,73 +482,61 @@ class WheelStrategy(BaseOptionStrategy):
         put_options = []
 
         try:
-            # Simulate put options at various strike prices
-            # In production, this would be replaced with actual API calls
-            strike_prices = []
+            from src.data import AlpacaDataProvider
 
-            # Generate strike prices around current price
-            for pct in [0.95, 0.90, 0.85, 0.80]:  # 5%, 10%, 15%, 20% OTM
-                strike = round(current_price * pct, 2)
-                if strike >= self.parameters['min_stock_price']:
-                    strike_prices.append(strike)
+            provider = AlpacaDataProvider()
+            chain = provider.get_options_chain(symbol)
+            if chain is None or chain.empty:
+                self.logger.warning(f"Options chain unavailable for {symbol}.")
+                return []
 
-            # Generate options for different expiration dates
+            chain = chain.copy()
+            chain['expiration_date'] = pd.to_datetime(chain['expiration_date'], errors='coerce')
             base_date = datetime.now()
-            expiration_dates = []
 
-            for weeks in [1, 2, 3, 4, 6]:  # 1-6 weeks out
-                exp_date = base_date + timedelta(weeks=weeks)
-                # Adjust to Friday (options typically expire on Fridays)
-                days_ahead = 4 - exp_date.weekday()  # 4 = Friday
-                if days_ahead < 0:
-                    days_ahead += 7
-                exp_date += timedelta(days=days_ahead)
-                expiration_dates.append(exp_date)
+            for _, row in chain.iterrows():
+                option_type = str(row.get('option_type', '')).upper()
+                if option_type != 'P':
+                    continue
 
-            # Create simulated put options
-            for strike in strike_prices:
-                for exp_date in expiration_dates:
-                    dte = (exp_date - base_date).days
+                exp_date = row.get('expiration_date')
+                if pd.isna(exp_date):
+                    continue
 
-                    if not (self.parameters['dte_min'] <= dte <= self.parameters['dte_max']):
-                        continue
+                strike = float(row.get('strike_price') or 0)
+                if strike < self.parameters['min_stock_price']:
+                    continue
 
-                    # Simulate option greeks and pricing
-                    # This is simplified - in production use actual option data
-                    moneyness = strike / current_price
-                    time_factor = dte / 365.0
+                dte = (exp_date - base_date).days
+                if not (self.parameters['dte_min'] <= dte <= self.parameters['dte_max']):
+                    continue
 
-                    # Simplified delta calculation for puts
-                    delta = -(0.5 - (current_price - strike) / current_price * 0.3)
-                    delta = max(-0.8, min(-0.05, delta))
-
-                    # Simplified bid/ask spread
-                    intrinsic_value = max(0, strike - current_price)
-                    time_value = strike * 0.02 * time_factor  # Simplified time value
-                    bid_price = intrinsic_value + time_value * 0.8
-
-                    # Apply filters
+                delta = row.get('delta')
+                if delta is not None:
                     if not (self.parameters['put_delta_min'] <= abs(delta) <= self.parameters['put_delta_max']):
                         continue
 
-                    put_option = {
-                        'symbol': f"{symbol}_{exp_date.strftime('%y%m%d')}P{int(strike * 1000):08d}",
-                        'underlying_symbol': symbol,
-                        'type': 'put',
-                        'strike_price': strike,
-                        'expiration_date': exp_date,
-                        'days_to_expiration': dte,
-                        'bid': round(bid_price, 2),
-                        'ask': round(bid_price * 1.1, 2),
-                        'delta': round(delta, 3),
-                        'open_interest': np.random.randint(100, 1000),  # Simulated
-                        'volume': np.random.randint(10, 200)  # Simulated
-                    }
+                volume = row.get('volume')
+                open_interest = row.get('open_interest')
 
-                    # Apply liquidity filters
-                    if (put_option['open_interest'] >= self.parameters['min_open_interest'] and
-                        put_option['volume'] >= self.parameters['min_daily_volume']):
-                        put_options.append(put_option)
+                if volume is not None and volume < self.parameters['min_daily_volume']:
+                    continue
+                if open_interest is not None and open_interest < self.parameters['min_open_interest']:
+                    continue
+
+                put_options.append({
+                    'symbol': row.get('symbol'),
+                    'underlying_symbol': symbol,
+                    'type': 'put',
+                    'strike_price': strike,
+                    'expiration_date': exp_date,
+                    'days_to_expiration': dte,
+                    'bid': row.get('bid_price'),
+                    'ask': row.get('ask_price'),
+                    'delta': delta,
+                    'open_interest': open_interest,
+                    'volume': volume
+                })
 
         except Exception as e:
             self.logger.error(f"Error getting put options for {symbol}: {e}")
@@ -561,10 +545,7 @@ class WheelStrategy(BaseOptionStrategy):
 
     def _get_call_options_for_symbol(self, symbol: str, current_price: float) -> List[Dict[str, Any]]:
         """
-        Get suitable call options for a given symbol.
-
-        This is a simulation method. In production, this would query the Alpaca API
-        for actual option chains.
+        Get suitable call options for a given symbol from the live options chain.
 
         Args:
             symbol: Stock symbol
@@ -576,70 +557,58 @@ class WheelStrategy(BaseOptionStrategy):
         call_options = []
 
         try:
-            # Generate strike prices above current price for covered calls
-            strike_prices = []
+            from src.data import AlpacaDataProvider
 
-            # Generate strike prices above current price
-            for pct in [1.05, 1.10, 1.15, 1.20]:  # 5%, 10%, 15%, 20% OTM
-                strike = round(current_price * pct, 2)
-                strike_prices.append(strike)
+            provider = AlpacaDataProvider()
+            chain = provider.get_options_chain(symbol)
+            if chain is None or chain.empty:
+                self.logger.warning(f"Options chain unavailable for {symbol}.")
+                return []
 
-            # Generate options for different expiration dates
+            chain = chain.copy()
+            chain['expiration_date'] = pd.to_datetime(chain['expiration_date'], errors='coerce')
             base_date = datetime.now()
-            expiration_dates = []
 
-            for weeks in [1, 2, 3, 4, 6]:  # 1-6 weeks out
-                exp_date = base_date + timedelta(weeks=weeks)
-                # Adjust to Friday (options typically expire on Fridays)
-                days_ahead = 4 - exp_date.weekday()  # 4 = Friday
-                if days_ahead < 0:
-                    days_ahead += 7
-                exp_date += timedelta(days=days_ahead)
-                expiration_dates.append(exp_date)
+            for _, row in chain.iterrows():
+                option_type = str(row.get('option_type', '')).upper()
+                if option_type != 'C':
+                    continue
 
-            # Create simulated call options
-            for strike in strike_prices:
-                for exp_date in expiration_dates:
-                    dte = (exp_date - base_date).days
+                exp_date = row.get('expiration_date')
+                if pd.isna(exp_date):
+                    continue
 
-                    if not (self.parameters['dte_min'] <= dte <= self.parameters['dte_max']):
-                        continue
+                strike = float(row.get('strike_price') or 0)
+                dte = (exp_date - base_date).days
+                if not (self.parameters['dte_min'] <= dte <= self.parameters['dte_max']):
+                    continue
 
-                    # Simulate option greeks and pricing
-                    moneyness = strike / current_price
-                    time_factor = dte / 365.0
-
-                    # Simplified delta calculation for calls
-                    delta = 0.5 + (current_price - strike) / current_price * 0.3
-                    delta = max(0.05, min(0.8, delta))
-
-                    # Simplified bid/ask spread
-                    intrinsic_value = max(0, current_price - strike)
-                    time_value = current_price * 0.02 * time_factor  # Simplified time value
-                    bid_price = intrinsic_value + time_value * 0.8
-
-                    # Apply filters
+                delta = row.get('delta')
+                if delta is not None:
                     if not (self.parameters['call_delta_min'] <= delta <= self.parameters['call_delta_max']):
                         continue
 
-                    call_option = {
-                        'symbol': f"{symbol}_{exp_date.strftime('%y%m%d')}C{int(strike * 1000):08d}",
-                        'underlying_symbol': symbol,
-                        'type': 'call',
-                        'strike_price': strike,
-                        'expiration_date': exp_date,
-                        'days_to_expiration': dte,
-                        'bid': round(bid_price, 2),
-                        'ask': round(bid_price * 1.1, 2),
-                        'delta': round(delta, 3),
-                        'open_interest': np.random.randint(100, 1000),  # Simulated
-                        'volume': np.random.randint(10, 200)  # Simulated
-                    }
+                volume = row.get('volume')
+                open_interest = row.get('open_interest')
 
-                    # Apply liquidity filters
-                    if (call_option['open_interest'] >= self.parameters['min_open_interest'] and
-                        call_option['volume'] >= self.parameters['min_daily_volume']):
-                        call_options.append(call_option)
+                if volume is not None and volume < self.parameters['min_daily_volume']:
+                    continue
+                if open_interest is not None and open_interest < self.parameters['min_open_interest']:
+                    continue
+
+                call_options.append({
+                    'symbol': row.get('symbol'),
+                    'underlying_symbol': symbol,
+                    'type': 'call',
+                    'strike_price': strike,
+                    'expiration_date': exp_date,
+                    'days_to_expiration': dte,
+                    'bid': row.get('bid_price'),
+                    'ask': row.get('ask_price'),
+                    'delta': delta,
+                    'open_interest': open_interest,
+                    'volume': volume
+                })
 
         except Exception as e:
             self.logger.error(f"Error getting call options for {symbol}: {e}")

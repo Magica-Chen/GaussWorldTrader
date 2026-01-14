@@ -205,8 +205,8 @@ def format_crypto_data(crypto_response: Dict) -> Dict[str, Any]:
         'price_gbp': price_usd * 0.75,  # Approximate GBP conversion
         'last_updated': timestamp.strftime('%Y-%m-%d %H:%M:%S') if hasattr(timestamp, 'strftime') else str(timestamp),
         'market_cap': price_usd * 19_500_000,  # Approximate BTC supply
-        'volume_24h': price_usd * np.random.uniform(50000, 100000),  # Simulated volume
-        'change_24h': np.random.uniform(-5.0, 5.0)  # Simulated change
+        'volume_24h': None,
+        'change_24h': None
     }
     
     return formatted_data
@@ -295,13 +295,6 @@ def render_economic_data():
                     with [col1, col2, col3][i]:
                         st.metric(name, "N/A")
         else:
-            st.warning("FRED API not configured")
-            today = now_et().strftime('%Y-%m-%d')
-            future = (now_et() + timedelta(days=2)).strftime('%Y-%m-%d')
-            mock_events = [
-                {"Date": today, "Event": "CPI", "Previous": "3.1%", "Forecast": "3.2%"},
-                {"Date": future, "Event": "Retail Sales", "Previous": "0.3%", "Forecast": "0.4%"}
-            ]
-            st.dataframe(pd.DataFrame(mock_events), use_container_width=True)
+            st.warning("FRED API not configured. Economic calendar is under development.")
     except Exception as e:
         st.error(f"Error loading economic calendar: {e}")

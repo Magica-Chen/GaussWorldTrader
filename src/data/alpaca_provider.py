@@ -228,8 +228,7 @@ class AlpacaProvider:
             
         except Exception as e:
             logging.error(f"Error getting option bars for {symbol}: {e}")
-            # Try to create synthetic bar from latest quote as fallback
-            return self._create_synthetic_option_bar(symbol, end)
+            return pd.DataFrame()
     
     def get_option_latest_quote(self, symbol: str) -> Dict[str, Any]:
         """Get latest quote for an option"""
@@ -494,44 +493,6 @@ class AlpacaProvider:
         
         return pd.DataFrame(data)
     
-    def _create_synthetic_option_bar(self, symbol: str, end_time: datetime) -> pd.DataFrame:
-        """Create synthetic option bar from latest quote when bars unavailable"""
-        try:
-            quote_data = self.get_option_latest_quote(symbol)
-            
-            if 'error' in quote_data:
-                return pd.DataFrame()
-            
-            bid = quote_data.get('bid_price', 0)
-            ask = quote_data.get('ask_price', 0)
-            
-            if bid <= 0 or ask <= 0:
-                return pd.DataFrame()
-            
-            mid_price = (bid + ask) / 2.0
-            
-            synthetic_data = [{
-                'timestamp': end_time.replace(hour=16, minute=0, second=0, microsecond=0),
-                'open': mid_price,
-                'high': mid_price,
-                'low': mid_price,
-                'close': mid_price,
-                'volume': 0,
-                'trade_count': 0,
-                'vwap': mid_price
-            }]
-            
-            df = pd.DataFrame(synthetic_data)
-            df.set_index('timestamp', inplace=True)
-            df.index = pd.to_datetime(df.index)
-            
-            return df
-            
-        except Exception as e:
-            logging.error(f"Error creating synthetic option bar for {symbol}: {e}")
-            return pd.DataFrame()
-
-
     def get_account_info(self) -> Dict[str, Any]:
         """Get account information including VIP status and data feed info (legacy method)"""
         account_data = self.get_account()

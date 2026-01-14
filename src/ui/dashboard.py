@@ -671,11 +671,15 @@ class Dashboard(BaseDashboard):
         with col1:
             news_symbol = st.text_input("Symbol for News", value="AAPL", key="news_symbol").upper()
             if st.button("Get News"):
-                st.session_state.news_symbol = news_symbol
+                st.session_state.news_query_symbol = news_symbol
 
         with col2:
-            if hasattr(st.session_state, 'news_symbol'):
-                symbol = st.session_state.news_symbol
+            symbol = st.session_state.get('news_query_symbol')
+            if not symbol:
+                st.info("Enter a symbol and click Get News to load results.")
+                return
+
+            if symbol:
 
                 try:
                     if 'news_provider' in st.session_state:
@@ -706,11 +710,15 @@ class Dashboard(BaseDashboard):
         with col1:
             insider_symbol = st.text_input("Symbol for Insider Data", value="AAPL", key="insider_symbol").upper()
             if st.button("Get Insider Data"):
-                st.session_state.insider_symbol = insider_symbol
+                st.session_state.insider_query_symbol = insider_symbol
 
         with col2:
-            if hasattr(st.session_state, 'insider_symbol'):
-                symbol = st.session_state.insider_symbol
+            symbol = st.session_state.get('insider_query_symbol')
+            if not symbol:
+                st.info("Enter a symbol and click Get Insider Data to load results.")
+                return
+
+            if symbol:
 
                 try:
                     if 'news_provider' in st.session_state:
@@ -747,38 +755,7 @@ class Dashboard(BaseDashboard):
     def render_ai_reports(self):
         """Render AI-generated reports"""
         st.subheader("🤖 AI Reports")
-        st.info("🚧 AI report generation coming soon...")
-
-        # Placeholder for AI reports
-        report_types = st.multiselect(
-            "Select Report Types",
-            ["Market Summary", "Portfolio Analysis", "Risk Assessment", "Trade Recommendations"],
-            default=["Market Summary"]
-        )
-
-        if st.button("Generate AI Report"):
-            with st.spinner("Generating AI report..."):
-                st.write("**AI Market Summary Report**")
-                st.write("""
-                Based on current market conditions and analysis:
-                
-                📈 **Market Outlook**: Cautiously optimistic with mixed signals
-                
-                🔍 **Key Observations**:
-                - Technology sector showing resilience
-                - Volatility remains elevated
-                - Economic indicators are mixed
-                
-                💡 **Recommendations**:
-                - Maintain diversified portfolio
-                - Consider defensive positions
-                - Monitor key support/resistance levels
-                
-                ⚠️ **Risks to Watch**:
-                - Geopolitical tensions
-                - Interest rate changes
-                - Earnings season results
-                """)
+        st.info("🚧 AI report generation is under development. Connect a report provider to enable.")
 
     def render_main_content(self):
         """Implementation of abstract method for main content"""

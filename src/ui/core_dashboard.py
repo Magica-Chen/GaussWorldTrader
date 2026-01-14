@@ -1181,8 +1181,12 @@ class UIComponents:
             quantity = st.number_input("Quantity", min_value=1, value=100, key="trade_quantity")
             order_type = st.selectbox("Order Type", ["market", "limit", "stop"], key="trade_order_type")
 
-            if order_type in ["limit", "stop"]:
-                limit_price = st.number_input("Price", value=150.0, step=0.01, key="trade_limit_price")
+            limit_price = None
+            stop_price = None
+            if order_type == "limit":
+                limit_price = st.number_input("Limit Price", value=150.0, step=0.01, key="trade_limit_price")
+            elif order_type == "stop":
+                stop_price = st.number_input("Stop Price", value=150.0, step=0.01, key="trade_stop_price")
 
             time_in_force = st.selectbox("Time in Force", ["day", "gtc", "ioc", "fok"], key="trade_time_in_force")
 
@@ -1209,7 +1213,29 @@ class UIComponents:
                     st.warning(f"Unable to get current price for {symbol}")
 
             if st.button("Submit Order", type="primary"):
-                st.warning("⚠️ This is a demo. Order submission is disabled.")
+                if not symbol:
+                    st.error("Symbol is required.")
+                elif order_type == "limit" and limit_price is None:
+                    st.error("Limit price is required for limit orders.")
+                elif order_type == "stop" and stop_price is None:
+                    st.error("Stop price is required for stop orders.")
+                elif 'order_manager' not in st.session_state:
+                    st.error("Order manager not initialized.")
+                else:
+                    order_manager = st.session_state.order_manager
+                    result = order_manager.place_order(
+                        symbol=symbol,
+                        qty=int(quantity),
+                        side=side,
+                        order_type=order_type,
+                        time_in_force=time_in_force,
+                        limit_price=limit_price,
+                        stop_price=stop_price
+                    )
+                    if result and 'error' in result:
+                        st.error(f"Order failed: {result['error']}")
+                    else:
+                        st.success(f"Order submitted: {result.get('id', 'unknown')}")
 
     @staticmethod
     def render_orders_table():
