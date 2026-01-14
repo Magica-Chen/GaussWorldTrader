@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
 from config import Config
@@ -17,16 +17,22 @@ class NewsDataProvider:
     def __init__(self, api_key: str = None):
         self.finnhub = FinnhubProvider(api_key)
         self.logger = logging.getLogger(__name__)
-        self.alpaca_client = None
+        self.alpaca_client = self._init_alpaca_client()
 
-        if ALPACA_PY_AVAILABLE and Config.validate_alpaca_config():
-            try:
-                self.alpaca_client = NewsClient(
-                    api_key=Config.ALPACA_API_KEY,
-                    secret_key=Config.ALPACA_SECRET_KEY
-                )
-            except Exception as exc:
-                self.logger.warning(f"Alpaca news client unavailable: {exc}")
+    def _init_alpaca_client(self):
+        if not ALPACA_PY_AVAILABLE or not Config.validate_alpaca_config():
+            return None
+        try:
+            return NewsClient(
+                api_key=Config.ALPACA_API_KEY,
+                secret_key=Config.ALPACA_SECRET_KEY
+            )
+        except Exception as exc:
+            self.logger.warning(f"Alpaca news client unavailable: {exc}")
+            return None
+
+    def _has_error(self, result: Any) -> bool:
+        return isinstance(result, list) and len(result) > 0 and "error" in result[0]
 
     def _normalize_finnhub_article(self, article: Dict[str, Any]) -> Dict[str, Any]:
         timestamp = article.get("datetime")
@@ -141,8 +147,7 @@ class NewsDataProvider:
         to_str = to_date.strftime('%Y-%m-%d')
         
         result = self.finnhub.get_company_news(symbol, from_str, to_str)
-        
-        if isinstance(result, list) and len(result) > 0 and "error" in result[0]:
+        if self._has_error(result):
             self.logger.error(f"Error fetching company news: {result[0]['error']}")
             result = []
 
@@ -161,8 +166,7 @@ class NewsDataProvider:
     
     def get_market_news(self, category: str = "general") -> List[Dict[str, Any]]:
         result = self.finnhub.get_market_news(category)
-        
-        if isinstance(result, list) and len(result) > 0 and "error" in result[0]:
+        if self._has_error(result):
             self.logger.error(f"Error fetching market news: {result[0]['error']}")
             result = []
 
@@ -178,11 +182,9 @@ class NewsDataProvider:
     def get_insider_transactions(self, symbol: str) -> List[Dict[str, Any]]:
         """Get insider transactions"""
         result = self.finnhub.get_insider_transactions(symbol)
-        
-        if isinstance(result, list) and len(result) > 0 and "error" in result[0]:
+        if self._has_error(result):
             self.logger.error(f"Error fetching insider transactions: {result[0]['error']}")
             return []
-        
         return result if isinstance(result, list) else []
     
     def get_insider_sentiment(self, symbol: str, 

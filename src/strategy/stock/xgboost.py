@@ -37,19 +37,3 @@ class XGBoostStrategy(StrategyBase):
             }
         )
         return base.generate_signals(current_date, current_prices, current_data, historical_data, portfolio)
-
-    def generate_trading_plan(
-        self,
-        current_date: datetime,
-        current_prices: Dict[str, float],
-        current_data: Dict[str, Any],
-        historical_data: Dict[str, pd.DataFrame],
-        portfolio: Any = None,
-    ) -> List[Dict[str, Any]]:
-        return super().generate_trading_plan(
-            current_date,
-            current_prices,
-            current_data,
-            historical_data,
-            portfolio,
-        )

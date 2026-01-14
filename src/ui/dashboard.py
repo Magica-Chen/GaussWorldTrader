@@ -37,6 +37,27 @@ from src.utils.watchlist_manager import WatchlistManager
 logger = logging.getLogger(__name__)
 
 
+def _get_field(data, attr: str, raw_key: str):
+    """Extract field from stream data (object attribute or dict key)."""
+    if hasattr(data, attr):
+        return getattr(data, attr)
+    if isinstance(data, dict):
+        return data.get(raw_key)
+    return None
+
+
+def _format_timestamp(value):
+    """Format timestamp for display."""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def _format_raw(data):
+    """Format raw stream data for display."""
+    return data if isinstance(data, (dict, list, str, int, float)) else repr(data)
+
+
 class Dashboard(BaseDashboard):
     """Unified dashboard with reorganized navigation structure"""
 
@@ -511,21 +532,6 @@ class Dashboard(BaseDashboard):
 
         message_queue = st.session_state.stream_queue
 
-        def _get_field(data, attr: str, raw_key: str):
-            if hasattr(data, attr):
-                return getattr(data, attr)
-            if isinstance(data, dict):
-                return data.get(raw_key)
-            return None
-
-        def _format_timestamp(value):
-            if hasattr(value, "isoformat"):
-                return value.isoformat()
-            return value
-
-        def _format_raw(data):
-            return data if isinstance(data, (dict, list, str, int, float)) else repr(data)
-
         async def handle_trade(data):
             if raw_output:
                 message_queue.put({"type": "raw", "payload": _format_raw(data)})
@@ -995,21 +1001,6 @@ class Dashboard(BaseDashboard):
             return
 
         message_queue = st.session_state.news_stream_queue
-
-        def _get_field(data, attr: str, raw_key: str):
-            if hasattr(data, attr):
-                return getattr(data, attr)
-            if isinstance(data, dict):
-                return data.get(raw_key)
-            return None
-
-        def _format_timestamp(value):
-            if hasattr(value, "isoformat"):
-                return value.isoformat()
-            return value
-
-        def _format_raw(data):
-            return data if isinstance(data, (dict, list, str, int, float)) else repr(data)
 
         async def handle_news(data):
             if raw_output:

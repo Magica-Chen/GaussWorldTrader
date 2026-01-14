@@ -150,6 +150,7 @@ class StrategyBase:
                 )
             )
         return [item.to_dict() for item in plan]
+
     def log_signal(self, signal: Dict[str, Any]) -> None:
         signal_with_timestamp = {**signal, "timestamp": signal.get("timestamp") or datetime.now()}
         self.signals.append(signal_with_timestamp)
