@@ -172,7 +172,7 @@ def stream_market(
     asset_type: str = typer.Option(
         "stock",
         "--asset-type",
-        help="Asset type to stream: stock or crypto",
+        help="Asset type to stream: stock, crypto, or option",
     ),
     crypto_loc: str = typer.Option(
         "eu-1",
@@ -191,8 +191,8 @@ def stream_market(
         raise typer.Exit(1)
 
     asset_type = asset_type.strip().lower()
-    if asset_type not in {"stock", "crypto"}:
-        print("asset-type must be one of: stock, crypto")
+    if asset_type not in {"stock", "crypto", "option"}:
+        print("asset-type must be one of: stock, crypto, option")
         raise typer.Exit(1)
 
     stream_type = stream_type.strip().lower()
@@ -206,6 +206,8 @@ def stream_market(
         except ValueError as exc:
             print(exc)
             raise typer.Exit(1)
+    elif asset_type == "option":
+        stream = provider.create_option_stream(raw_data=raw)
     else:
         stream = provider.create_stock_stream(raw_data=raw)
     max_messages = max_messages if max_messages > 0 else None

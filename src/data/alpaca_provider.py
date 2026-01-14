@@ -135,6 +135,19 @@ class AlpacaProvider:
             feed=loc,
         )
 
+    def create_option_stream(self, raw_data: bool = False):
+        """Create a real-time option data stream (quotes/trades/bars)."""
+        if not ALPACA_PY_AVAILABLE:
+            raise ImportError(
+                "alpaca-py is required. Install with: pip install alpaca-py"
+            )
+
+        return OptionDataStream(
+            api_key=Config.ALPACA_API_KEY,
+            secret_key=Config.ALPACA_SECRET_KEY,
+            raw_data=raw_data,
+        )
+
     def create_news_stream(self, raw_data: bool = False):
         """Create a real-time news data stream."""
         if not ALPACA_PY_AVAILABLE:

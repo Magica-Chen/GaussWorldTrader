@@ -416,7 +416,7 @@ class Dashboard(BaseDashboard):
         with col1:
             asset_type = st.selectbox(
                 "Asset Type",
-                ["stock", "crypto"],
+                ["stock", "crypto", "option"],
                 key="stream_asset_type",
             )
             crypto_loc = "eu-1"
@@ -501,6 +501,8 @@ class Dashboard(BaseDashboard):
                 stream = provider.create_crypto_stream(
                     raw_data=raw_output, loc=crypto_loc
                 )
+            elif asset_type == "option":
+                stream = provider.create_option_stream(raw_data=raw_output)
             else:
                 stream = provider.create_stock_stream(raw_data=raw_output)
         except Exception as exc:
