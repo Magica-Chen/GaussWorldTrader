@@ -7,6 +7,9 @@ Strategy Backtest, Trade & Order, News & Report
 
 import logging
 import sys
+import queue
+import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -56,11 +59,26 @@ class Dashboard(BaseDashboard):
                 st.session_state.watchlist_manager = WatchlistManager()
                 st.session_state.news_provider = NewsDataProvider()
                 st.session_state.fred_provider = FREDProvider()
+                self._initialize_stream_state()
                 st.session_state.dashboard_initialized = True
 
             except Exception as e:
                 logger.error(f"Error initializing modern modules: {e}")
                 st.error("Error initializing trading modules. Please check API configuration.")
+
+        if 'stream_state_initialized' not in st.session_state:
+            self._initialize_stream_state()
+
+    def _initialize_stream_state(self):
+        """Initialize Alpaca stream state for the dashboard."""
+        st.session_state.stream_state_initialized = True
+        st.session_state.stream_running = False
+        st.session_state.stream_thread = None
+        st.session_state.stream_queue = queue.Queue()
+        st.session_state.stream_messages = []
+        st.session_state.stream_error = None
+        st.session_state.stream_config = {}
+        st.session_state.stream_obj = None
 
     def create_main_navigation(self):
         """Create main navigation tabs on the left sidebar"""
@@ -317,10 +335,15 @@ class Dashboard(BaseDashboard):
 
     def render_live_analysis_tab(self):
         """Live Analysis: Symbol Analysis"""
-        st.header("🔍 Live Analysis (Symbol)")
+        st.header("🔍 Live Analysis")
 
-        # Only symbol analysis remains in this tab
-        self.render_symbol_analysis()
+        analysis_tabs = st.tabs(["📈 Historical Market", "📡 Market Stream"])
+
+        with analysis_tabs[0]:
+            self.render_symbol_analysis()
+
+        with analysis_tabs[1]:
+            self.render_market_stream()
 
     def render_symbol_analysis(self):
         """Render symbol analysis"""
@@ -369,6 +392,203 @@ class Dashboard(BaseDashboard):
                         st.metric("Annualized Volatility", f"{volatility:.1f}%")
                 else:
                     st.error(f"Unable to load data for {symbol}: {error}")
+
+    def render_market_stream(self):
+        """Render real-time market data stream controls and output."""
+        st.subheader("📡 Real-Time Market Stream")
+
+        col1, col2 = st.columns([2, 3])
+
+        with col1:
+            symbols_input = st.text_input(
+                "Symbols (comma-separated, max 30)",
+                value="AAPL, MSFT, NVDA",
+                key="stream_symbols_input",
+            )
+            stream_type = st.selectbox(
+                "Stream Type",
+                ["trades", "quotes", "bars"],
+                key="stream_type_select",
+            )
+            raw_output = st.checkbox("Raw Payload", value=False, key="stream_raw")
+            max_rows = st.slider("Rows to Display", 20, 200, 100, key="stream_rows")
+
+            symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
+            if len(symbols) > 30:
+                st.error("Alpaca basic accounts support up to 30 symbols per websocket.")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Start Stream", disabled=st.session_state.stream_running):
+                    if symbols and len(symbols) <= 30:
+                        self._start_stream(symbols, stream_type, raw_output)
+            with col_b:
+                if st.button("Stop Stream", disabled=not st.session_state.stream_running):
+                    self._stop_stream()
+
+            if st.session_state.stream_error:
+                st.error(st.session_state.stream_error)
+
+            auto_refresh = st.checkbox("Auto-refresh", value=True, key="stream_auto_refresh")
+            refresh_interval = st.slider(
+                "Refresh Interval (sec)", 1, 10, 2, key="stream_refresh_interval"
+            )
+
+        with col2:
+            self._drain_stream_queue(max_rows)
+            if st.session_state.stream_messages:
+                st.dataframe(
+                    pd.DataFrame(st.session_state.stream_messages).tail(max_rows),
+                    use_container_width=True,
+                )
+            else:
+                st.info("No stream messages yet. Start the stream to receive data.")
+
+        if auto_refresh and st.session_state.stream_running:
+            time.sleep(refresh_interval)
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
+
+    def _start_stream(self, symbols, stream_type, raw_output):
+        """Start Alpaca WebSocket stream in a background thread."""
+        if st.session_state.stream_running:
+            return
+
+        st.session_state.stream_error = None
+        st.session_state.stream_messages = []
+        st.session_state.stream_config = {
+            "symbols": symbols,
+            "stream_type": stream_type,
+            "raw_output": raw_output,
+        }
+
+        try:
+            provider = AlpacaDataProvider()
+            stream = provider.create_stock_stream(raw_data=raw_output)
+        except Exception as exc:
+            st.session_state.stream_error = f"Unable to start stream: {exc}"
+            return
+
+        message_queue = st.session_state.stream_queue
+
+        def _get_field(data, attr: str, raw_key: str):
+            if hasattr(data, attr):
+                return getattr(data, attr)
+            if isinstance(data, dict):
+                return data.get(raw_key)
+            return None
+
+        def _format_timestamp(value):
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            return value
+
+        def _format_raw(data):
+            return data if isinstance(data, (dict, list, str, int, float)) else repr(data)
+
+        async def handle_trade(data):
+            if raw_output:
+                message_queue.put({"type": "raw", "payload": _format_raw(data)})
+                return
+            message_queue.put(
+                {
+                    "type": "trade",
+                    "symbol": _get_field(data, "symbol", "S"),
+                    "price": _get_field(data, "price", "p"),
+                    "size": _get_field(data, "size", "s"),
+                    "exchange": _get_field(data, "exchange", "x"),
+                    "timestamp": _format_timestamp(_get_field(data, "timestamp", "t")),
+                }
+            )
+
+        async def handle_quote(data):
+            if raw_output:
+                message_queue.put({"type": "raw", "payload": _format_raw(data)})
+                return
+            message_queue.put(
+                {
+                    "type": "quote",
+                    "symbol": _get_field(data, "symbol", "S"),
+                    "bid_price": _get_field(data, "bid_price", "bp"),
+                    "bid_size": _get_field(data, "bid_size", "bs"),
+                    "ask_price": _get_field(data, "ask_price", "ap"),
+                    "ask_size": _get_field(data, "ask_size", "as"),
+                    "timestamp": _format_timestamp(_get_field(data, "timestamp", "t")),
+                }
+            )
+
+        async def handle_bar(data):
+            if raw_output:
+                message_queue.put({"type": "raw", "payload": _format_raw(data)})
+                return
+            message_queue.put(
+                {
+                    "type": "bar",
+                    "symbol": _get_field(data, "symbol", "S"),
+                    "close": _get_field(data, "close", "c"),
+                    "volume": _get_field(data, "volume", "v"),
+                    "timestamp": _format_timestamp(_get_field(data, "timestamp", "t")),
+                }
+            )
+
+        if stream_type == "trades":
+            stream.subscribe_trades(handle_trade, *symbols)
+        elif stream_type == "quotes":
+            stream.subscribe_quotes(handle_quote, *symbols)
+        else:
+            stream.subscribe_bars(handle_bar, *symbols)
+
+        def _run_stream():
+            try:
+                stream.run()
+            except Exception as exc:
+                message_queue.put({"type": "error", "message": str(exc)})
+            finally:
+                message_queue.put({"type": "status", "message": "stopped"})
+
+        stream_thread = threading.Thread(target=_run_stream, name="alpaca_stream", daemon=True)
+        st.session_state.stream_obj = stream
+        st.session_state.stream_thread = stream_thread
+        st.session_state.stream_running = True
+        stream_thread.start()
+
+    def _stop_stream(self):
+        """Stop Alpaca WebSocket stream."""
+        stream = st.session_state.get("stream_obj")
+        if stream:
+            try:
+                stream.stop()
+            except Exception as exc:
+                st.session_state.stream_error = f"Unable to stop stream: {exc}"
+        st.session_state.stream_running = False
+
+    def _drain_stream_queue(self, max_rows):
+        """Drain stream messages into session state."""
+        message_queue = st.session_state.stream_queue
+        updated = False
+
+        while True:
+            try:
+                item = message_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            item_type = item.get("type")
+            if item_type == "error":
+                st.session_state.stream_error = item.get("message", "Stream error")
+                st.session_state.stream_running = False
+            elif item_type == "status":
+                st.session_state.stream_running = False
+            else:
+                st.session_state.stream_messages.append(item)
+                updated = True
+
+        if updated:
+            max_keep = max_rows * 3
+            if len(st.session_state.stream_messages) > max_keep:
+                st.session_state.stream_messages = st.session_state.stream_messages[-max_keep:]
 
 
     def render_watchlist_tab(self):
