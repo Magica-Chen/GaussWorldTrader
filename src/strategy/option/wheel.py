@@ -24,7 +24,7 @@ import pandas as pd
 from typing import Dict, List, Any, Optional
 import logging
 
-from .base_option_strategy import BaseOptionStrategy
+from src.strategy.base import BaseOptionStrategy, StrategyMeta
 
 
 class WheelStrategy(BaseOptionStrategy):
@@ -34,6 +34,16 @@ class WheelStrategy(BaseOptionStrategy):
     The Wheel Strategy systematically sells cash-secured puts and covered calls
     to generate income while managing stock positions through assignment cycles.
     """
+
+    meta = StrategyMeta(
+        name="wheel",
+        label="Wheel",
+        category="option",
+        description="Options wheel strategy for income-focused trading.",
+        asset_type="option",
+        visible_in_dashboard=False,
+        default_params={},
+    )
 
     def __init__(self, parameters: Dict[str, Any] = None):
         """

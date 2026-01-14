@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Type
 
-from .template import StrategyBase, StrategyMeta
-from .strategies import (
+from .base import StrategyBase, StrategyMeta
+from .option import WheelStrategy
+from .crypto import CryptoMomentumStrategy
+from .stock import (
     MomentumStrategy,
     ValueStrategy,
     TrendFollowingStrategy,
@@ -15,7 +17,6 @@ from .strategies import (
     GaussianProcessStrategy,
     XGBoostStrategy,
     DeepLearningStrategy,
-    WheelStrategy,
 )
 
 
@@ -30,6 +31,7 @@ class StrategyRegistry:
             "gaussian_process": GaussianProcessStrategy,
             "xgboost": XGBoostStrategy,
             "deep_learning": DeepLearningStrategy,
+            "crypto_momentum": CryptoMomentumStrategy,
             "wheel": WheelStrategy,
         }
 

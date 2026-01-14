@@ -1,6 +1,8 @@
-from .template import StrategyBase, StrategyMeta, StrategySignal
+from .base import StrategyBase, StrategyMeta, StrategySignal, BaseOptionStrategy, BaseCryptoStrategy
 from .registry import get_strategy_registry, StrategyRegistry
-from .strategies import (
+from .option import WheelStrategy
+from .crypto import CryptoMomentumStrategy
+from .stock import (
     MomentumStrategy,
     ValueStrategy,
     TrendFollowingStrategy,
@@ -9,15 +11,17 @@ from .strategies import (
     GaussianProcessStrategy,
     XGBoostStrategy,
     DeepLearningStrategy,
-    WheelStrategy,
 )
 
 __all__ = [
     "StrategyBase",
     "StrategyMeta",
     "StrategySignal",
+    "BaseOptionStrategy",
+    "BaseCryptoStrategy",
     "StrategyRegistry",
     "get_strategy_registry",
+    "CryptoMomentumStrategy",
     "MomentumStrategy",
     "ValueStrategy",
     "TrendFollowingStrategy",
