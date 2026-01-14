@@ -161,6 +161,104 @@ def backtest(
         print(f"{key}: {value}")
 
 
+@app.command("stream-market")
+def stream_market(
+    symbols: Optional[List[str]] = typer.Option(
+        None,
+        "--symbols",
+        "-s",
+        help="Symbols to stream (repeatable or space-separated)",
+    ),
+    stream_type: str = typer.Option("trades", help="trades, quotes, or bars"),
+    max_messages: int = typer.Option(0, help="Stop after N messages (0 = unlimited)"),
+    raw: bool = typer.Option(False, help="Print raw stream payloads"),
+) -> None:
+    """Stream live market data from Alpaca (CLI only)."""
+    provider = AlpacaDataProvider()
+    symbols_list = _load_symbols(symbols)
+    if len(symbols_list) > 30:
+        print("Alpaca basic accounts support up to 30 symbols per websocket.")
+        raise typer.Exit(1)
+
+    stream_type = stream_type.strip().lower()
+    if stream_type not in {"trades", "quotes", "bars"}:
+        print("stream-type must be one of: trades, quotes, bars")
+        raise typer.Exit(1)
+
+    stream = provider.create_stock_stream(raw_data=raw)
+    max_messages = max_messages if max_messages > 0 else None
+    message_count = {"count": 0}
+
+    def _get_field(data, attr: str, raw_key: str):
+        if hasattr(data, attr):
+            return getattr(data, attr)
+        if isinstance(data, dict):
+            return data.get(raw_key)
+        return None
+
+    def _maybe_stop() -> None:
+        if max_messages and message_count["count"] >= max_messages:
+            stream.stop()
+
+    async def handle_trade(data) -> None:
+        message_count["count"] += 1
+        if raw:
+            print(data, flush=True)
+        else:
+            symbol = _get_field(data, "symbol", "S")
+            price = _get_field(data, "price", "p")
+            size = _get_field(data, "size", "s")
+            timestamp = _get_field(data, "timestamp", "t")
+            exchange = _get_field(data, "exchange", "x")
+            print(f"{symbol} trade {price} x{size} @ {timestamp} {exchange}", flush=True)
+        _maybe_stop()
+
+    async def handle_quote(data) -> None:
+        message_count["count"] += 1
+        if raw:
+            print(data, flush=True)
+        else:
+            symbol = _get_field(data, "symbol", "S")
+            bid_price = _get_field(data, "bid_price", "bp")
+            bid_size = _get_field(data, "bid_size", "bs")
+            ask_price = _get_field(data, "ask_price", "ap")
+            ask_size = _get_field(data, "ask_size", "as")
+            timestamp = _get_field(data, "timestamp", "t")
+            print(
+                f"{symbol} quote {bid_price}@{bid_size} / {ask_price}@{ask_size} @ {timestamp}",
+                flush=True,
+            )
+        _maybe_stop()
+
+    async def handle_bar(data) -> None:
+        message_count["count"] += 1
+        if raw:
+            print(data, flush=True)
+        else:
+            symbol = _get_field(data, "symbol", "S")
+            close = _get_field(data, "close", "c")
+            volume = _get_field(data, "volume", "v")
+            timestamp = _get_field(data, "timestamp", "t")
+            print(f"{symbol} bar close={close} volume={volume} @ {timestamp}", flush=True)
+        _maybe_stop()
+
+    if stream_type == "trades":
+        stream.subscribe_trades(handle_trade, *symbols_list)
+    elif stream_type == "quotes":
+        stream.subscribe_quotes(handle_quote, *symbols_list)
+    else:
+        stream.subscribe_bars(handle_bar, *symbols_list)
+
+    print(
+        f"Streaming {stream_type} for {', '.join(symbols_list)}. Ctrl+C to stop.",
+        flush=True,
+    )
+    try:
+        stream.run()
+    except KeyboardInterrupt:
+        stream.stop()
+
+
 def main() -> None:
     app()
 

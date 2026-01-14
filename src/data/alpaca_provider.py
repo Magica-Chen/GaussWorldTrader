@@ -30,6 +30,7 @@ try:
         OptionSnapshotRequest,
         OptionChainRequest
     )
+    from alpaca.data.enums import DataFeed
     from alpaca.data.timeframe import TimeFrame
     from alpaca.trading.client import TradingClient
     from alpaca.trading.requests import (
@@ -98,6 +99,21 @@ class AlpacaProvider:
         self.news_client = NewsClient(
             api_key=Config.ALPACA_API_KEY,
             secret_key=Config.ALPACA_SECRET_KEY
+        )
+
+    def create_stock_stream(self, raw_data: bool = False):
+        """Create a real-time stock data stream (quotes/trades/bars)."""
+        if not ALPACA_PY_AVAILABLE:
+            raise ImportError(
+                "alpaca-py is required. Install with: pip install alpaca-py"
+            )
+
+        feed = DataFeed.SIP if self.is_pro_tier else DataFeed.IEX
+        return StockDataStream(
+            api_key=Config.ALPACA_API_KEY,
+            secret_key=Config.ALPACA_SECRET_KEY,
+            feed=feed,
+            raw_data=raw_data
         )
     
     def _check_pro_tier(self) -> bool:
