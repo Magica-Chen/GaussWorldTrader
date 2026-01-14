@@ -8,21 +8,10 @@ import pandas as pd
 
 from src.analysis.technical_analysis import TechnicalAnalysis
 from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
+from src.strategy.utils import latest_price, safe_series
 
 
 ta = TechnicalAnalysis()
-
-
-def _latest_price(data: pd.DataFrame) -> float:
-    if data.empty:
-        return 0.0
-    return float(data["close"].iloc[-1])
-
-
-def _safe_series(series: pd.Series, default: float = 0.0) -> float:
-    if series.empty:
-        return default
-    return float(series.iloc[-1])
 
 
 class ScalpingStrategy(StrategyBase):
@@ -53,8 +42,8 @@ class ScalpingStrategy(StrategyBase):
             if len(data) < period + 1:
                 continue
             ema = ta.ema(data["close"], period)
-            ema_val = _safe_series(ema)
-            price = current_prices.get(symbol, _latest_price(data))
+            ema_val = safe_series(ema)
+            price = current_prices.get(symbol, latest_price(data))
             if ema_val <= 0:
                 continue
             deviation = (price - ema_val) / ema_val

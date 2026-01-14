@@ -7,12 +7,7 @@ from typing import Any, Dict, List
 import pandas as pd
 
 from src.strategy.base import BaseCryptoStrategy, StrategyMeta, StrategySignal
-
-
-def _latest_price(data: pd.DataFrame) -> float:
-    if data.empty:
-        return 0.0
-    return float(data["close"].iloc[-1])
+from src.strategy.utils import latest_price
 
 
 class CryptoMomentumStrategy(BaseCryptoStrategy):
@@ -44,7 +39,7 @@ class CryptoMomentumStrategy(BaseCryptoStrategy):
                 continue
             window = data["close"].iloc[-lookback:]
             returns = (window.iloc[-1] - window.iloc[0]) / window.iloc[0]
-            price = current_prices.get(symbol, _latest_price(data))
+            price = current_prices.get(symbol, latest_price(data))
             portfolio_value = getattr(portfolio, "get_portfolio_value", lambda *_: 100000)(current_prices)
             quantity = self._position_size(price, portfolio_value, risk_pct)
 
