@@ -156,9 +156,9 @@ class OrderManager:
                      limit_price: float = None, stop_price: float = None,
                      trail_price: float = None, trail_percent: float = None) -> Dict[str, Any]:
         """Replace/modify an existing order"""
-        
+
         replace_data = {}
-        
+
         if qty is not None:
             replace_data['qty'] = str(abs(qty))
         if time_in_force:
@@ -171,7 +171,7 @@ class OrderManager:
             replace_data['trail_price'] = str(trail_price)
         if trail_percent is not None:
             replace_data['trail_percent'] = str(trail_percent)
-        
+
         try:
             response = requests.patch(
                 f"{self.account_manager.base_url}/v2/orders/{order_id}",
@@ -180,14 +180,71 @@ class OrderManager:
                 timeout=10
             )
             response.raise_for_status()
-            
+
             order = response.json()
             self.logger.info(f"Order {order_id} replaced")
-            
+
             return order
-            
+
         except Exception as e:
             self.logger.error(f"Error replacing order {order_id}: {e}")
+            return {"error": str(e)}
+
+    def place_bracket_order(
+        self,
+        symbol: str,
+        qty: int,
+        side: str,
+        stop_loss: float,
+        take_profit: float,
+        time_in_force: str = "gtc",
+    ) -> Dict[str, Any]:
+        """Place a bracket order (market entry with stop-loss and take-profit).
+
+        This places a market order with attached OTO (one-triggers-other) orders
+        for stop-loss and take-profit.
+
+        Args:
+            symbol: Trading symbol
+            qty: Quantity to trade
+            side: 'buy' or 'sell'
+            stop_loss: Stop-loss price
+            take_profit: Take-profit price
+            time_in_force: Time in force for the order (default 'gtc')
+
+        Returns:
+            Order response dict or error dict
+        """
+        order_data = {
+            "symbol": symbol,
+            "qty": str(abs(qty)),
+            "side": side.lower(),
+            "type": "market",
+            "time_in_force": time_in_force.lower(),
+            "order_class": "bracket",
+            "stop_loss": {"stop_price": str(stop_loss)},
+            "take_profit": {"limit_price": str(take_profit)},
+        }
+
+        try:
+            response = requests.post(
+                f"{self.account_manager.base_url}/v2/orders",
+                headers=self.account_manager.headers,
+                json=order_data,
+                timeout=10,
+            )
+            response.raise_for_status()
+
+            order = response.json()
+            self.logger.info(
+                f"Bracket order placed: {order.get('id')} for {symbol} "
+                f"(SL: {stop_loss}, TP: {take_profit})"
+            )
+
+            return order
+
+        except Exception as e:
+            self.logger.error(f"Error placing bracket order for {symbol}: {e}")
             return {"error": str(e)}
     
     def analyze_orders(self, days: int = 30) -> Dict[str, Any]:

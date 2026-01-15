@@ -14,6 +14,15 @@ import pandas as pd
 
 
 @dataclass(frozen=True)
+class RiskConfig:
+    """Risk management configuration for strategies."""
+
+    stop_loss_pct: float = 0.03      # 3% stop-loss
+    take_profit_pct: float = 0.06    # 6% take-profit (2:1 risk/reward)
+    position_size_pct: float = 0.10  # 10% of portfolio per trade
+
+
+@dataclass(frozen=True)
 class StrategyMeta:
     """Metadata that describes a strategy."""
 
@@ -36,6 +45,8 @@ class StrategySignal:
     price: Optional[float] = None
     reason: str = ""
     timestamp: Optional[datetime] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -45,6 +56,8 @@ class StrategySignal:
             "price": self.price,
             "reason": self.reason,
             "timestamp": self.timestamp,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
         }
 
 
@@ -61,6 +74,8 @@ class TradingPlanItem:
     asset_type: str = "stock"
     strategy: str = ""
     plan_type: str = "signal"
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -73,6 +88,8 @@ class TradingPlanItem:
             "asset_type": self.asset_type,
             "strategy": self.strategy,
             "plan_type": self.plan_type,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
         }
 
 
@@ -152,9 +169,49 @@ class StrategyBase:
                     asset_type=self.meta.asset_type,
                     strategy=self.meta.name,
                     plan_type="signal",
+                    stop_loss=signal.get("stop_loss"),
+                    take_profit=signal.get("take_profit"),
                 )
             )
         return [item.to_dict() for item in plan]
+
+    def get_risk_config(self) -> RiskConfig:
+        """Get risk configuration from strategy params or defaults."""
+        return RiskConfig(
+            stop_loss_pct=float(self.params.get("stop_loss_pct", 0.03)),
+            take_profit_pct=float(self.params.get("take_profit_pct", 0.06)),
+            position_size_pct=float(self.params.get("risk_pct", 0.10)),
+        )
+
+    def calculate_stop_loss(self, price: float, side: str) -> float:
+        """Calculate stop-loss price based on entry price and side.
+
+        Args:
+            price: Entry price
+            side: 'long' or 'short'
+
+        Returns:
+            Stop-loss price
+        """
+        risk = self.get_risk_config()
+        if side.lower() == "long":
+            return price * (1 - risk.stop_loss_pct)
+        return price * (1 + risk.stop_loss_pct)
+
+    def calculate_take_profit(self, price: float, side: str) -> float:
+        """Calculate take-profit price based on entry price and side.
+
+        Args:
+            price: Entry price
+            side: 'long' or 'short'
+
+        Returns:
+            Take-profit price
+        """
+        risk = self.get_risk_config()
+        if side.lower() == "long":
+            return price * (1 + risk.take_profit_pct)
+        return price * (1 - risk.take_profit_pct)
 
     def log_signal(self, signal: Dict[str, Any]) -> None:
         signal_with_timestamp = {**signal, "timestamp": signal.get("timestamp") or datetime.now()}

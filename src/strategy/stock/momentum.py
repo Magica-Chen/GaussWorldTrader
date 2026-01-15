@@ -1,17 +1,18 @@
-"""Momentum strategy.
+"""Momentum strategy using dual momentum crossover.
 
-Buys when the lookback return exceeds a threshold and sells on weakness.
-Position sizing is based on the configured risk percentage.
+Generates BUY signals when short-term momentum crosses above long-term momentum,
+and SELL signals when short-term momentum crosses below long-term momentum.
+Includes stop-loss and take-profit levels for risk management.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
 from datetime import datetime
+from typing import Any, Dict, List
 
 import pandas as pd
 
 from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
-from src.strategy.utils import latest_price
+from src.strategy.utils import detect_momentum_crossover, latest_price, rate_of_change
 
 
 class MomentumStrategy(StrategyBase):
@@ -19,15 +20,23 @@ class MomentumStrategy(StrategyBase):
         name="momentum",
         label="Momentum",
         category="signal",
-        description="Buys strength and sells weakness using recent returns.",
+        description="Dual momentum crossover strategy with stop-loss and take-profit.",
         asset_type="stock",
-        default_params={"lookback": 20, "threshold": 0.02, "risk_pct": 0.05},
+        default_params={
+            "short_period": 12,
+            "long_period": 26,
+            "threshold": 0.005,
+            "risk_pct": 0.05,
+            "stop_loss_pct": 0.03,
+            "take_profit_pct": 0.06,
+        },
         visible_in_dashboard=True,
     )
     summary = (
-        "Buys strength and sells weakness using recent returns. "
-        "Return = (P_t - P_{t-L}) / P_{t-L}. BUY if return >= threshold, "
-        "SELL if return <= -threshold. Size = portfolio_value * risk_pct / price."
+        "Dual momentum crossover strategy. Calculates short-term (12-period) and "
+        "long-term (26-period) Rate of Change momentum. Generates BUY when short "
+        "momentum crosses above long momentum, SELL when it crosses below. "
+        "Includes stop-loss (3%) and take-profit (6%) for risk management."
     )
 
     def generate_signals(
@@ -39,40 +48,49 @@ class MomentumStrategy(StrategyBase):
         portfolio: Any = None,
     ) -> List[Dict[str, Any]]:
         signals: List[StrategySignal] = []
-        risk_pct = float(self.params["risk_pct"])
-        lookback = int(self.params["lookback"])
+        short_period = int(self.params["short_period"])
+        long_period = int(self.params["long_period"])
         threshold = float(self.params["threshold"])
+        risk_pct = float(self.params["risk_pct"])
 
         for symbol, data in historical_data.items():
-            if len(data) < lookback + 1:
+            min_bars = long_period + 2
+            if len(data) < min_bars:
                 continue
-            window = data["close"].iloc[-lookback:]
-            returns = (window.iloc[-1] - window.iloc[0]) / window.iloc[0]
+
+            prices = data["close"].tolist()
+            short_mom = rate_of_change(prices, short_period)
+            long_mom = rate_of_change(prices, long_period)
+
+            signal_type = detect_momentum_crossover(short_mom, long_mom, threshold)
+            if signal_type == "HOLD":
+                continue
+
             price = current_prices.get(symbol, latest_price(data))
-            portfolio_value = getattr(portfolio, "get_portfolio_value", lambda *_: 100000)(current_prices)
+            portfolio_value = getattr(
+                portfolio, "get_portfolio_value", lambda *_: 100000
+            )(current_prices)
             quantity = self._position_size(price, portfolio_value, risk_pct)
 
-            if returns >= threshold:
-                signals.append(
-                    StrategySignal(
-                        symbol=symbol,
-                        action="BUY",
-                        quantity=quantity,
-                        price=price,
-                        reason=f"{returns:.2%} momentum",
-                        timestamp=current_date,
-                    )
+            side = "long" if signal_type == "BUY" else "short"
+            stop_loss = self.calculate_stop_loss(price, side)
+            take_profit = self.calculate_take_profit(price, side)
+
+            curr_short = short_mom[-1] if short_mom[-1] is not None else 0
+            curr_long = long_mom[-1] if long_mom[-1] is not None else 0
+            reason = f"momentum crossover (short: {curr_short:.2%}, long: {curr_long:.2%})"
+
+            signals.append(
+                StrategySignal(
+                    symbol=symbol,
+                    action=signal_type,
+                    quantity=quantity,
+                    price=price,
+                    reason=reason,
+                    timestamp=current_date,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
                 )
-            elif returns <= -threshold:
-                signals.append(
-                    StrategySignal(
-                        symbol=symbol,
-                        action="SELL",
-                        quantity=quantity,
-                        price=price,
-                        reason=f"{returns:.2%} drawdown",
-                        timestamp=current_date,
-                    )
-                )
+            )
 
         return self._normalize(signals)
