@@ -32,7 +32,7 @@ try:
         OptionChainRequest
     )
     from alpaca.data.enums import DataFeed
-    from alpaca.data.timeframe import TimeFrame
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
     from alpaca.trading.client import TradingClient
     from alpaca.trading.requests import (
         GetAssetsRequest,
@@ -467,15 +467,14 @@ class AlpacaProvider:
         """Convert timeframe string to alpaca-py TimeFrame enum"""
         timeframe_map = {
             '1Min': TimeFrame.Minute,
-            '5Min': TimeFrame(5, 'Minute'),
-            '15Min': TimeFrame(15, 'Minute'),
-            '30Min': TimeFrame(30, 'Minute'),
+            '5Min': TimeFrame(5, TimeFrameUnit.Minute),
+            '15Min': TimeFrame(15, TimeFrameUnit.Minute),
+            '30Min': TimeFrame(30, TimeFrameUnit.Minute),
             '1Hour': TimeFrame.Hour,
             '1Day': TimeFrame.Day,
             '1Week': TimeFrame.Week,
             '1Month': TimeFrame.Month
         }
-        
         return timeframe_map.get(timeframe, TimeFrame.Day)
     
     def _process_bars(self, bars_response, symbol: str, asset_type: str = 'stock') -> pd.DataFrame:

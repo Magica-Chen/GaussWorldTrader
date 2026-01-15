@@ -1,49 +1,26 @@
-#!/usr/bin/env python3
-"""
-Live BTC/USD trading loop using Alpaca streaming data and momentum signals.
-"""
+"""Abstract base for live trading with streaming data and signal orchestration."""
 from __future__ import annotations
 
-import argparse
 import logging
 import threading
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from src.data import AlpacaDataProvider
-from src.strategy.crypto.momentum import CryptoMomentumStrategy
-from src.trade import TradingEngine
 from src.utils.timezone_utils import now_et
 from src.utils.validators import convert_crypto_symbol_for_display
 
-
-def _get_field(data: Any, attr: str, raw_key: str) -> Any:
-    if hasattr(data, attr):
-        return getattr(data, attr)
-    if isinstance(data, dict):
-        return data.get(raw_key)
-    return None
-
-
-def _normalize_crypto_symbol(symbol: str) -> str:
-    symbol = symbol.strip().upper()
-    if "/" in symbol:
-        return symbol
-    if symbol.endswith("USD") and len(symbol) > 3:
-        return f"{symbol[:-3]}/USD"
-    return symbol
-
-
-def _seconds_until_next_hour() -> float:
-    now = datetime.now(timezone.utc)
-    next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
-    return max(1.0, (next_hour - now).total_seconds())
+if TYPE_CHECKING:
+    from src.strategy.base import StrategyBase
+    from .trading_engine import TradingEngine
 
 
 @dataclass
 class PositionState:
+    """Track position state for live trading."""
     qty: float = 0.0
     side: str = "flat"
     entry_price: Optional[float] = None
@@ -51,35 +28,43 @@ class PositionState:
     take_profit: Optional[float] = None
 
 
-class BtcLiveTrader:
+class LiveTradingEngine(ABC):
+    """Abstract base for live trading with streaming data and signal orchestration.
+
+    Provides common functionality for:
+    - Real-time data streaming
+    - Position state tracking
+    - Signal generation cycles
+    - Stop-loss and take-profit monitoring
+    - Order execution with dry-run support
+    """
+
     def __init__(
         self,
         symbol: str,
         timeframe: str,
         lookback_days: int,
-        crypto_loc: str,
         risk_pct: float,
         stop_loss_pct: float,
         take_profit_pct: float,
         execute: bool,
         auto_exit: bool,
     ) -> None:
-        self.symbol = _normalize_crypto_symbol(symbol)
+        self.raw_symbol = symbol
+        self.symbol = self._normalize_symbol(symbol)
         self.timeframe = timeframe
         self.lookback_days = lookback_days
-        self.crypto_loc = crypto_loc
         self.execute = execute
         self.auto_exit = auto_exit
 
         self.provider = AlpacaDataProvider()
-        self.engine = TradingEngine()
-        self.strategy = CryptoMomentumStrategy(
-            params={
-                "risk_pct": risk_pct,
-                "stop_loss_pct": stop_loss_pct,
-                "take_profit_pct": take_profit_pct,
-            }
-        )
+        self.engine = self._get_trading_engine()
+        self.strategy = self._get_strategy()
+        self.strategy.params.update({
+            "risk_pct": risk_pct,
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
+        })
 
         self._lock = threading.Lock()
         self._exit_lock = threading.Lock()
@@ -91,16 +76,51 @@ class BtcLiveTrader:
 
         self._stream = None
         self._stream_thread: Optional[threading.Thread] = None
-        self.logger = logging.getLogger("btc_live_trader")
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @abstractmethod
+    def _normalize_symbol(self, symbol: str) -> str:
+        """Normalize symbol format for the specific asset type."""
+        pass
+
+    @abstractmethod
+    def _get_trading_engine(self) -> "TradingEngine":
+        """Return the appropriate trading engine instance."""
+        pass
+
+    @abstractmethod
+    def _get_strategy(self) -> "StrategyBase":
+        """Return the appropriate strategy instance."""
+        pass
+
+    @abstractmethod
+    def _create_stream(self) -> Any:
+        """Create and return the data stream for this asset type."""
+        pass
+
+    @abstractmethod
+    def _get_signal_interval_seconds(self) -> float:
+        """Return seconds until next signal check."""
+        pass
+
+    @abstractmethod
+    def _subscribe_to_stream(self, handler: Any) -> None:
+        """Subscribe to the appropriate stream data."""
+        pass
+
+    def _get_display_symbol(self) -> str:
+        """Get display-friendly symbol for logging and position matching."""
+        return convert_crypto_symbol_for_display(self.symbol)
 
     def start(self) -> None:
+        """Main entry point - starts streaming and signal loop."""
         self._start_stream()
         self._refresh_position_state()
 
         try:
             while True:
                 self._run_signal_cycle()
-                sleep_seconds = _seconds_until_next_hour()
+                sleep_seconds = self._get_signal_interval_seconds()
                 next_run = datetime.now(timezone.utc) + timedelta(seconds=sleep_seconds)
                 self.logger.info(
                     "Next signal check at %s (sleep %.0fs)",
@@ -113,15 +133,17 @@ class BtcLiveTrader:
         finally:
             self._stop_stream()
 
+    def stop(self) -> None:
+        """Stop the live trading engine."""
+        self._stop_stream()
+
     def _start_stream(self) -> None:
-        try:
-            self._stream = self.provider.create_crypto_stream(raw_data=False, loc=self.crypto_loc)
-        except Exception as exc:
-            raise RuntimeError(f"Unable to start crypto stream: {exc}") from exc
+        """Start the data streaming thread."""
+        self._stream = self._create_stream()
 
         async def handle_trade(data: Any) -> None:
-            price = _get_field(data, "price", "p")
-            timestamp = _get_field(data, "timestamp", "t")
+            price = self._get_field(data, "price", "p")
+            timestamp = self._get_field(data, "timestamp", "t")
             if price is None:
                 return
             with self._lock:
@@ -129,7 +151,7 @@ class BtcLiveTrader:
                 self._latest_timestamp = timestamp if isinstance(timestamp, datetime) else None
             self._monitor_position(float(price))
 
-        self._stream.subscribe_trades(handle_trade, self.symbol)
+        self._subscribe_to_stream(handle_trade)
 
         def _run_stream() -> None:
             try:
@@ -137,11 +159,14 @@ class BtcLiveTrader:
             except Exception as exc:
                 self.logger.error("Stream stopped: %s", exc)
 
-        self._stream_thread = threading.Thread(target=_run_stream, name="btc_stream", daemon=True)
+        self._stream_thread = threading.Thread(
+            target=_run_stream, name=f"{self.__class__.__name__}_stream", daemon=True
+        )
         self._stream_thread.start()
-        self.logger.info("Streaming BTC trades from feed %s", self.crypto_loc)
+        self.logger.info("Streaming started for %s", self.symbol)
 
     def _stop_stream(self) -> None:
+        """Stop the data streaming thread."""
         if self._stream:
             try:
                 self._stream.stop()
@@ -151,8 +176,9 @@ class BtcLiveTrader:
             self._stream_thread.join(timeout=5)
 
     def _refresh_position_state(self) -> None:
+        """Refresh position state from the trading engine."""
         positions = self.engine.get_current_positions()
-        display_symbol = convert_crypto_symbol_for_display(self.symbol)
+        display_symbol = self._get_display_symbol()
         match = next((pos for pos in positions if pos.get("symbol") == display_symbol), None)
 
         with self._lock:
@@ -182,6 +208,7 @@ class BtcLiveTrader:
             )
 
     def _run_signal_cycle(self) -> None:
+        """Run one signal generation and execution cycle."""
         self._refresh_position_state()
         signal = self._get_latest_signal()
         if not signal:
@@ -203,6 +230,7 @@ class BtcLiveTrader:
             self._close_position("signal_sell")
 
     def _get_latest_signal(self) -> Optional[Dict[str, Any]]:
+        """Generate the latest signal from the strategy."""
         start_date = now_et() - timedelta(days=self.lookback_days)
         bars = self.provider.get_bars(self.symbol, self.timeframe, start_date)
         if bars.empty:
@@ -219,7 +247,9 @@ class BtcLiveTrader:
         }
 
         account_info = self.engine.get_account_info()
-        portfolio_value = float(account_info.get("portfolio_value") or account_info.get("equity") or 100000)
+        portfolio_value = float(
+            account_info.get("portfolio_value") or account_info.get("equity") or 100000
+        )
 
         class _PortfolioProxy:
             def __init__(self, value: float) -> None:
@@ -238,6 +268,7 @@ class BtcLiveTrader:
         return signals[0] if signals else None
 
     def _place_order(self, side: str, signal: Dict[str, Any]) -> None:
+        """Place an order based on a signal."""
         qty = float(signal.get("quantity", 0.0))
         if qty <= 0:
             self.logger.info("Signal quantity is zero; skipping order.")
@@ -256,6 +287,7 @@ class BtcLiveTrader:
         self.logger.info("Order placed: %s %s %s", side, qty, self.symbol)
 
     def _close_position(self, reason: str) -> None:
+        """Close the current position."""
         if not self.execute:
             self.logger.info("DRY RUN: would close position (%s)", reason)
             return
@@ -267,7 +299,7 @@ class BtcLiveTrader:
 
         def _do_close() -> None:
             try:
-                self.engine.close_position(self.symbol)
+                self.engine.close_position(self._get_display_symbol())
                 self.logger.info("Closed position: %s", reason)
             except Exception as exc:
                 self.logger.error("Failed to close position: %s", exc)
@@ -276,9 +308,12 @@ class BtcLiveTrader:
                     self._exit_in_progress = False
                 self._refresh_position_state()
 
-        threading.Thread(target=_do_close, name="btc_close_position", daemon=True).start()
+        threading.Thread(
+            target=_do_close, name=f"{self.__class__.__name__}_close", daemon=True
+        ).start()
 
     def _monitor_position(self, price: float) -> None:
+        """Monitor position for stop-loss and take-profit exits."""
         with self._lock:
             position = self.position
             if position.side == "flat" or not position.entry_price or position.qty == 0:
@@ -321,51 +356,11 @@ class BtcLiveTrader:
                 elif position.take_profit and price <= position.take_profit:
                     self._close_position("take_profit")
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Live BTC/USD trading script.")
-    parser.add_argument("--symbol", default="BTC/USD", help="Crypto pair to trade.")
-    parser.add_argument("--timeframe", default="1Hour", help="Bar timeframe for signals.")
-    parser.add_argument("--lookback-days", type=int, default=14, help="Historical lookback.")
-    parser.add_argument("--crypto-loc", default="eu-1", help="Crypto stream feed: us, us-1, eu-1.")
-    parser.add_argument("--risk-pct", type=float, default=0.10, help="Portfolio risk per trade.")
-    parser.add_argument("--stop-loss-pct", type=float, default=0.03, help="Stop-loss percent.")
-    parser.add_argument("--take-profit-pct", type=float, default=0.06, help="Take-profit percent.")
-    parser.add_argument(
-        "--execute",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Execute live trades (use --no-execute for dry run).",
-    )
-    parser.add_argument(
-        "--auto-exit",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Auto-close on stop/take (use --no-auto-exit to only monitor).",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
-    )
-    args = parse_args()
-    trader = BtcLiveTrader(
-        symbol=args.symbol,
-        timeframe=args.timeframe,
-        lookback_days=args.lookback_days,
-        crypto_loc=args.crypto_loc,
-        risk_pct=args.risk_pct,
-        stop_loss_pct=args.stop_loss_pct,
-        take_profit_pct=args.take_profit_pct,
-        execute=args.execute,
-        auto_exit=args.auto_exit,
-    )
-    trader.logger.info("Live trading %s (execute=%s, auto_exit=%s)", trader.symbol, args.execute, args.auto_exit)
-    trader.start()
-
-
-if __name__ == "__main__":
-    main()
+    @staticmethod
+    def _get_field(data: Any, attr: str, raw_key: str) -> Any:
+        """Extract field from data object or dict."""
+        if hasattr(data, attr):
+            return getattr(data, attr)
+        if isinstance(data, dict):
+            return data.get(raw_key)
+        return None
