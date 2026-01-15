@@ -76,6 +76,7 @@ class LiveTradingEngine(ABC):
 
         self._stream = None
         self._stream_thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @abstractmethod
@@ -103,6 +104,14 @@ class LiveTradingEngine(ABC):
         """Return seconds until next signal check."""
         pass
 
+    def is_market_open(self) -> bool:
+        """Return True if the market is open for this asset type."""
+        return True
+
+    def seconds_until_market_open(self) -> float:
+        """Return seconds until the market opens for this asset type."""
+        return 0.0
+
     def _timeframe_to_seconds(self) -> int:
         """Convert timeframe string to seconds."""
         mapping = {
@@ -126,8 +135,8 @@ class LiveTradingEngine(ABC):
         return max(1.0, next_boundary - epoch)
 
     @abstractmethod
-    def _subscribe_to_stream(self, handler: Any) -> None:
-        """Subscribe to the appropriate stream data."""
+    def _subscribe_to_stream(self, handler: Any, symbol: str) -> None:
+        """Subscribe to the appropriate stream data for a symbol."""
         pass
 
     def _get_display_symbol(self) -> str:
@@ -137,43 +146,36 @@ class LiveTradingEngine(ABC):
     def start(self) -> None:
         """Main entry point - starts streaming and signal loop."""
         self._start_stream()
-        self._refresh_position_state()
-
         try:
-            while True:
-                self._run_signal_cycle()
-                sleep_seconds = self._get_signal_interval_seconds()
-                next_run = datetime.now(timezone.utc) + timedelta(seconds=sleep_seconds)
-                self.logger.info(
-                    "Next signal check at %s (sleep %.0fs)",
-                    next_run.isoformat(timespec="seconds"),
-                    sleep_seconds,
-                )
-                time.sleep(sleep_seconds)
-        except KeyboardInterrupt:
-            self.logger.info("Stopping live trader.")
+            self.run_signal_loop()
         finally:
             self._stop_stream()
 
+    def run_signal_loop(self) -> None:
+        """Run the signal loop without starting a stream."""
+        self._stop_event.clear()
+        self._refresh_position_state()
+
+        while not self._stop_event.is_set():
+            self._run_signal_cycle()
+            sleep_seconds = self._get_signal_interval_seconds()
+            next_run = datetime.now(timezone.utc) + timedelta(seconds=sleep_seconds)
+            self.logger.info(
+                "Next signal check at %s (sleep %.0fs)",
+                next_run.isoformat(timespec="seconds"),
+                sleep_seconds,
+            )
+            self._stop_event.wait(timeout=sleep_seconds)
+
     def stop(self) -> None:
         """Stop the live trading engine."""
+        self._stop_event.set()
         self._stop_stream()
 
     def _start_stream(self) -> None:
         """Start the data streaming thread."""
         self._stream = self._create_stream()
-
-        async def handle_trade(data: Any) -> None:
-            price = self._get_field(data, "price", "p")
-            timestamp = self._get_field(data, "timestamp", "t")
-            if price is None:
-                return
-            with self._lock:
-                self._latest_price = float(price)
-                self._latest_timestamp = timestamp if isinstance(timestamp, datetime) else None
-            self._monitor_position(float(price))
-
-        self._subscribe_to_stream(handle_trade)
+        self._subscribe_to_stream(self.handle_trade, self.symbol)
 
         def _run_stream() -> None:
             try:
@@ -386,3 +388,18 @@ class LiveTradingEngine(ABC):
         if isinstance(data, dict):
             return data.get(raw_key)
         return None
+
+    async def handle_trade(self, data: Any) -> None:
+        """Handle a trade update from the stream."""
+        price = self._get_field(data, "price", "p")
+        timestamp = self._get_field(data, "timestamp", "t")
+        if price is None:
+            return
+        self._handle_trade_update(float(price), timestamp)
+
+    def _handle_trade_update(self, price: float, timestamp: Any) -> None:
+        """Update latest price and monitor position for a trade."""
+        with self._lock:
+            self._latest_price = price
+            self._latest_timestamp = timestamp if isinstance(timestamp, datetime) else None
+        self._monitor_position(price)

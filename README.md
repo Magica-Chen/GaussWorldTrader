@@ -63,7 +63,28 @@ python main_cli.py list-strategies              # List all available strategies
 python main_cli.py run-strategy momentum AAPL MSFT --days 90
 python main_cli.py backtest momentum AAPL --days 365
 python main_cli.py account-info                 # View account details
+python main_cli.py stream-market --asset-type crypto --crypto-loc eu-1 --symbols BTC/USD,ETH/USD
 ```
+
+---
+
+## 🛰️ Live Trading Scripts
+
+```bash
+# Crypto (multi-symbol)
+python crypto_script.py --symbols BTC/USD,ETH/USD --timeframe 5Min --no-execute
+
+# Stocks (multi-symbol)
+python stock_script.py --symbols AAPL,MSFT --timeframe 15Min --no-execute
+
+# Options (multi-underlying)
+python option_script.py --symbols AAPL,MSFT --timeframe 1Day --no-execute
+```
+
+Notes:
+- Multi-symbol runs share a single websocket per asset type to stay within Alpaca connection limits.
+- For crypto, all symbols in one run must use the same `--crypto-loc` feed.
+- Stock and option scripts exit early if the market is closed (they log time-to-open).
 
 ---
 

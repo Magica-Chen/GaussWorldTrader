@@ -72,9 +72,9 @@ class LiveTradingStock(LiveTradingEngine):
         """Create stock data stream."""
         return self.provider.create_stock_stream(raw_data=False)
 
-    def _subscribe_to_stream(self, handler: Any) -> None:
+    def _subscribe_to_stream(self, handler: Any, symbol: str) -> None:
         """Subscribe to stock trade stream."""
-        self._stream.subscribe_trades(handler, self.symbol)
+        self._stream.subscribe_trades(handler, symbol)
 
     def _get_signal_interval_seconds(self) -> float:
         """Return seconds until next signal check, respecting market hours."""
@@ -93,6 +93,14 @@ class LiveTradingStock(LiveTradingEngine):
             return self._seconds_until_market_open()
 
         return interval_secs
+
+    def is_market_open(self) -> bool:
+        """Expose market open status for scripts."""
+        return self._is_market_open()
+
+    def seconds_until_market_open(self) -> float:
+        """Expose seconds until next market open for scripts."""
+        return self._seconds_until_market_open()
 
     def _is_market_open(self) -> bool:
         """Check if market is currently open."""

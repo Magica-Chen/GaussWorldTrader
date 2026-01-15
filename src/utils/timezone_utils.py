@@ -57,3 +57,11 @@ def to_et(dt: datetime) -> datetime:
         return EASTERN.localize(dt)
     else:
         return dt.astimezone(EASTERN)
+
+
+def format_duration(seconds: float) -> str:
+    """Format seconds as Hh Mm Ss."""
+    total = int(max(0, round(seconds)))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours}h {minutes}m {secs}s"

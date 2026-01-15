@@ -64,9 +64,9 @@ class LiveTradingCrypto(LiveTradingEngine):
         """Create crypto data stream."""
         return self.provider.create_crypto_stream(raw_data=False, loc=self.crypto_loc)
 
-    def _subscribe_to_stream(self, handler: Any) -> None:
+    def _subscribe_to_stream(self, handler: Any, symbol: str) -> None:
         """Subscribe to crypto trade stream."""
-        self._stream.subscribe_trades(handler, self.symbol)
+        self._stream.subscribe_trades(handler, symbol)
 
     def _get_signal_interval_seconds(self) -> float:
         """Crypto trades 24/7, check at timeframe intervals."""
