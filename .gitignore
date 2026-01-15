@@ -7,3 +7,4 @@ __pycache__/
 .env.local
 .env.*.local
 results/
+tests/
