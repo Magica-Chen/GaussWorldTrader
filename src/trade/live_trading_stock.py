@@ -21,7 +21,7 @@ class LiveTradingStock(LiveTradingEngine):
     Features:
     - Market hours awareness (9:30 AM - 4:00 PM ET)
     - Extended hours support (optional)
-    - Fractional shares support (optional)
+    - Signal cycles based on timeframe
     - PDT rules consideration
     """
 
@@ -81,20 +81,18 @@ class LiveTradingStock(LiveTradingEngine):
         if not self._is_market_open():
             return self._seconds_until_market_open()
 
+        interval_secs = self._seconds_until_next_interval()
         now = datetime.now(EASTERN)
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-
-        close_time = (
-            self.EXTENDED_CLOSE if self.extended_hours else self.MARKET_CLOSE
-        )
+        close_time = self.EXTENDED_CLOSE if self.extended_hours else self.MARKET_CLOSE
         today_close = now.replace(
             hour=close_time.hour, minute=close_time.minute, second=0, microsecond=0
         )
+        secs_to_close = max(0.0, (today_close - now).total_seconds())
 
-        if next_hour.time() > close_time:
+        if interval_secs > secs_to_close:
             return self._seconds_until_market_open()
 
-        return max(1.0, (next_hour - now).total_seconds())
+        return interval_secs
 
     def _is_market_open(self) -> bool:
         """Check if market is currently open."""

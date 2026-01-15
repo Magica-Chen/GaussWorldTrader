@@ -1,7 +1,6 @@
 """Live crypto trading with 24/7 streaming."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.strategy.crypto.momentum import CryptoMomentumStrategy
@@ -15,7 +14,7 @@ class LiveTradingCrypto(LiveTradingEngine):
 
     Features:
     - 24/7 trading availability
-    - Hourly signal cycles
+    - Signal cycles based on timeframe
     - Real-time trade streaming
     - No short selling support
     """
@@ -70,7 +69,5 @@ class LiveTradingCrypto(LiveTradingEngine):
         self._stream.subscribe_trades(handler, self.symbol)
 
     def _get_signal_interval_seconds(self) -> float:
-        """Crypto trades 24/7, check every hour on the hour."""
-        now = datetime.now(timezone.utc)
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        return max(1.0, (next_hour - now).total_seconds())
+        """Crypto trades 24/7, check at timeframe intervals."""
+        return self._seconds_until_next_interval()

@@ -103,6 +103,28 @@ class LiveTradingEngine(ABC):
         """Return seconds until next signal check."""
         pass
 
+    def _timeframe_to_seconds(self) -> int:
+        """Convert timeframe string to seconds."""
+        mapping = {
+            "1Min": 60,
+            "5Min": 300,
+            "15Min": 900,
+            "30Min": 1800,
+            "1Hour": 3600,
+            "1Day": 86400,
+            "1Week": 604800,
+            "1Month": 2592000,
+        }
+        return mapping.get(self.timeframe, 3600)
+
+    def _seconds_until_next_interval(self) -> float:
+        """Calculate seconds until next timeframe boundary."""
+        interval = self._timeframe_to_seconds()
+        now = datetime.now(timezone.utc)
+        epoch = now.timestamp()
+        next_boundary = ((int(epoch) // interval) + 1) * interval
+        return max(1.0, next_boundary - epoch)
+
     @abstractmethod
     def _subscribe_to_stream(self, handler: Any) -> None:
         """Subscribe to the appropriate stream data."""

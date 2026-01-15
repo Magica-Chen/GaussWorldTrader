@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pytz
 
@@ -74,20 +74,22 @@ class LiveTradingOption(LiveTradingEngine):
         self._stream.subscribe_trades(handler, self.underlying_symbol)
 
     def _get_signal_interval_seconds(self) -> float:
-        """Options check daily during market hours."""
+        """Return seconds until next signal check, respecting market hours."""
         if not self._is_market_open():
             return self._seconds_until_market_open()
 
+        interval_secs = self._seconds_until_next_interval()
         now = datetime.now(EASTERN)
-
         today_close = now.replace(
             hour=self.MARKET_CLOSE.hour, minute=self.MARKET_CLOSE.minute,
             second=0, microsecond=0
         )
-        if now >= today_close:
+        secs_to_close = max(0.0, (today_close - now).total_seconds())
+
+        if interval_secs > secs_to_close:
             return self._seconds_until_market_open()
 
-        return max(1.0, (today_close - now).total_seconds())
+        return interval_secs
 
     def _is_market_open(self) -> bool:
         """Check if market is currently open."""
