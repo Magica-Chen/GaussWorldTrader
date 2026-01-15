@@ -26,7 +26,7 @@ class TradingEngine:
         else:
             self.logger.warning("Trading engine initialized in LIVE TRADING mode")
     
-    def place_market_order(self, symbol: str, qty: int, side: str = 'buy', 
+    def place_market_order(self, symbol: str, qty: float, side: str = 'buy', 
                           time_in_force: str = 'gtc') -> Dict[str, Any]:
         try:
             order_request = MarketOrderRequest(
@@ -57,7 +57,7 @@ class TradingEngine:
             self.logger.error(f"Failed to place market order: {e}")
             raise
     
-    def place_limit_order(self, symbol: str, qty: int, limit_price: float, 
+    def place_limit_order(self, symbol: str, qty: float, limit_price: float, 
                          side: str = 'buy', time_in_force: str = 'gtc') -> Dict[str, Any]:
         try:
             order_request = LimitOrderRequest(
@@ -90,7 +90,7 @@ class TradingEngine:
             self.logger.error(f"Failed to place limit order: {e}")
             raise
     
-    def place_stop_loss_order(self, symbol: str, qty: int, stop_price: float,
+    def place_stop_loss_order(self, symbol: str, qty: float, stop_price: float,
                              side: str = 'sell', time_in_force: str = 'gtc') -> Dict[str, Any]:
         try:
             order_request = StopOrderRequest(
@@ -212,7 +212,7 @@ class TradingEngine:
             if not position:
                 raise ValueError(f"No position found for symbol {symbol}")
             
-            qty_to_close = int(abs(float(position['qty'])) * percentage)
+            qty_to_close = abs(float(position['qty'])) * percentage
             side = 'sell' if float(position['qty']) > 0 else 'buy'
             
             return self.place_market_order(symbol, qty_to_close, side)

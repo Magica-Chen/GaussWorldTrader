@@ -41,7 +41,7 @@ class StrategySignal:
 
     symbol: str
     action: str  # BUY or SELL
-    quantity: int
+    quantity: float
     price: Optional[float] = None
     reason: str = ""
     timestamp: Optional[datetime] = None
@@ -67,7 +67,7 @@ class TradingPlanItem:
 
     symbol: str
     action: str
-    quantity: int
+    quantity: float
     price: Optional[float] = None
     reason: str = ""
     timestamp: Optional[datetime] = None
@@ -145,10 +145,10 @@ class StrategyBase:
     def supports_dashboard(self) -> bool:
         return self.meta.visible_in_dashboard
 
-    def _position_size(self, price: float, portfolio_value: float, risk_pct: float) -> int:
+    def _position_size(self, price: float, portfolio_value: float, risk_pct: float) -> float:
         if price <= 0 or portfolio_value <= 0:
-            return 0
-        return max(1, int((portfolio_value * risk_pct) / price))
+            return 0.0
+        return float(max(1, int((portfolio_value * risk_pct) / price)))
 
     def _normalize(self, signals: Iterable[StrategySignal]) -> List[Dict[str, Any]]:
         return [signal.to_dict() for signal in signals]
@@ -158,11 +158,13 @@ class StrategyBase:
     ) -> List[Dict[str, Any]]:
         plan: List[TradingPlanItem] = []
         for signal in signals:
+            quantity = signal.get("quantity", 0)
+            quantity_value = float(quantity) if quantity is not None else 0.0
             plan.append(
                 TradingPlanItem(
                     symbol=signal.get("symbol", ""),
                     action=signal.get("action", ""),
-                    quantity=int(signal.get("quantity", 0)),
+                    quantity=quantity_value,
                     price=signal.get("price"),
                     reason=signal.get("reason", ""),
                     timestamp=signal.get("timestamp") or timestamp,
@@ -248,6 +250,17 @@ class BaseCryptoStrategy(StrategyBase):
         visible_in_dashboard=False,
         default_params={},
     )
+
+    def _position_size(self, price: float, portfolio_value: float, risk_pct: float) -> float:
+        if price <= 0 or portfolio_value <= 0:
+            return 0.0
+        quantity = (portfolio_value * risk_pct) / price
+        precision = int(self.params.get("qty_precision", 6))
+        min_qty = float(self.params.get("min_qty", 0.0))
+        quantity = round(quantity, precision)
+        if min_qty > 0 and quantity < min_qty:
+            return 0.0
+        return quantity
 
 
 class BaseOptionStrategy(StrategyBase, ABC):

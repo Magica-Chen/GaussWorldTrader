@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Simple stock momentum example using the current strategy framework.
+Crypto momentum strategy example using the current strategy framework.
 
-Workflow:
-- Validate Alpaca credentials
-- Fetch recent daily bars for a stock
-- Generate signals and a trading plan
+Strategy logic:
+- Short momentum (ROC) = (close - close_n) / close_n
+- Long momentum (ROC) = (close - close_n) / close_n
+- BUY when short momentum crosses above long momentum by the threshold
+- SELL when short momentum crosses below long momentum by the threshold
 """
 
 import os
@@ -20,7 +21,7 @@ sys.path.insert(0, ROOT_DIR)
 
 from config import Config
 from src.data import AlpacaDataProvider
-from src.strategy import MomentumStrategy
+from src.strategy import CryptoMomentumStrategy
 from src.trade import Portfolio
 from src.utils.timezone_utils import now_et
 
@@ -63,12 +64,12 @@ def main() -> int:
         print("Set ALPACA_API_KEY and ALPACA_SECRET_KEY in your environment or .env.")
         return 1
 
-    symbol = sys.argv[1] if len(sys.argv) > 1 else "AAPL"
-    timeframe = "1Day"
-    lookback_days = 120
+    symbol = "BTC/USD"
+    timeframe = "1Hour"
+    lookback_days = 7
 
     provider = AlpacaDataProvider()
-    strategy = MomentumStrategy()
+    strategy = CryptoMomentumStrategy()
     portfolio = Portfolio()
 
     current_prices, current_data, historical_data = build_market_snapshot(

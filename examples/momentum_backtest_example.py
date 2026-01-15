@@ -7,14 +7,17 @@ Author: Magica Chen
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
 
 from datetime import datetime, timedelta
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
-from src.data.alpaca_provider import AlpacaDataProvider
+from config import Config
+from src.data import AlpacaDataProvider
 from src.trade.backtester import Backtester
 from src.strategy import MomentumStrategy
 
@@ -257,6 +260,11 @@ def generate_transaction_log(results, symbols):
 
 def momentum_backtest_example():
     """Gauss World Trader - Example of running a momentum strategy backtest"""
+
+    if not Config.validate_alpaca_config():
+        print("Missing Alpaca credentials.")
+        print("Set ALPACA_API_KEY and ALPACA_SECRET_KEY in your environment or .env.")
+        return
     
     # Initialize components
     try:

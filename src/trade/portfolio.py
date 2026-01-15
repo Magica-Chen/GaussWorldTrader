@@ -11,7 +11,7 @@ class Portfolio:
         self.transactions: List[Dict[str, Any]] = []
         self.performance_history: List[Dict[str, Any]] = []
         
-    def add_position(self, symbol: str, quantity: int, price: float, 
+    def add_position(self, symbol: str, quantity: float, price: float, 
                     timestamp: Optional[datetime] = None):
         if timestamp is None:
             timestamp = datetime.now()
@@ -52,7 +52,7 @@ class Portfolio:
             'type': 'BUY' if quantity > 0 else 'SELL'
         })
     
-    def remove_position(self, symbol: str, quantity: int, price: float,
+    def remove_position(self, symbol: str, quantity: float, price: float,
                        timestamp: Optional[datetime] = None):
         if symbol not in self.positions:
             raise ValueError(f"No position found for symbol {symbol}")
@@ -126,25 +126,31 @@ class Portfolio:
     
     def get_realized_pnl(self) -> float:
         realized_pnl = 0.0
-        position_costs = {}
-        
+        position_lots: Dict[str, List[Dict[str, float]]] = {}
+
         for transaction in self.transactions:
             symbol = transaction['symbol']
-            quantity = transaction['quantity']
-            price = transaction['price']
-            
-            if symbol not in position_costs:
-                position_costs[symbol] = []
-            
+            quantity = float(transaction['quantity'])
+            price = float(transaction['price'])
+
+            lots = position_lots.setdefault(symbol, [])
+
             if quantity > 0:
-                position_costs[symbol].extend([price] * quantity)
-            else:
-                quantity = abs(quantity)
-                if len(position_costs[symbol]) >= quantity:
-                    sold_costs = position_costs[symbol][:quantity]
-                    position_costs[symbol] = position_costs[symbol][quantity:]
-                    realized_pnl += sum((price - cost) for cost in sold_costs)
-        
+                lots.append({"qty": quantity, "price": price})
+                continue
+
+            sell_qty = abs(quantity)
+            while sell_qty > 0 and lots:
+                lot = lots[0]
+                lot_qty = lot["qty"]
+                take_qty = min(lot_qty, sell_qty)
+                realized_pnl += take_qty * (price - lot["price"])
+                lot["qty"] = lot_qty - take_qty
+                sell_qty -= take_qty
+
+                if lot["qty"] <= 0:
+                    lots.pop(0)
+
         return realized_pnl
     
     def get_performance_metrics(self, current_prices: Optional[Dict[str, float]] = None) -> Dict[str, float]:

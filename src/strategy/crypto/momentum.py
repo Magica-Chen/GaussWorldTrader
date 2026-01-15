@@ -29,6 +29,8 @@ class CryptoMomentumStrategy(BaseCryptoStrategy):
             "risk_pct": 0.10,
             "stop_loss_pct": 0.03,
             "take_profit_pct": 0.06,
+            "qty_precision": 6,
+            "min_qty": 0.000001,
         },
         visible_in_dashboard=True,
     )
@@ -71,6 +73,8 @@ class CryptoMomentumStrategy(BaseCryptoStrategy):
                 portfolio, "get_portfolio_value", lambda *_: 100000
             )(current_prices)
             quantity = self._position_size(price, portfolio_value, risk_pct)
+            if quantity <= 0:
+                continue
 
             side = "long" if signal_type == "BUY" else "short"
             stop_loss = self.calculate_stop_loss(price, side)

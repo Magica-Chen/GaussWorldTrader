@@ -6,9 +6,8 @@ This directory contains example scripts demonstrating various features of Gauss 
 
 ### 1. `simple_example.py`
 Basic usage example showing:
-- Simple trading strategy implementation
-- Market data fetching
-- Basic backtesting
+- Stock momentum signal generation
+- Trading plan output
 
 ### 2. `momentum_backtest_example.py`
 Momentum strategy backtesting example showing:
@@ -16,17 +15,16 @@ Momentum strategy backtesting example showing:
 - Chart generation and visualization
 - CSV transaction export
 
-### 3. `advanced_strategies_example.py`
-Comprehensive strategy demonstration showing:
-- All available trading strategies
-- Strategy comparison and selection
-- Performance metrics analysis
+### 3. `crypto_momentum_example.py`
+Crypto momentum strategy example showing:
+- BTC/USD data fetch with Alpaca
+- Strategy signal generation
+- Trading plan output
 
-### 4. `run_backtest_example.py`
-Command-line backtesting example showing:
-- CLI-based backtesting
-- Multiple symbol analysis
-- Results visualization
+### 4. `wheel_strategy_example.py`
+Wheel options strategy example showing:
+- Live options chain usage (Alpaca entitlement required)
+- Cash-secured put/covered call signals
 
 ## Running Examples
 
@@ -39,11 +37,11 @@ python examples/simple_example.py
 # Momentum strategy backtest
 python examples/momentum_backtest_example.py
 
-# Advanced strategies demonstration
-python examples/advanced_strategies_example.py
+# Crypto momentum example (requires Alpaca API keys)
+python examples/crypto_momentum_example.py
 
-# CLI backtest example
-python examples/run_backtest_example.py
+# Wheel options example (requires Alpaca option data access)
+python examples/wheel_strategy_example.py
 ```
 
 ## Requirements
@@ -55,4 +53,4 @@ All examples require the same dependencies as the main application. Ensure you h
 
 ## Example Data
 
-Examples use real market data when API credentials are available, or demonstrate with sample data otherwise.
+Examples use live market data. If required credentials or data entitlements are missing, the script exits with a brief message.
