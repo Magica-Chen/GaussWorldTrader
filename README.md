@@ -67,24 +67,22 @@ python main_cli.py stream-market --asset-type crypto --crypto-loc eu-1 --symbols
 
 ---
 
-## 🛰️ Live Trading Scripts
+## 🛰️ Live Trading
 
 ```bash
-# Crypto (multi-symbol)
-python crypto_script.py --symbols BTC/USD,ETH/USD --timeframe 5Min --no-execute
-
-# Stocks (multi-symbol)
-python stock_script.py --symbols AAPL,MSFT --timeframe 15Min --no-execute
-
-# Options (multi-underlying)
-python option_script.py --symbols AAPL,MSFT --timeframe 1Day --no-execute
+# Launch unified interactive CLI
+python live_script.py
 ```
+
+The unified CLI provides:
+- **Quick Start** — Trade all asset types with watchlist defaults
+- **Custom Configuration** — Select asset types, symbols, and parameters interactively
 
 Notes:
 - Multi-symbol runs share a single websocket per asset type to stay within Alpaca connection limits.
-- For crypto, all symbols in one run must use the same `--crypto-loc` feed.
-- Stock and option scripts exit early if the market is closed (they log time-to-open).
-- If no `--symbols`/`--symbol` is provided, live scripts default to watchlist symbols + current positions for that asset type.
+- Due to Alpaca connection limits, multiple asset types run sequentially (press Ctrl+C to advance).
+- Stock and option engines check market hours before trading.
+- Defaults are pulled from `watchlist.json` + current positions for each asset type.
 
 ---
 
@@ -107,9 +105,11 @@ Notes:
 GaussWorldTrader/
 ├── 📄 main_cli.py          # CLI entry point
 ├── 📄 dashboard.py         # Streamlit dashboard entry
+├── 📄 live_script.py       # Unified live trading CLI
 ├── 📄 watchlist.json       # Watchlist entries with asset_type
 ├── 📁 src/
 │   ├── 📁 strategy/        # Trading strategies & templates
+│   ├── 📁 script/          # Live trading modules (stock, crypto, option)
 │   ├── 📁 ui/              # Dashboard components
 │   ├── 📁 trade/           # Trading engine & backtester
 │   ├── 📁 data/            # Market data providers

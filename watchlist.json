@@ -3,13 +3,6 @@
     {"symbol": "RGTI", "asset_type": "stock"},
     {"symbol": "AFRM", "asset_type": "stock"},
     {"symbol": "UPST", "asset_type": "stock"},
-    {"symbol": "OPFI", "asset_type": "stock"},
-    {"symbol": "ETOR", "asset_type": "stock"},
-    {"symbol": "MARA", "asset_type": "stock"},
-    {"symbol": "CRCL", "asset_type": "stock"},
-    {"symbol": "QUBT", "asset_type": "stock"},
-    {"symbol": "GME", "asset_type": "stock"},
-    {"symbol": "BMNR", "asset_type": "stock"},
     {"symbol": "DFDV", "asset_type": "stock"},
     {"symbol": "BTC/USD", "asset_type": "crypto"},
     {"symbol": "ETH/USD", "asset_type": "crypto"}
