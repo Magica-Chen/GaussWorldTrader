@@ -8,3 +8,5 @@ __pycache__/
 .env.*.local
 results/
 tests/
+AGENTS.md
+CLAUDE.md
