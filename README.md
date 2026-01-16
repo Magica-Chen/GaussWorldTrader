@@ -55,6 +55,8 @@ python main_cli.py list-strategies
 | **CLI** | `python main_cli.py` | Command-line interface for scripting and automation |
 | **Dashboard** | `python dashboard.py` | Interactive Streamlit web interface at `http://localhost:3721` |
 
+ ![Trading Dashboard](/src/pic/screenshot2.png)
+
 ### CLI Examples
 
 ```bash
@@ -73,6 +75,7 @@ python main_cli.py stream-market --asset-type crypto --crypto-loc eu-1 --symbols
 # Launch unified interactive CLI
 python live_script.py
 ```
+ ![live Trading CLI](/src/pic/screenshot1.png)
 
 The unified CLI provides:
 - **Quick Start** — Trade all asset types with watchlist defaults
