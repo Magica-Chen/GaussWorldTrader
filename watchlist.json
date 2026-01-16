@@ -1,9 +1,9 @@
 {
   "watchlist": [
-    {"symbol": "RGTI", "asset_type": "stock"},
-    {"symbol": "AFRM", "asset_type": "stock"},
-    {"symbol": "UPST", "asset_type": "stock"},
-    {"symbol": "DFDV", "asset_type": "stock"},
+    {"symbol": "AAPL", "asset_type": "stock"},
+    {"symbol": "MSFT", "asset_type": "stock"},
+    {"symbol": "NVDA", "asset_type": "stock"},
+    {"symbol": "GOOG", "asset_type": "stock"},
     {"symbol": "BTC/USD", "asset_type": "crypto"},
     {"symbol": "ETH/USD", "asset_type": "crypto"}
   ],

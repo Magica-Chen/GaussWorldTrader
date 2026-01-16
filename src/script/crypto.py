@@ -40,6 +40,7 @@ def create_crypto_engines(
     take_profit_pct: float = 0.06,
     execute: bool = True,
     auto_exit: bool = True,
+    strategy: str = "crypto_momentum",
 ) -> List[LiveTradingCrypto]:
     """Create crypto trading engines without starting them.
 
@@ -60,6 +61,7 @@ def create_crypto_engines(
             take_profit_pct=take_profit_pct,
             execute=execute,
             auto_exit=auto_exit,
+            strategy=strategy,
         )
         for symbol in trading_symbols
     ]
@@ -75,6 +77,7 @@ def run_crypto_trading(
     take_profit_pct: float = 0.06,
     execute: bool = True,
     auto_exit: bool = True,
+    strategy: str = "crypto_momentum",
 ) -> None:
     """Run live cryptocurrency trading.
 
@@ -89,6 +92,7 @@ def run_crypto_trading(
         take_profit_pct: Take-profit percentage.
         execute: Execute live trades (False for dry run).
         auto_exit: Auto-close on stop/take-profit.
+        strategy: Strategy name to use for signals.
     """
     engines = create_crypto_engines(
         symbols=symbols,
@@ -100,6 +104,7 @@ def run_crypto_trading(
         take_profit_pct=take_profit_pct,
         execute=execute,
         auto_exit=auto_exit,
+        strategy=strategy,
     )
 
     for engine in engines:

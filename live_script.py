@@ -16,6 +16,7 @@ from rich.text import Text
 from src.script.crypto import create_crypto_engines, get_default_crypto_symbols
 from src.script.option import create_option_engines, get_default_option_symbols
 from src.script.stock import create_stock_engines, get_default_stock_symbols
+from src.strategy.registry import get_strategy_registry
 from src.trade.live_runner import run_live_engines
 from src.utils.watchlist_manager import WatchlistManager
 
@@ -33,11 +34,18 @@ BANNER = """
 """
 
 
+# Strategies available per asset type
+STOCK_STRATEGIES = ["momentum", "value", "trend_following", "scalping", "statistical_arbitrage"]
+CRYPTO_STRATEGIES = ["crypto_momentum"]
+OPTION_STRATEGIES = ["wheel"]
+
+
 @dataclass
 class TradingConfig:
     """Trading configuration for a session."""
     asset_types: List[str] = field(default_factory=list)
     symbols: Dict[str, List[str]] = field(default_factory=dict)
+    strategies: Dict[str, str] = field(default_factory=dict)
     timeframe: str = "1Hour"
     lookback_days: int = 30
     risk_pct: float = 0.05
@@ -145,6 +153,54 @@ def configure_symbols(asset_types: List[str]) -> Dict[str, List[str]]:
     return symbols
 
 
+def get_strategies_for_type(asset_type: str) -> List[str]:
+    """Get available strategies for a specific asset type."""
+    if asset_type == "stock":
+        return STOCK_STRATEGIES
+    elif asset_type == "crypto":
+        return CRYPTO_STRATEGIES
+    elif asset_type == "option":
+        return OPTION_STRATEGIES
+    return []
+
+
+def get_default_strategy(asset_type: str) -> str:
+    """Get default strategy for an asset type."""
+    defaults = {"stock": "momentum", "crypto": "crypto_momentum", "option": "wheel"}
+    return defaults.get(asset_type, "momentum")
+
+
+def configure_strategies(asset_types: List[str]) -> Dict[str, str]:
+    """Configure strategies for each asset type."""
+    console.print()
+    console.print(Panel("[bold]Strategy Selection[/bold]", style="blue"))
+
+    strategies: Dict[str, str] = {}
+
+    for asset_type in asset_types:
+        available = get_strategies_for_type(asset_type)
+        default = get_default_strategy(asset_type)
+
+        if len(available) == 1:
+            # Only one strategy available, use it automatically
+            strategies[asset_type] = available[0]
+            console.print(f"[cyan]{asset_type.upper()}[/cyan]: {available[0]} (only option)")
+        else:
+            console.print(f"\n[cyan]{asset_type.upper()}[/cyan] strategies:")
+            for i, strat in enumerate(available, 1):
+                marker = " (default)" if strat == default else ""
+                console.print(f"  [dim]{i}[/dim] - {strat}{marker}")
+
+            choice = Prompt.ask(
+                f"Select {asset_type} strategy",
+                choices=[str(i) for i in range(1, len(available) + 1)],
+                default="1",
+            )
+            strategies[asset_type] = available[int(choice) - 1]
+
+    return strategies
+
+
 def configure_parameters(config: TradingConfig) -> TradingConfig:
     """Configure trading parameters interactively."""
     console.print()
@@ -204,6 +260,8 @@ def show_final_config(config: TradingConfig) -> None:
 
     for asset_type, symbols in config.symbols.items():
         table.add_row(f"{asset_type.upper()} Symbols", ", ".join(symbols))
+        strategy = config.strategies.get(asset_type, get_default_strategy(asset_type))
+        table.add_row(f"{asset_type.upper()} Strategy", strategy)
 
     table.add_row("Timeframe", config.timeframe)
     table.add_row("Lookback", f"{config.lookback_days} days")
@@ -233,6 +291,8 @@ def run_trading(config: TradingConfig) -> None:
 
         console.print(f"[cyan]Creating {asset_type.upper()} engines...[/cyan]")
 
+        strategy = config.strategies.get(asset_type, get_default_strategy(asset_type))
+
         if asset_type == "stock":
             engines = create_stock_engines(
                 symbols=symbols,
@@ -245,6 +305,7 @@ def run_trading(config: TradingConfig) -> None:
                 auto_exit=config.auto_exit,
                 fractional=config.fractional,
                 extended_hours=config.extended_hours,
+                strategy=strategy,
             )
             if engines:
                 engine_groups["stock"] = engines
@@ -259,6 +320,7 @@ def run_trading(config: TradingConfig) -> None:
                 take_profit_pct=config.take_profit_pct,
                 execute=config.execute,
                 auto_exit=config.auto_exit,
+                strategy=strategy,
             )
             if engines:
                 engine_groups["crypto"] = engines
@@ -273,6 +335,7 @@ def run_trading(config: TradingConfig) -> None:
                 execute=config.execute,
                 auto_exit=config.auto_exit,
                 roll_days=config.roll_days,
+                strategy=strategy,
             )
             if engines:
                 engine_groups["option"] = engines
@@ -338,7 +401,11 @@ def quick_start() -> Optional[TradingConfig]:
         symbols = get_symbols_for_type(asset_type)
         if symbols:
             config.symbols[asset_type] = symbols
-            console.print(f"  [cyan]{asset_type.upper()}[/cyan]: {', '.join(symbols)}")
+            config.strategies[asset_type] = get_default_strategy(asset_type)
+            console.print(
+                f"  [cyan]{asset_type.upper()}[/cyan]: {', '.join(symbols)} "
+                f"([dim]{config.strategies[asset_type]}[/dim])"
+            )
 
     console.print()
     config.execute = Confirm.ask(
@@ -380,6 +447,7 @@ def main() -> None:
             config = TradingConfig()
             config.asset_types = select_asset_types()
             config.symbols = configure_symbols(config.asset_types)
+            config.strategies = configure_strategies(config.asset_types)
             config = configure_parameters(config)
 
         if config:

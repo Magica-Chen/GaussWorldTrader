@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.strategy.crypto.momentum import CryptoMomentumStrategy
+from src.strategy.base import StrategyBase
+from src.strategy.registry import get_strategy_registry
 
 from .crypto_engine import TradingCryptoEngine
 from .live_trading_base import LiveTradingEngine
@@ -30,8 +31,10 @@ class LiveTradingCrypto(LiveTradingEngine):
         take_profit_pct: float = 0.06,
         execute: bool = True,
         auto_exit: bool = True,
+        strategy: str = "crypto_momentum",
     ) -> None:
         self.crypto_loc = crypto_loc
+        self.strategy_name = strategy
         super().__init__(
             symbol=symbol,
             timeframe=timeframe,
@@ -56,9 +59,9 @@ class LiveTradingCrypto(LiveTradingEngine):
         """Return crypto trading engine."""
         return TradingCryptoEngine()
 
-    def _get_strategy(self) -> CryptoMomentumStrategy:
-        """Return crypto momentum strategy."""
-        return CryptoMomentumStrategy()
+    def _get_strategy(self) -> StrategyBase:
+        """Return the configured strategy."""
+        return get_strategy_registry().create(self.strategy_name)
 
     def _create_stream(self) -> Any:
         """Create crypto data stream."""

@@ -6,7 +6,8 @@ from typing import Any
 
 import pytz
 
-from src.strategy.option.wheel import WheelStrategy
+from src.strategy.base import StrategyBase
+from src.strategy.registry import get_strategy_registry
 
 from .live_trading_base import LiveTradingEngine, PositionState
 from .option_engine import TradingOptionEngine
@@ -39,9 +40,11 @@ class LiveTradingOption(LiveTradingEngine):
         execute: bool = True,
         auto_exit: bool = True,
         roll_days_before_expiry: int = 5,
+        strategy: str = "wheel",
     ) -> None:
         self.underlying_symbol = underlying_symbol.strip().upper()
         self.roll_days_before_expiry = roll_days_before_expiry
+        self.strategy_name = strategy
         super().__init__(
             symbol=underlying_symbol,
             timeframe=timeframe,
@@ -61,9 +64,9 @@ class LiveTradingOption(LiveTradingEngine):
         """Return options trading engine."""
         return TradingOptionEngine()
 
-    def _get_strategy(self) -> WheelStrategy:
-        """Return wheel options strategy."""
-        return WheelStrategy()
+    def _get_strategy(self) -> StrategyBase:
+        """Return the configured strategy."""
+        return get_strategy_registry().create(self.strategy_name)
 
     def _create_stream(self) -> Any:
         """Create stock data stream for underlying."""

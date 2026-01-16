@@ -38,6 +38,7 @@ def create_stock_engines(
     auto_exit: bool = True,
     fractional: bool = False,
     extended_hours: bool = False,
+    strategy: str = "momentum",
 ) -> List[LiveTradingStock]:
     """Create stock trading engines without starting them.
 
@@ -59,6 +60,7 @@ def create_stock_engines(
             auto_exit=auto_exit,
             allow_fractional=fractional,
             extended_hours=extended_hours,
+            strategy=strategy,
         )
         for symbol in trading_symbols
     ]
@@ -75,6 +77,7 @@ def run_stock_trading(
     auto_exit: bool = True,
     fractional: bool = False,
     extended_hours: bool = False,
+    strategy: str = "momentum",
 ) -> None:
     """Run live stock trading.
 
@@ -90,6 +93,7 @@ def run_stock_trading(
         auto_exit: Auto-close on stop/take-profit.
         fractional: Allow fractional shares.
         extended_hours: Trade during extended hours (4AM-8PM ET).
+        strategy: Strategy name to use for signals.
     """
     engines = create_stock_engines(
         symbols=symbols,
@@ -102,6 +106,7 @@ def run_stock_trading(
         auto_exit=auto_exit,
         fractional=fractional,
         extended_hours=extended_hours,
+        strategy=strategy,
     )
 
     if engines and not engines[0].is_market_open():

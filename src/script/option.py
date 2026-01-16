@@ -40,6 +40,7 @@ def create_option_engines(
     execute: bool = True,
     auto_exit: bool = True,
     roll_days: int = 5,
+    strategy: str = "wheel",
 ) -> List[LiveTradingOption]:
     """Create option trading engines without starting them.
 
@@ -60,6 +61,7 @@ def create_option_engines(
             execute=execute,
             auto_exit=auto_exit,
             roll_days_before_expiry=roll_days,
+            strategy=strategy,
         )
         for underlying in underlyings
     ]
@@ -75,6 +77,7 @@ def run_option_trading(
     execute: bool = True,
     auto_exit: bool = True,
     roll_days: int = 5,
+    strategy: str = "wheel",
 ) -> None:
     """Run live options trading.
 
@@ -89,6 +92,7 @@ def run_option_trading(
         execute: Execute live trades (False for dry run).
         auto_exit: Auto-close on stop/take-profit.
         roll_days: Days before expiry to warn about rolling positions.
+        strategy: Strategy name to use for signals.
     """
     engines = create_option_engines(
         symbols=symbols,
@@ -100,6 +104,7 @@ def run_option_trading(
         execute=execute,
         auto_exit=auto_exit,
         roll_days=roll_days,
+        strategy=strategy,
     )
 
     if engines and not engines[0].is_market_open():

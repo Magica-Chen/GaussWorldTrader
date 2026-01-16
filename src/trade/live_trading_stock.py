@@ -6,7 +6,8 @@ from typing import Any
 
 import pytz
 
-from src.strategy.stock.momentum import MomentumStrategy
+from src.strategy.base import StrategyBase
+from src.strategy.registry import get_strategy_registry
 
 from .live_trading_base import LiveTradingEngine
 from .stock_engine import TradingStockEngine
@@ -42,9 +43,11 @@ class LiveTradingStock(LiveTradingEngine):
         auto_exit: bool = True,
         allow_fractional: bool = False,
         extended_hours: bool = False,
+        strategy: str = "momentum",
     ) -> None:
         self.allow_fractional = allow_fractional
         self.extended_hours = extended_hours
+        self.strategy_name = strategy
         super().__init__(
             symbol=symbol,
             timeframe=timeframe,
@@ -64,9 +67,9 @@ class LiveTradingStock(LiveTradingEngine):
         """Return stock trading engine."""
         return TradingStockEngine(allow_fractional=self.allow_fractional)
 
-    def _get_strategy(self) -> MomentumStrategy:
-        """Return stock momentum strategy."""
-        return MomentumStrategy()
+    def _get_strategy(self) -> StrategyBase:
+        """Return the configured strategy."""
+        return get_strategy_registry().create(self.strategy_name)
 
     def _create_stream(self) -> Any:
         """Create stock data stream."""
