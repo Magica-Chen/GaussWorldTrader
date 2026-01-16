@@ -81,6 +81,7 @@ backtest_results/
 .Trashes
 ehthumbs.db
 Thumbs.db
+*:Zone.Identifier
 
 # Temporary files
 *.tmp
