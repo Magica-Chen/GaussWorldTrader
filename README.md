@@ -1,19 +1,18 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Platform">
-  <img src="https://img.shields.io/badge/Trading-Alpaca-yellow?style=for-the-badge" alt="Alpaca">
-</p>
-
-<h1 align="center">📈 Gauss World Trader</h1>
-
-<p align="center">
-  <em>A high-performance, Python 3.12+ optimized quantitative trading system featuring modern async operations, intelligent data feeds, and advanced portfolio management.</em>
-</p>
-
-<p align="center">
-  <strong>Named after Carl Friedrich Gauss</strong>, who revolutionized statistics and probability theory — the foundations of modern quantitative finance.
-</p>
+<div align="center">
+  <img src="src/pic/logo3.png" width="600" alt="Gauss World Trader logo">
+  <p>
+    <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Platform">
+    <img src="https://img.shields.io/badge/Trading-Alpaca-yellow?style=for-the-badge" alt="Alpaca">
+  </p>
+  <p>
+    <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized quantitative trading system featuring modern async operations, intelligent data feeds, and advanced portfolio management.</em>
+  </p>
+  <p>
+    <strong>Named after Carl Friedrich Gauss</strong>, who revolutionized statistics and probability theory — the foundations of modern quantitative finance.
+  </p>
+</div>
 
 ---
 
