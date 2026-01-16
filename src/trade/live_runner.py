@@ -1,12 +1,15 @@
 """Helpers to run multiple live trading engines concurrently."""
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from datetime import datetime
 from typing import Iterable
 
 from .live_trading_base import LiveTradingEngine
+
+logger = logging.getLogger(__name__)
 
 
 def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
@@ -61,13 +64,11 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
         try:
             stream.run()
         except Exception as exc:
-            first.logger.error("Stream stopped: %s", exc)
+            logger.error("Stream stopped: %s", exc)
 
     stream_thread = threading.Thread(target=_run_stream, name="live_stream", daemon=False)
     stream_thread.start()
-    first.logger.info(
-        "Shared stream started for %d symbols", len(engine_list)
-    )
+    logger.info("Shared stream started for %d symbols", len(engine_list))
 
     for engine in engine_list:
         name = f"{engine.__class__.__name__}_{engine.symbol}"
@@ -84,7 +85,7 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
         try:
             stream.stop()
         except Exception as exc:
-            first.logger.error("Failed to stop stream: %s", exc)
+            logger.error("Failed to stop stream: %s", exc)
     finally:
         stream_thread.join(timeout=5)
         for thread in threads:

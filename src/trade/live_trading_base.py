@@ -77,7 +77,7 @@ class LiveTradingEngine(ABC):
         self._stream = None
         self._stream_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(f"{self.__class__.__name__}.{self.symbol}")
 
     @abstractmethod
     def _normalize_symbol(self, symbol: str) -> str:
