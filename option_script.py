@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import argparse
 import logging
-from typing import Iterable, List
+from typing import List
 
 from src.trade.live_trading_option import LiveTradingOption
 from src.trade.live_runner import run_live_engines
+from src.trade.option_engine import TradingOptionEngine
+from src.utils.live_utils import merge_symbol_sources, parse_symbol_args
 from src.utils.timezone_utils import format_duration
+from src.utils.watchlist_manager import WatchlistManager
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Live options trading script.")
-    parser.add_argument("--underlying", default="AAPL", help="Underlying stock symbol.")
+    parser.add_argument("--underlying", help="Underlying stock symbol.")
     parser.add_argument(
         "--symbols",
         action="append",
@@ -45,15 +48,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _parse_symbols(symbols: Iterable[str] | None, fallback: str) -> List[str]:
-    items = list(symbols) if symbols else [fallback]
-    parsed: List[str] = []
-    for item in items:
-        for part in item.split(","):
-            symbol = part.strip()
-            if symbol:
-                parsed.append(symbol)
-    return parsed or [fallback]
+def _get_default_symbols() -> List[str]:
+    manager = WatchlistManager()
+    watchlist_symbols = manager.get_watchlist(asset_type="option")
+    position_symbols: List[str] = []
+    try:
+        engine = TradingOptionEngine()
+        for pos in engine.get_option_positions():
+            underlying = pos.get("underlying")
+            if underlying:
+                position_symbols.append(underlying)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Failed to load option positions: %s", exc)
+    defaults = merge_symbol_sources("option", watchlist_symbols, position_symbols)
+    return defaults or ["AAPL"]
 
 
 def main() -> None:
@@ -62,7 +70,11 @@ def main() -> None:
         format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
     )
     args = parse_args()
-    underlyings = _parse_symbols(args.symbols, args.underlying)
+    parsed_symbols = parse_symbol_args(args.symbols, args.underlying)
+    underlyings = merge_symbol_sources(
+        "option",
+        parsed_symbols if parsed_symbols else _get_default_symbols(),
+    )
     engines = [
         LiveTradingOption(
             underlying_symbol=underlying,

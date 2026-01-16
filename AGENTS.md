@@ -5,7 +5,8 @@
 - Core code lives in `src/` with `strategy/` (base + registry + per-asset submodules), `trade/` (engines, live trading), `data/` (providers), `account/`, `analysis/`, `ui/`, and `utils/`.
 - Strategy layout: `src/strategy/base.py` defines `StrategyBase`, `BaseCryptoStrategy`, `BaseOptionStrategy` and trading-plan helpers; one strategy per file under `src/strategy/stock/`, `src/strategy/crypto/`, `src/strategy/option/`. Register new strategies in `src/strategy/registry.py`.
 - Trade engines: `src/trade/trading_engine.py` (shared), asset-specific engines in `src/trade/stock_engine.py`, `src/trade/crypto_engine.py`, `src/trade/option_engine.py`, plus live trading in `src/trade/live_trading_*.py`.
-- Configuration is in `config/`, `.env`, and `watchlist.json`. Examples live in `examples/`. Docs live in `docs/`.
+- Configuration is in `config/`, `.env`, and `watchlist.json` (entries include `asset_type`, e.g., `{\"symbol\":\"AAPL\",\"asset_type\":\"stock\"}`). Examples live in `examples/`. Docs live in `docs/`.
+- Asset helpers live in `src/utils/asset_utils.py` and live-script helpers in `src/utils/live_utils.py`.
 - `tests/` exists locally but is gitignored; keep tests local unless asked to reintroduce them to git.
 
 ## Build, Test, and Development Commands
@@ -17,6 +18,7 @@
 - `python crypto_script.py --symbols BTC/USD,ETH/USD --timeframe 5Min --no-execute` runs live crypto in dry-run mode.
 - `python stock_script.py --symbols AAPL,MSFT --timeframe 15Min --no-execute` runs live stock trading in dry-run mode.
 - `python option_script.py --symbols AAPL,MSFT --timeframe 1Day --no-execute` runs live options trading in dry-run mode.
+- If no symbols are provided, live scripts use `watchlist.json` + current positions filtered by asset type.
 - Multi-symbol live runs use a shared websocket per asset type; for crypto, all symbols must share the same `--crypto-loc`.
 - Stock and option scripts exit immediately when the market is closed and log time-to-open.
 - Optional tooling: `black .`, `ruff check .`, `mypy src` (configured in `pyproject.toml`).

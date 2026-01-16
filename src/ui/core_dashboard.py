@@ -21,13 +21,71 @@ import logging
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.utils.timezone_utils import EASTERN, now_et, get_market_status
+from src.utils.timezone_utils import now_et, get_market_status
 from src.data import AlpacaDataProvider
-from src.trade import TradingEngine, Backtester, Portfolio
+from src.trade import (
+    TradingStockEngine,
+    TradingCryptoEngine,
+    TradingOptionEngine,
+    Backtester,
+    Portfolio,
+)
 from src.strategy import get_strategy_registry
 from src.analysis import TechnicalAnalysis
 
 logger = logging.getLogger(__name__)
+
+
+def _get_trading_engine(asset_type: str = "stock", allow_fractional: bool = False):
+    """Return a cached trading engine instance for the requested asset type."""
+    engines = st.session_state.setdefault("trading_engines", {})
+    asset_type = asset_type.strip().lower()
+
+    if asset_type == "stock":
+        engine = engines.get("stock")
+        if engine is None or getattr(engine, "allow_fractional", False) != allow_fractional:
+            engine = TradingStockEngine(allow_fractional=allow_fractional)
+            engines["stock"] = engine
+        return engine
+
+    if asset_type == "crypto":
+        engine = engines.get("crypto")
+        if engine is None:
+            engine = TradingCryptoEngine()
+            engines["crypto"] = engine
+        return engine
+
+    if asset_type == "option":
+        engine = engines.get("option")
+        if engine is None:
+            engine = TradingOptionEngine()
+            engines["option"] = engine
+        return engine
+
+    raise ValueError(f"Unsupported asset type: {asset_type}")
+
+
+def _infer_asset_type(symbol: str) -> str:
+    """Infer asset type from Alpaca symbol conventions."""
+    if not symbol:
+        return "stock"
+
+    sym = symbol.strip().upper()
+    # Option OCC format (e.g., AAPL240119C00150000)
+    if (
+        len(sym) > 10
+        and (("C" in sym[-9:]) or ("P" in sym[-9:]))
+        and any(char.isdigit() for char in sym[-8:])
+    ) or "C00" in sym or "P00" in sym:
+        return "option"
+
+    if "/" in sym:
+        return "crypto"
+
+    if sym.endswith("USD") and len(sym) > 3:
+        return "crypto"
+
+    return "stock"
 
 
 class BaseDashboard(ABC):
@@ -88,10 +146,10 @@ class BaseDashboard(ABC):
         """Initialize common session state variables"""
         if 'data_provider' not in st.session_state:
             st.session_state.data_provider = AlpacaDataProvider()
-        
-        if 'trading_engine' not in st.session_state:
-            st.session_state.trading_engine = TradingEngine()
-            
+
+        if 'trading_engines' not in st.session_state:
+            st.session_state.trading_engines = {}
+
         if 'technical_analysis' not in st.session_state:
             st.session_state.technical_analysis = TechnicalAnalysis()
     
@@ -102,7 +160,15 @@ class BaseDashboard(ABC):
     def get_account_info(self) -> Tuple[Optional[Dict], Optional[str]]:
         """Get account information with error handling"""
         try:
-            return st.session_state.trading_engine.get_account_info(), None
+            if 'account_manager' in st.session_state:
+                account_info = st.session_state.account_manager.get_account()
+                if account_info and 'error' not in account_info:
+                    return account_info, None
+                if isinstance(account_info, dict) and 'error' in account_info:
+                    return None, account_info.get('error')
+
+            engine = _get_trading_engine("stock")
+            return engine.get_account_info(), None
         except Exception as e:
             return None, str(e)
     
@@ -976,19 +1042,37 @@ class UIComponents:
         if not positions:
             st.info("No active positions found.")
             return
+
+        asset_filter = st.selectbox(
+            "Asset Type",
+            ["All", "Stock", "Crypto", "Option"],
+            key="positions_asset_filter",
+        )
+        filter_value = asset_filter.lower()
+
+        def _format_qty(value: float) -> str:
+            if abs(value - int(value)) < 1e-6:
+                return str(int(value))
+            return f"{value:.6f}".rstrip("0").rstrip(".")
         
         positions_data = []
         for pos in positions:
             qty = float(pos.get('qty', 0))
             if qty != 0:
+                symbol_value = pos.get('symbol', '')
+                asset_type = _infer_asset_type(symbol_value)
+                if filter_value != "all" and asset_type != filter_value:
+                    continue
+
                 market_value = float(pos.get('market_value', 0))
                 cost_basis = float(pos.get('cost_basis', 0))
                 unrealized_pl = float(pos.get('unrealized_pl', 0))
                 unrealized_plpc = float(pos.get('unrealized_plpc', 0)) * 100
                 
                 positions_data.append({
-                    'Symbol': pos.get('symbol', ''),
-                    'Quantity': int(qty),
+                    'Symbol': symbol_value,
+                    'Asset': asset_type.title(),
+                    'Quantity': _format_qty(qty),
                     'Market Value': f"${market_value:,.2f}",
                     'Cost Basis': f"${cost_basis:,.2f}",
                     'Unrealized P&L': f"${unrealized_pl:,.2f}",
@@ -1057,35 +1141,49 @@ class UIComponents:
             wm = st.session_state.watchlist_manager
 
             st.subheader("➕ Add Symbol")
-            col1, col2, col3 = st.columns([2, 1, 1])
+            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
             with col1:
                 new_symbol = st.text_input("Enter Symbol to Add", key="add_symbol").upper()
             with col2:
+                new_asset_type = st.selectbox(
+                    "Asset Type",
+                    ["stock", "crypto", "option"],
+                    key="add_symbol_asset_type",
+                )
+            with col3:
                 if st.button("Add Symbol", type="primary") and new_symbol:
-                    if new_symbol not in wm.get_watchlist():
-                        wm.add_symbol(new_symbol)
-                        st.success(f"✅ Added {new_symbol} to watchlist")
+                    if not wm.is_symbol_in_watchlist(new_symbol, asset_type=new_asset_type):
+                        wm.add_symbol(new_symbol, asset_type=new_asset_type)
+                        st.success(f"✅ Added {new_symbol} ({new_asset_type}) to watchlist")
                         st.rerun()
                     else:
-                        st.warning(f"⚠️ {new_symbol} is already in watchlist")
-            with col3:
+                        st.warning(f"⚠️ {new_symbol} ({new_asset_type}) is already in watchlist")
+            with col4:
                 if st.button("🔄 Refresh Data", help="Refresh all watchlist data"):
                     st.rerun()
 
             st.divider()
 
-            watchlist = wm.get_watchlist()
-            if watchlist:
-                st.subheader(f"👁️ Watchlist ({len(watchlist)} symbols)")
-                
+            watchlist_entries = wm.get_watchlist_entries()
+            if watchlist_entries:
+                st.subheader(f"👁️ Watchlist ({len(watchlist_entries)} symbols)")
+
                 col1, col2 = st.columns([2, 1])
                 with col1:
-                    symbol_to_delete = st.selectbox("Select Symbol to Remove", 
-                                                   options=[""] + sorted(watchlist))
+                    symbol_to_delete = st.selectbox(
+                        "Select Symbol to Remove",
+                        options=[None] + watchlist_entries,
+                        format_func=lambda entry: "" if entry is None else f"{entry['symbol']} ({entry['asset_type']})",
+                    )
                 with col2:
                     if st.button("🗑️ Remove", type="secondary") and symbol_to_delete:
-                        wm.remove_symbol(symbol_to_delete)
-                        st.success(f"🗑️ Removed {symbol_to_delete} from watchlist")
+                        wm.remove_symbol(
+                            symbol_to_delete["symbol"],
+                            asset_type=symbol_to_delete["asset_type"],
+                        )
+                        st.success(
+                            f"🗑️ Removed {symbol_to_delete['symbol']} ({symbol_to_delete['asset_type']}) from watchlist"
+                        )
                         st.rerun()
 
                 st.divider()
@@ -1101,9 +1199,11 @@ class UIComponents:
                 
                 provider = AlpacaDataProvider()
                 
-                for i, symbol in enumerate(watchlist):
-                    status_text.text(f"Loading data for {symbol}...")
-                    progress_bar.progress((i + 1) / len(watchlist))
+                for i, entry in enumerate(watchlist_entries):
+                    symbol = entry["symbol"]
+                    asset_type = entry["asset_type"]
+                    status_text.text(f"Loading data for {symbol} ({asset_type})...")
+                    progress_bar.progress((i + 1) / len(watchlist_entries))
                     
                     try:
                         data = provider.get_bars(symbol, '1Day', start=now_et() - timedelta(days=2))
@@ -1116,6 +1216,7 @@ class UIComponents:
                             change_color = "🟢" if change >= 0 else "🔴"
                             watchlist_data.append({
                                 'Symbol': symbol,
+                                'Asset Type': asset_type.title(),
                                 'Current Price': f"${current:.2f}",
                                 'Change ($)': f"${change:+.2f}",
                                 'Change (%)': f"{change_pct:+.2f}%",
@@ -1124,6 +1225,7 @@ class UIComponents:
                         else:
                             watchlist_data.append({
                                 'Symbol': symbol,
+                                'Asset Type': asset_type.title(),
                                 'Current Price': "N/A",
                                 'Change ($)': "N/A", 
                                 'Change (%)': "N/A",
@@ -1132,6 +1234,7 @@ class UIComponents:
                     except Exception:
                         watchlist_data.append({
                             'Symbol': symbol,
+                            'Asset Type': asset_type.title(),
                             'Current Price': "N/A",
                             'Change ($)': "N/A", 
                             'Change (%)': "N/A",
@@ -1152,7 +1255,7 @@ class UIComponents:
                         
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:
-                            st.metric("Total Symbols", len(watchlist))
+                            st.metric("Total Symbols", len(watchlist_entries))
                         with col2:
                             st.metric("Gainers", gains, delta=f"+{gains}")
                         with col3:
@@ -1173,19 +1276,109 @@ class UIComponents:
 
         with col1:
             st.write("**Order Details**")
-            symbol = st.text_input("Symbol", value="AAPL", key="trade_symbol").upper()
-            side = st.selectbox("Side", ["buy", "sell"], key="trade_side")
-            quantity = st.number_input("Quantity", min_value=1, value=100, key="trade_quantity")
-            order_type = st.selectbox("Order Type", ["market", "limit", "stop"], key="trade_order_type")
+            asset_type = st.selectbox(
+                "Asset Type",
+                ["stock", "crypto", "option"],
+                key="trade_asset_type",
+            )
+
+            default_symbol = {
+                "stock": "AAPL",
+                "crypto": "BTC/USD",
+                "option": "AAPL240119C00150000",
+            }[asset_type]
+            symbol_key = f"trade_symbol_{asset_type}"
+            symbol = st.text_input("Symbol", value=default_symbol, key=symbol_key).strip().upper()
+
+            side = st.selectbox("Side", ["buy", "sell"], key=f"trade_side_{asset_type}")
+
+            allow_fractional = False
+            if asset_type == "stock":
+                allow_fractional = st.checkbox(
+                    "Allow fractional shares",
+                    value=False,
+                    key="trade_allow_fractional",
+                )
+
+            if asset_type == "crypto":
+                quantity = st.number_input(
+                    "Quantity",
+                    min_value=0.000001,
+                    value=0.01,
+                    step=0.0001,
+                    format="%.6f",
+                    key="trade_quantity_crypto",
+                )
+            elif asset_type == "option":
+                quantity = st.number_input(
+                    "Contracts",
+                    min_value=1,
+                    value=1,
+                    step=1,
+                    key="trade_quantity_option",
+                )
+            else:
+                if allow_fractional:
+                    quantity = st.number_input(
+                        "Quantity",
+                        min_value=0.0001,
+                        value=1.0,
+                        step=0.1,
+                        format="%.4f",
+                        key="trade_quantity_stock_frac",
+                    )
+                else:
+                    quantity = st.number_input(
+                        "Quantity",
+                        min_value=1,
+                        value=100,
+                        step=1,
+                        key="trade_quantity_stock",
+                    )
+
+            order_type_options = {
+                "stock": ["market", "limit", "stop"],
+                "crypto": ["market", "limit"],
+                "option": ["market", "limit"],
+            }
+            order_type = st.selectbox(
+                "Order Type",
+                order_type_options[asset_type],
+                key=f"trade_order_type_{asset_type}",
+            )
 
             limit_price = None
             stop_price = None
             if order_type == "limit":
-                limit_price = st.number_input("Limit Price", value=150.0, step=0.01, key="trade_limit_price")
+                limit_price = st.number_input(
+                    "Limit Price",
+                    value=150.0,
+                    step=0.01,
+                    key=f"trade_limit_price_{asset_type}",
+                )
             elif order_type == "stop":
-                stop_price = st.number_input("Stop Price", value=150.0, step=0.01, key="trade_stop_price")
+                stop_price = st.number_input(
+                    "Stop Price",
+                    value=150.0,
+                    step=0.01,
+                    key="trade_stop_price",
+                )
 
-            time_in_force = st.selectbox("Time in Force", ["day", "gtc", "ioc", "fok"], key="trade_time_in_force")
+            time_in_force_options = {
+                "stock": ["day", "gtc"],
+                "crypto": ["gtc", "day"],
+                "option": ["day", "gtc"],
+            }
+            time_in_force = st.selectbox(
+                "Time in Force",
+                time_in_force_options[asset_type],
+                key=f"trade_time_in_force_{asset_type}",
+            )
+
+            if asset_type == "crypto":
+                st.caption("Crypto trading is long-only. SELL closes existing positions.")
+            if asset_type == "option":
+                st.caption("Options use OCC symbols (e.g., AAPL240119C00150000).")
 
         with col2:
             st.write("**Order Preview**")
@@ -1216,23 +1409,43 @@ class UIComponents:
                     st.error("Limit price is required for limit orders.")
                 elif order_type == "stop" and stop_price is None:
                     st.error("Stop price is required for stop orders.")
-                elif 'order_manager' not in st.session_state:
-                    st.error("Order manager not initialized.")
                 else:
-                    order_manager = st.session_state.order_manager
-                    result = order_manager.place_order(
-                        symbol=symbol,
-                        qty=int(quantity),
-                        side=side,
-                        order_type=order_type,
-                        time_in_force=time_in_force,
-                        limit_price=limit_price,
-                        stop_price=stop_price
-                    )
-                    if result and 'error' in result:
-                        st.error(f"Order failed: {result['error']}")
-                    else:
+                    try:
+                        engine = _get_trading_engine(asset_type, allow_fractional=allow_fractional)
+                        if asset_type == "option":
+                            qty_value = int(quantity)
+                        elif asset_type == "stock" and not allow_fractional:
+                            qty_value = int(quantity)
+                        else:
+                            qty_value = float(quantity)
+
+                        if order_type == "market":
+                            result = engine.place_market_order(
+                                symbol=symbol,
+                                qty=qty_value,
+                                side=side,
+                                time_in_force=time_in_force,
+                            )
+                        elif order_type == "limit":
+                            result = engine.place_limit_order(
+                                symbol=symbol,
+                                qty=qty_value,
+                                limit_price=limit_price,
+                                side=side,
+                                time_in_force=time_in_force,
+                            )
+                        else:
+                            result = engine.place_stop_loss_order(
+                                symbol=symbol,
+                                qty=qty_value,
+                                stop_price=stop_price,
+                                side=side,
+                                time_in_force=time_in_force,
+                            )
+
                         st.success(f"Order submitted: {result.get('id', 'unknown')}")
+                    except Exception as exc:
+                        st.error(f"Order failed: {exc}")
 
     @staticmethod
     def render_orders_table():
@@ -1240,13 +1453,26 @@ class UIComponents:
         st.subheader("📋 Active Orders")
 
         if 'order_manager' in st.session_state:
+            asset_filter = st.selectbox(
+                "Asset Type",
+                ["All", "Stock", "Crypto", "Option"],
+                key="orders_asset_filter",
+            )
+            filter_value = asset_filter.lower()
+
             orders = st.session_state.order_manager.get_orders()
             if orders:
                 orders_data = []
                 for order in orders:
+                    symbol_value = order.get('symbol', 'N/A')
+                    asset_type = _infer_asset_type(symbol_value)
+                    if filter_value != "all" and asset_type != filter_value:
+                        continue
+
                     orders_data.append({
                         'Order ID': order.get('id', 'N/A'),
-                        'Symbol': order.get('symbol', 'N/A'),
+                        'Symbol': symbol_value,
+                        'Asset': asset_type.title(),
                         'Side': order.get('side', 'N/A').upper(),
                         'Quantity': order.get('qty', 0),
                         'Order Type': order.get('order_type', 'N/A'),

@@ -4,7 +4,6 @@ Simple CLI entry point for Gauss World Trader.
 """
 from __future__ import annotations
 
-import json
 from datetime import timedelta
 from pathlib import Path
 from typing import List, Optional
@@ -15,6 +14,7 @@ from src.data import AlpacaDataProvider
 from src.strategy import get_strategy_registry
 from src.trade import Backtester, TradingEngine
 from src.utils.timezone_utils import now_et
+from src.utils.watchlist_manager import WatchlistManager
 
 app = typer.Typer(add_completion=False)
 
@@ -24,8 +24,8 @@ def _load_symbols(symbols: Optional[List[str]]) -> List[str]:
         return [s.upper() for s in symbols]
     watchlist_path = Path("watchlist.json")
     if watchlist_path.exists():
-        data = json.loads(watchlist_path.read_text())
-        return [s.upper() for s in data.get("watchlist", [])]
+        manager = WatchlistManager()
+        return [s.upper() for s in manager.get_watchlist(asset_type="stock")]
     return ["AAPL", "MSFT", "GOOGL"]
 
 

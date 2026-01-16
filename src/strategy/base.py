@@ -6,7 +6,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
 import logging
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -318,20 +317,17 @@ class BaseOptionStrategy(StrategyBase, ABC):
 
     def _load_watchlist_symbols(self) -> List[str]:
         """
-        Load symbols from watchlist.json.
+        Load symbols from watchlist.json filtered to stock entries.
 
         Returns:
             List of symbols from the watchlist
-
-        Raises:
-            FileNotFoundError: If watchlist.json does not exist
-            json.JSONDecodeError: If watchlist.json is not valid JSON
         """
-        with open("watchlist.json", "r") as f:
-            watchlist_data = json.load(f)
-            symbols = watchlist_data.get("watchlist", [])
-            self.logger.info("Loaded %s symbols from watchlist.json", len(symbols))
-            return symbols
+        from src.utils.watchlist_manager import WatchlistManager
+
+        manager = WatchlistManager()
+        symbols = manager.get_watchlist(asset_type="stock")
+        self.logger.info("Loaded %s symbols from watchlist.json", len(symbols))
+        return symbols
 
     @abstractmethod
     def filter_underlying_stocks(self, client: Any) -> List[str]:

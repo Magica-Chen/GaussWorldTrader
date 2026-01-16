@@ -1,24 +1,23 @@
 {
   "watchlist": [
-    "RGTI",
-    "AFRM",
-    "UPST",
-    "OPFI",
-    "PGY",
-    "ETOR",
-    "MARA",
-    "CRCL",
-    "QUBT",
-    "GME",
-    "SMCI",
-    "BMNR",
-    "DFDV",
-    "CNC"
+    {"symbol": "RGTI", "asset_type": "stock"},
+    {"symbol": "AFRM", "asset_type": "stock"},
+    {"symbol": "UPST", "asset_type": "stock"},
+    {"symbol": "OPFI", "asset_type": "stock"},
+    {"symbol": "ETOR", "asset_type": "stock"},
+    {"symbol": "MARA", "asset_type": "stock"},
+    {"symbol": "CRCL", "asset_type": "stock"},
+    {"symbol": "QUBT", "asset_type": "stock"},
+    {"symbol": "GME", "asset_type": "stock"},
+    {"symbol": "BMNR", "asset_type": "stock"},
+    {"symbol": "DFDV", "asset_type": "stock"},
+    {"symbol": "BTC/USD", "asset_type": "crypto"},
+    {"symbol": "ETH/USD", "asset_type": "crypto"}
   ],
   "metadata": {
     "created": "2025-08-21",
-    "last_updated": "2025-08-28 22:44:14",
+    "last_updated": "2026-01-16 00:11:10",
     "description": "Gauss World Trader Default Watchlist",
-    "version": "1.0"
+    "version": "2.0"
   }
 }

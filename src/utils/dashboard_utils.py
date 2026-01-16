@@ -212,15 +212,23 @@ def format_crypto_data(crypto_response: Dict) -> Dict[str, Any]:
     return formatted_data
 
 
-def get_default_symbols():
-    """Get default symbols from watchlist and current positions"""
-    symbols = set()
+def get_default_symbols(asset_type: str = "stock"):
+    """Get default symbols from watchlist and current positions for an asset type."""
+    from src.utils.asset_utils import infer_asset_type, normalize_asset_type, normalize_symbol
+
+    symbols = []
+    seen = set()
+    normalized_type = normalize_asset_type(asset_type)
     
     # Add symbols from watchlist
     try:
         if 'watchlist_manager' in st.session_state:
-            watchlist = st.session_state.watchlist_manager.get_watchlist()
-            symbols.update(watchlist)
+            watchlist = st.session_state.watchlist_manager.get_watchlist(asset_type=normalized_type)
+            for symbol in watchlist:
+                normalized = normalize_symbol(symbol, normalized_type)
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    symbols.append(normalized)
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -233,14 +241,17 @@ def get_default_symbols():
             if positions and not any('error' in pos for pos in positions):
                 for pos in positions:
                     symbol = pos.get('symbol')
-                    if symbol:
-                        symbols.add(symbol)
+                    if symbol and infer_asset_type(symbol) == normalized_type:
+                        normalized = normalize_symbol(symbol, normalized_type)
+                        if normalized and normalized not in seen:
+                            seen.add(normalized)
+                            symbols.append(normalized)
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error getting positions: {e}")
     
-    return list(symbols)
+    return symbols
 
 
 def format_strategy_comparison(comparison_results, symbol):

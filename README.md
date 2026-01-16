@@ -85,6 +85,7 @@ Notes:
 - Multi-symbol runs share a single websocket per asset type to stay within Alpaca connection limits.
 - For crypto, all symbols in one run must use the same `--crypto-loc` feed.
 - Stock and option scripts exit early if the market is closed (they log time-to-open).
+- If no `--symbols`/`--symbol` is provided, live scripts default to watchlist symbols + current positions for that asset type.
 
 ---
 
@@ -107,6 +108,7 @@ Notes:
 GaussWorldTrader/
 ├── 📄 main_cli.py          # CLI entry point
 ├── 📄 dashboard.py         # Streamlit dashboard entry
+├── 📄 watchlist.json       # Watchlist entries with asset_type
 ├── 📁 src/
 │   ├── 📁 strategy/        # Trading strategies & templates
 │   ├── 📁 ui/              # Dashboard components
@@ -161,6 +163,30 @@ Create a `.env` file with the following API keys:
 | `ALPACA_BASE_URL` | ✅ | Alpaca API endpoint |
 | `FINNHUB_API_KEY` | ✅ | Finnhub market data |
 | `FRED_API_KEY` | ✅ | Federal Reserve economic data |
+
+---
+
+## 👁️ Watchlist
+
+Watchlist entries are typed by asset so the dashboard and live scripts can filter symbols correctly.
+
+```json
+{
+  "watchlist": [
+    {"symbol": "AAPL", "asset_type": "stock"},
+    {"symbol": "BTC/USD", "asset_type": "crypto"}
+  ],
+  "metadata": {
+    "created": "2025-08-21",
+    "last_updated": "2026-01-16 00:11:10",
+    "description": "Gauss World Trader Default Watchlist",
+    "version": "2.0"
+  }
+}
+```
+
+- Supported `asset_type`: `stock`, `crypto`, `option`.
+- The dashboard Watchlist tab lets you add/remove symbols with an asset type.
 
 ---
 
