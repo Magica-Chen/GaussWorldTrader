@@ -79,7 +79,14 @@ python live_script.py
 
 The unified CLI provides:
 - **Quick Start** — Trade all asset types with watchlist defaults
-- **Custom Configuration** — Select asset types, symbols, and parameters interactively
+- **Custom Configuration** — Select asset types, symbols, strategies, and parameters interactively
+
+**Strategy Selection by Asset Type:**
+| Asset Type | Available Strategies |
+|------------|---------------------|
+| Stock | momentum, value, trend_following, scalping, statistical_arbitrage |
+| Crypto | crypto_momentum |
+| Option | wheel |
 
 Notes:
 - Multi-symbol runs share a single websocket per asset type to stay within Alpaca connection limits.
