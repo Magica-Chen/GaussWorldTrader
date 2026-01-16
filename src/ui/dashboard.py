@@ -119,7 +119,7 @@ class Dashboard(BaseDashboard):
         """Create main navigation tabs on the left sidebar"""
         with st.sidebar:
             # Display logo above navigation
-            logo_path = Path(__file__).parent.parent / "pic" / "logo.png"
+            logo_path = Path(__file__).parent.parent / "pic" / "logo2.png"
             if logo_path.exists():
                 st.image(str(logo_path), width=150)
 
