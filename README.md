@@ -5,6 +5,10 @@
     <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
     <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Platform">
     <img src="https://img.shields.io/badge/Trading-Alpaca-yellow?style=for-the-badge" alt="Alpaca">
+    <a href="https://join.slack.com/t/gaussianprocessmodels/shared_invite/zt-5acinu03-qvIOXiqSX0tvQmwPL2D7Nw">
+      <img src="https://img.shields.io/badge/Slack-Join%20the%20Community-4A154B?style=for-the-badge&logo=slack&logoColor=white"
+           alt="Join Gauss World Slack">
+    </a>
   </p>
   <p>
     <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized quantitative trading system featuring modern async operations, intelligent data feeds, and advanced portfolio management.</em>
@@ -32,6 +36,10 @@
 # Clone the repository
 git clone https://github.com/Magica-Chen/GaussWorldTrader.git
 cd GaussWorldTrader
+
+# Create environment (Python 3.12+ required)
+conda create -n gaussworldtrader python=3.12
+conda activate gaussworldtrader
 
 # Install dependencies
 pip install -r requirements.txt
