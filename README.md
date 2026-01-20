@@ -11,12 +11,67 @@
     </a>
   </p>
   <p>
-    <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized quantitative trading system featuring modern async operations, intelligent data feeds, and advanced portfolio management.</em>
+    <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized algorithmic trading platform featuring modern async operations, intelligent data feeds, and advanced portfolio management.</em>
   </p>
   <p>
     <strong>Named after Carl Friedrich Gauss</strong>, who revolutionized statistics and probability theory — the foundations of modern quantitative finance.
   </p>
 </div>
+
+---
+
+## 📖 What is Algorithmic Trading?
+
+Algorithmic trading (also called algo trading or automated trading) uses computer programs to execute trades based on predefined rules and strategies. Instead of manually watching charts and clicking buy/sell buttons, algorithms analyze market data and make trading decisions automatically.
+
+**Key concepts:**
+- **Automated Execution** — Trades happen without manual intervention once rules are set
+- **Speed & Efficiency** — Computers can process data and execute orders faster than humans
+- **Emotion-Free Trading** — Algorithms follow rules consistently without fear or greed
+- **Backtesting** — Strategies can be tested on historical data before risking real money
+
+Algorithmic trading is used by individual traders, hedge funds, and institutions worldwide to implement strategies ranging from simple moving average crossovers to complex statistical arbitrage.
+
+---
+
+## 🌐 What is GaussWorldTrader?
+
+GaussWorldTrader is an open-source algorithmic trading platform designed for both learning and practical use.
+
+- **Multiple Asset Classes** — Trade stocks, cryptocurrencies, and options through a unified interface
+- **Pre-built Strategies** — Ready-to-use strategies including momentum, value investing, trend following, and more
+- **Educational Foundation** — Clear code structure and documentation to help you understand how trading systems work
+- **Real-time & Backtesting** — Test strategies on historical data or run them live with paper or real money
+- **Modern Architecture** — Built with Python 3.12+ using async patterns for efficient data processing
+
+Whether you're a beginner learning about markets or an experienced trader building custom strategies, GaussWorldTrader provides the tools and framework to get started.
+
+---
+
+## 🏁 How to Start GaussWorldTrader
+
+**Step 1: Set Up Your Environment**
+- Install Python 3.12 or higher on your system
+- Clone the repository and install the required dependencies
+- Create your `.env` file with API keys (see Configuration section below)
+
+**Step 2: Get API Access**
+- Sign up for an [Alpaca](https://alpaca.markets/) account (free) for trading and market data
+- Obtain API keys from [Finnhub](https://finnhub.io/) and [FRED](https://fred.stlouisfed.org/) for additional data sources
+
+**Step 3: Choose Your Interface**
+- **Dashboard** — Launch the web-based Streamlit interface for visual analysis and monitoring
+- **CLI** — Use the command-line interface for scripting and automation
+
+**Step 4: Start with Paper Trading**
+- Always begin with Alpaca's paper trading mode to test strategies without risking real money
+- Run backtests on historical data to understand strategy performance
+- Monitor results and adjust parameters before considering live trading
+
+**Step 5: Explore and Learn**
+- Review the built-in strategies to understand different trading approaches
+- Study the codebase structure to learn how trading systems are designed
+- Join the Slack community to ask questions and share ideas
 
 ---
 
