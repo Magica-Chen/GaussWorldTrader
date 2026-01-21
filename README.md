@@ -159,6 +159,46 @@ Notes:
 
 ---
 
+## 🔔 Order Notifications
+
+Get notified when orders are submitted and filled via Email (Gmail SMTP) or Slack webhook.
+
+**Setup:**
+```bash
+# In your .env file:
+
+# Email notifications
+NOTIFICATION_EMAIL_ENABLED=true
+GMAIL_ADDRESS=your@gmail.com
+GMAIL_APP_PASSWORD=your_app_password
+
+# Slack notifications
+NOTIFICATION_SLACK_ENABLED=true
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+```
+
+**Notification events:**
+| Event | When |
+|-------|------|
+| SUBMITTED | Immediately when order is placed |
+| FILLED | When order is filled (via Alpaca websocket stream) |
+
+**Usage in code:**
+```python
+from src.agent import NotificationService, TradeStreamHandler
+from src.trade.crypto_engine import TradingCryptoEngine
+
+notification_service = NotificationService()
+stream_handler = TradeStreamHandler(notification_service)
+stream_handler.start()  # Start listening for fills
+
+engine = TradingCryptoEngine(paper_trading=True, notification_service=notification_service)
+order = engine.place_market_order("BTC/USD", 0.001, "buy")  # Triggers SUBMITTED notification
+# FILLED notification arrives automatically when order fills
+```
+
+---
+
 ## 📊 Built-in Strategies
 
 | Strategy | Category | Dashboard |
@@ -235,6 +275,11 @@ Create a `.env` file with the following API keys:
 | `ALPACA_BASE_URL` | ✅ | Alpaca API endpoint |
 | `FINNHUB_API_KEY` | ✅ | Finnhub market data |
 | `FRED_API_KEY` | ✅ | Federal Reserve economic data |
+| `NOTIFICATION_EMAIL_ENABLED` | ❌ | Enable email notifications (true/false) |
+| `GMAIL_ADDRESS` | ❌ | Gmail address for notifications |
+| `GMAIL_APP_PASSWORD` | ❌ | Gmail app password |
+| `NOTIFICATION_SLACK_ENABLED` | ❌ | Enable Slack notifications (true/false) |
+| `SLACK_WEBHOOK_URL` | ❌ | Slack webhook URL |
 
 ---
 
