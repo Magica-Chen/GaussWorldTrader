@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 from datetime import time
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 
 from .trading_engine import TradingEngine
+
+if TYPE_CHECKING:
+    from src.agent.notification_service import NotificationService
 
 
 class TradingStockEngine(TradingEngine):
@@ -29,8 +32,9 @@ class TradingStockEngine(TradingEngine):
     EXTENDED_OPEN = time(4, 0)
     EXTENDED_CLOSE = time(20, 0)
 
-    def __init__(self, paper_trading: bool = True, allow_fractional: bool = False) -> None:
-        super().__init__(paper_trading)
+    def __init__(self, paper_trading: bool = True, allow_fractional: bool = False,
+                 notification_service: "NotificationService" = None) -> None:
+        super().__init__(paper_trading, notification_service)
         self.allow_fractional = allow_fractional
 
     def validate_order(self, symbol: str, qty: float, side: str) -> None:
@@ -100,6 +104,7 @@ class TradingStockEngine(TradingEngine):
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Stock market order placed: {side} {qty} shares of {symbol}")
+        self._notify_order(order_dict)
         return order_dict
 
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
@@ -127,6 +132,7 @@ class TradingStockEngine(TradingEngine):
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Stock limit order placed: {side} {qty} shares of {symbol} at ${limit_price}")
+        self._notify_order(order_dict)
         return order_dict
 
     def place_bracket_order(self, symbol: str, qty: float, side: str,
@@ -167,6 +173,7 @@ class TradingStockEngine(TradingEngine):
             f"Stock bracket order placed: {side} {qty} of {symbol} "
             f"(SL: ${stop_loss}, TP: ${take_profit})"
         )
+        self._notify_order(order_dict)
         return order_dict
 
     def short_sell(self, symbol: str, qty: float,

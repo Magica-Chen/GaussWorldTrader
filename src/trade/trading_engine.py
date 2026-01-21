@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TYPE_CHECKING
 import logging
+
+if TYPE_CHECKING:
+    from src.agent.notification_service import NotificationService
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
@@ -16,7 +19,8 @@ from .portfolio import Portfolio
 class TradingEngine(ABC):
     """Abstract base trading engine for Alpaca API integration."""
 
-    def __init__(self, paper_trading: bool = True) -> None:
+    def __init__(self, paper_trading: bool = True,
+                 notification_service: "NotificationService" = None) -> None:
         if not Config.validate_alpaca_config():
             raise ValueError("Alpaca API credentials not configured")
 
@@ -29,6 +33,7 @@ class TradingEngine(ABC):
         self.paper_trading = paper_trading
         self.portfolio = Portfolio()
         self.logger = logging.getLogger(self.__class__.__name__)
+        self._notification_service = notification_service
 
         if paper_trading:
             self.logger.info("Trading engine initialized in PAPER TRADING mode")
@@ -38,6 +43,11 @@ class TradingEngine(ABC):
     def normalize_symbol(self, symbol: str) -> str:
         """Normalize symbol format. Override in subclasses for asset-specific handling."""
         return symbol.strip().upper()
+
+    def _notify_order(self, order_dict: Dict[str, Any]) -> None:
+        """Send notification for order submission if notification service is configured."""
+        if self._notification_service:
+            self._notification_service.notify_order_submitted(order_dict)
 
     def validate_order(self, symbol: str, qty: float, side: str) -> None:
         """Validate order before submission. Override in subclasses for asset-specific rules."""
@@ -83,6 +93,7 @@ class TradingEngine(ABC):
         }
 
         self.logger.info(f"Stop loss order placed: {side} {qty} of {symbol} at ${stop_price}")
+        self._notify_order(order_dict)
         return order_dict
 
     def cancel_order(self, order_id: str) -> bool:

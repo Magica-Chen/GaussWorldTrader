@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from alpaca.trading.requests import (
     MarketOrderRequest,
@@ -12,6 +12,9 @@ from alpaca.trading.requests import (
 from alpaca.trading.enums import OrderSide, TimeInForce
 
 from .trading_engine import TradingEngine
+
+if TYPE_CHECKING:
+    from src.agent.notification_service import NotificationService
 
 
 class TradingOptionEngine(TradingEngine):
@@ -26,8 +29,9 @@ class TradingOptionEngine(TradingEngine):
     See: https://docs.alpaca.markets/docs/options-trading
     """
 
-    def __init__(self, paper_trading: bool = True) -> None:
-        super().__init__(paper_trading)
+    def __init__(self, paper_trading: bool = True,
+                 notification_service: "NotificationService" = None) -> None:
+        super().__init__(paper_trading, notification_service)
 
     def validate_order(self, symbol: str, qty: float, side: str) -> None:
         """Validate option order - whole contracts, valid expiration."""
@@ -127,6 +131,7 @@ class TradingOptionEngine(TradingEngine):
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Option market order placed: {side} {int(qty)} contracts of {symbol}")
+        self._notify_order(order_dict)
         return order_dict
 
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
@@ -156,6 +161,7 @@ class TradingOptionEngine(TradingEngine):
         self.logger.info(
             f"Option limit order placed: {side} {int(qty)} contracts of {symbol} at ${limit_price}"
         )
+        self._notify_order(order_dict)
         return order_dict
 
     def buy_to_open(self, symbol: str, qty: int,

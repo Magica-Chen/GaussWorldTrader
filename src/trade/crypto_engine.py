@@ -58,6 +58,7 @@ class TradingCryptoEngine(TradingEngine):
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Crypto market order placed: {side} {qty} of {symbol}")
+        self._notify_order(order_dict)
         return order_dict
 
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
@@ -77,6 +78,7 @@ class TradingCryptoEngine(TradingEngine):
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Crypto limit order placed: {side} {qty} of {symbol} at ${limit_price}")
+        self._notify_order(order_dict)
         return order_dict
 
     def get_crypto_positions(self) -> list[Dict[str, Any]]:

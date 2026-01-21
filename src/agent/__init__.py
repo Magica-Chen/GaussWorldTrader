@@ -10,8 +10,10 @@ from src.data.finnhub_provider import FinnhubProvider
 from src.data.fred_provider import FREDProvider
 from .fundamental_analyzer import FundamentalAnalyzer
 from .agent_manager import AgentManager
+from .notification_service import NotificationService, TradeStreamHandler
 
 __all__ = [
     'OpenAIProvider', 'DeepSeekProvider', 'ClaudeProvider', 'MoonshotProvider',
-    'FinnhubProvider', 'FREDProvider', 'FundamentalAnalyzer', 'AgentManager'
+    'FinnhubProvider', 'FREDProvider', 'FundamentalAnalyzer', 'AgentManager',
+    'NotificationService', 'TradeStreamHandler'
 ]
