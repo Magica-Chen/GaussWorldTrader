@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from src.data import AlpacaDataProvider
 from src.utils.timezone_utils import now_et
-from src.utils.validators import convert_crypto_symbol_for_display
+from src.account.position_manager import convert_crypto_symbol_for_display
 
 if TYPE_CHECKING:
     from src.strategy.base import StrategyBase

@@ -8,9 +8,9 @@ from typing import List, Optional
 from src.trade.live_trading_option import LiveTradingOption
 from src.trade.live_runner import run_live_engines
 from src.trade.option_engine import TradingOptionEngine
-from src.utils.live_utils import merge_symbol_sources
+from src.agent.live_utils import merge_symbol_sources
 from src.utils.timezone_utils import format_duration
-from src.utils.watchlist_manager import WatchlistManager
+from src.agent.watchlist_manager import WatchlistManager
 
 
 def get_default_option_symbols() -> List[str]:

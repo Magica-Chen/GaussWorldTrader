@@ -14,7 +14,7 @@ from src.data import AlpacaDataProvider
 from src.strategy import get_strategy_registry
 from src.trade import Backtester, TradingEngine
 from src.utils.timezone_utils import now_et
-from src.utils.watchlist_manager import WatchlistManager
+from src.agent.watchlist_manager import WatchlistManager
 
 app = typer.Typer(add_completion=False)
 

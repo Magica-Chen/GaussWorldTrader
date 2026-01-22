@@ -174,7 +174,7 @@ class TradingEngine(ABC):
     def get_current_positions(self) -> List[Dict[str, Any]]:
         """Get all current positions."""
         try:
-            from src.utils.validators import convert_crypto_symbol_for_display
+            from src.account.position_manager import convert_crypto_symbol_for_display
             positions = self.api.get_all_positions()
             return [{
                 'symbol': convert_crypto_symbol_for_display(pos.symbol),

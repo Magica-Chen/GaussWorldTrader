@@ -8,8 +8,8 @@ from typing import List, Optional
 from src.trade.crypto_engine import TradingCryptoEngine
 from src.trade.live_trading_crypto import LiveTradingCrypto
 from src.trade.live_runner import run_live_engines
-from src.utils.live_utils import merge_symbol_sources
-from src.utils.watchlist_manager import WatchlistManager
+from src.agent.live_utils import merge_symbol_sources
+from src.agent.watchlist_manager import WatchlistManager
 
 
 def get_default_crypto_symbols() -> List[str]:

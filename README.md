@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/pic/logo3.png" width="600" alt="Gauss World Trader logo">
+  <img src="docs/logo3.png" width="600" alt="Gauss World Trader logo">
   <p>
     <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
     <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
@@ -118,7 +118,7 @@ python main_cli.py list-strategies
 | **CLI** | `python main_cli.py` | Command-line interface for scripting and automation |
 | **Dashboard** | `python dashboard.py` | Interactive Streamlit web interface at `http://localhost:3721` |
 
- ![Trading Dashboard](/src/pic/screenshot2.png)
+ ![Trading Dashboard](/docs/screenshot2.png)
 
 ### CLI Examples
 
@@ -138,7 +138,7 @@ python main_cli.py stream-market --asset-type crypto --crypto-loc eu-1 --symbols
 # Launch unified interactive CLI
 python live_script.py
 ```
- ![live Trading CLI](/src/pic/screenshot1.png)
+ ![live Trading CLI](/docs/screenshot1.png)
 
 The unified CLI provides:
 - **Quick Start** — Trade all asset types with watchlist defaults
@@ -223,11 +223,13 @@ GaussWorldTrader/
 ├── 📁 src/
 │   ├── 📁 strategy/        # Trading strategies & templates
 │   ├── 📁 script/          # Live trading modules (stock, crypto, option)
-│   ├── 📁 ui/              # Dashboard components
+│   ├── 📁 agent/           # AI analysis, watchlist manager, live utils
+│   ├── 📁 ui/              # Dashboard (mixin-based architecture)
 │   ├── 📁 trade/           # Trading engine & backtester
 │   ├── 📁 data/            # Market data providers
-│   └── 📁 account/         # Portfolio & position tracking
-└── 📁 docs/                # Documentation
+│   ├── 📁 account/         # Portfolio & position tracking
+│   └── 📁 utils/           # Core utilities (asset, timezone, logger)
+└── 📁 docs/                # Documentation and images
 ```
 
 ---

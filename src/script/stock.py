@@ -8,9 +8,9 @@ from typing import List, Optional
 from src.trade.live_trading_stock import LiveTradingStock
 from src.trade.live_runner import run_live_engines
 from src.trade.stock_engine import TradingStockEngine
-from src.utils.live_utils import merge_symbol_sources, positions_for_asset_type
+from src.agent.live_utils import merge_symbol_sources, positions_for_asset_type
 from src.utils.timezone_utils import format_duration
-from src.utils.watchlist_manager import WatchlistManager
+from src.agent.watchlist_manager import WatchlistManager
 
 
 def get_default_stock_symbols() -> List[str]:

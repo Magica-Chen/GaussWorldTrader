@@ -10,6 +10,33 @@ from typing import Dict, List, Any, Optional
 import pandas as pd
 from datetime import datetime
 
+
+def convert_crypto_symbol_for_display(symbol: str) -> str:
+    """
+    Convert crypto symbols to consistent display format.
+    Converts BTCUSD (position format) to BTC/USD (display/API format).
+    """
+    if not isinstance(symbol, str):
+        return symbol
+
+    # Known crypto symbol mappings (position format -> display format)
+    crypto_mappings = {
+        'BTCUSD': 'BTC/USD',
+        'ETHUSD': 'ETH/USD',
+        'LTCUSD': 'LTC/USD',
+        'BCHUSD': 'BCH/USD',
+        'ADAUSD': 'ADA/USD',
+        'DOTUSD': 'DOT/USD',
+        'UNIUSD': 'UNI/USD',
+        'LINKUSD': 'LINK/USD',
+        'XLMUSD': 'XLM/USD',
+        'ALGOUSD': 'ALGO/USD'
+    }
+
+    # Convert if it's a known crypto symbol, otherwise return as-is
+    return crypto_mappings.get(symbol.upper(), symbol)
+
+
 class PositionManager:
     """Manages trading positions"""
     
@@ -20,8 +47,7 @@ class PositionManager:
     def get_all_positions(self) -> List[Dict[str, Any]]:
         """Get all current positions"""
         try:
-            from src.utils.validators import convert_crypto_symbol_for_display
-            
+                        
             response = requests.get(
                 f"{self.account_manager.base_url}/v2/positions",
                 headers=self.account_manager.headers,
@@ -47,8 +73,7 @@ class PositionManager:
     def get_position(self, symbol: str) -> Dict[str, Any]:
         """Get position for specific symbol"""
         try:
-            from src.utils.validators import convert_crypto_symbol_for_display
-            
+                        
             response = requests.get(
                 f"{self.account_manager.base_url}/v2/positions/{symbol}",
                 headers=self.account_manager.headers,

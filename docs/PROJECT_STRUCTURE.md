@@ -12,6 +12,7 @@ This repo is simplified around two entry points:
 GaussWorldTrader/
 ├── main_cli.py            # CLI entry point
 ├── dashboard.py           # Streamlit launcher
+├── live_script.py         # Unified live trading CLI
 ├── README.md              # Project documentation
 ├── pyproject.toml         # Python project configuration
 ├── requirements.txt       # Dependencies
@@ -23,18 +24,34 @@ GaussWorldTrader/
 │
 ├── src/                   # Source code
 │   ├── account/           # Account and portfolio management
-│   ├── agent/             # AI/LLM analysis utilities
+│   ├── agent/             # AI/LLM analysis, watchlist, live utils
+│   │   ├── watchlist_manager.py  # Watchlist management
+│   │   ├── live_utils.py         # Live trading utilities
+│   │   └── ...
 │   ├── analysis/          # Indicators and analytics
 │   ├── data/              # Market data providers
 │   ├── option_strategy/   # Options strategies (e.g., wheel)
+│   ├── pic/               # Images used in code (logo2.png)
+│   ├── script/            # Live trading modules per asset
 │   ├── strategy/          # Strategy template + built-ins
 │   ├── trade/             # Trading engine + backtester
-│   ├── ui/                # Streamlit dashboard
-│   └── utils/             # Shared utilities
+│   ├── ui/                # Streamlit dashboard (mixin-based)
+│   │   ├── dashboard.py        # Main dashboard orchestrator
+│   │   ├── market_views.py     # Market overview views
+│   │   ├── account_views.py    # Account/portfolio views
+│   │   ├── trading_views.py    # Trading/backtest views
+│   │   ├── analysis_views.py   # Analysis/news views
+│   │   ├── ui_components.py    # Reusable UI components
+│   │   └── dashboard_utils.py  # Dashboard utilities
+│   └── utils/             # Core utilities (asset_utils, timezone_utils, logger)
 │
 ├── examples/              # Example scripts
-├── tests/                 # Smoke tests
-└── docs/                  # Documentation
+├── tests/                 # Smoke tests (gitignored)
+└── docs/                  # Documentation and README images
+    ├── logo.png
+    ├── logo3.png
+    ├── screenshot1.png
+    └── screenshot2.png
 ```
 
 ## Strategy Template

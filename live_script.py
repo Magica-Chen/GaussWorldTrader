@@ -18,7 +18,7 @@ from src.script.option import create_option_engines, get_default_option_symbols
 from src.script.stock import create_stock_engines, get_default_stock_symbols
 from src.strategy.registry import get_strategy_registry
 from src.trade.live_runner import run_live_engines
-from src.utils.watchlist_manager import WatchlistManager
+from src.agent.watchlist_manager import WatchlistManager
 
 console = Console()
 
