@@ -862,21 +862,30 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                 st.session_state.news_stream_messages = st.session_state.news_stream_messages[-max_keep:]
 
     def render_header_info(self):
-        """Render header info row."""
-        col1, col2, col3, col4 = st.columns(4)
-        account_info, _ = self.get_account_info()
-        if account_info:
-            equity = float(account_info.get('equity', 0))
-            last_equity = float(account_info.get('last_equity', equity))
-            day_pl = equity - last_equity
+        """Render header with account tier and data source info."""
+        current_time = now_et()
+        try:
+            provider = AlpacaDataProvider()
+            account_info = provider.get_account_info()
+            vip = account_info.get('vip', False)
+            using_iex = account_info.get('using_iex', False)
+            account_tier = "VIP Account" if vip else "Free Tier"
+            is_trading_day = current_time.weekday() < 5
+
+            col1, col2 = st.columns([1, 1])
             with col1:
-                st.metric("Portfolio Value", f"${float(account_info.get('portfolio_value', 0)):,.2f}")
+                if vip:
+                    st.success(f"✨ {account_tier}")
+                else:
+                    st.info(f"🆓 {account_tier}")
             with col2:
-                st.metric("Buying Power", f"${float(account_info.get('buying_power', 0)):,.2f}")
-            with col3:
-                st.metric("Cash", f"${float(account_info.get('cash', 0)):,.2f}")
-            with col4:
-                st.metric("Day P&L", f"${day_pl:+,.2f}")
+                if not vip and is_trading_day:
+                    if using_iex:
+                        st.info("📊 15 Mins Delay")
+                    else:
+                        st.info("📊 Live Data")
+        except Exception:
+            st.info("🆓 Free Tier")
 
     def run_dashboard(self):
         """Main dashboard execution."""
