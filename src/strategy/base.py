@@ -36,10 +36,15 @@ class StrategyMeta:
 
 @dataclass(frozen=True)
 class StrategySignal:
-    """Normalized signal output for backtests and live runs."""
+    """Normalized signal output for backtests and live runs.
 
+    Core fields work for all asset types. Optional fields support options trading
+    without breaking existing stock/crypto strategies.
+    """
+
+    # Core fields (all asset types)
     symbol: str
-    action: str  # BUY or SELL
+    action: str  # BUY|SELL|SELL_TO_OPEN|BUY_TO_CLOSE|ROLL|HOLD
     quantity: float
     price: Optional[float] = None
     reason: str = ""
@@ -47,8 +52,17 @@ class StrategySignal:
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
 
+    # Option-specific fields (None for stocks/crypto)
+    underlying_symbol: Optional[str] = None
+    option_type: Optional[str] = None  # "put" or "call"
+    strike_price: Optional[float] = None
+    expiration_date: Optional[datetime] = None
+    delta: Optional[float] = None
+    premium: Optional[float] = None
+    strategy_stage: Optional[str] = None  # e.g., "cash_secured_put", "covered_call"
+
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "symbol": self.symbol,
             "action": self.action,
             "quantity": self.quantity,
@@ -58,6 +72,40 @@ class StrategySignal:
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
         }
+        # Include option fields only if present
+        if self.underlying_symbol is not None:
+            result["underlying_symbol"] = self.underlying_symbol
+        if self.option_type is not None:
+            result["option_type"] = self.option_type
+        if self.strike_price is not None:
+            result["strike_price"] = self.strike_price
+        if self.expiration_date is not None:
+            result["expiration_date"] = self.expiration_date
+        if self.delta is not None:
+            result["delta"] = self.delta
+        if self.premium is not None:
+            result["premium"] = self.premium
+        if self.strategy_stage is not None:
+            result["strategy_stage"] = self.strategy_stage
+        return result
+
+
+@dataclass
+class MarketDataContext:
+    """Container for all market data passed to strategy.generate_signals().
+
+    This provides a unified interface for data injection, enabling pure strategies
+    that don't need to fetch their own data. Supports stocks, crypto, and options.
+    """
+
+    current_prices: Dict[str, float]
+    historical_bars: Dict[str, pd.DataFrame]
+    portfolio_value: float = 100000.0
+    available_cash: float = 100000.0
+    current_positions: Optional[Dict[str, Any]] = None
+    # Option-specific data injection (Phase 2)
+    options_chains: Optional[Dict[str, pd.DataFrame]] = None
+    option_positions: Optional[Dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -234,32 +282,7 @@ class StrategyBase:
         }
 
     def _skip_summary_check(self) -> bool:
-        return isinstance(self, (BaseCryptoStrategy, BaseOptionStrategy)) or self.__class__ is StrategyBase
-
-
-class BaseCryptoStrategy(StrategyBase):
-    """Base class for crypto strategies."""
-
-    meta = StrategyMeta(
-        name="crypto_base",
-        label="Crypto Base",
-        category="crypto",
-        description="Base class for crypto strategies.",
-        asset_type="crypto",
-        visible_in_dashboard=False,
-        default_params={},
-    )
-
-    def _position_size(self, price: float, portfolio_value: float, risk_pct: float) -> float:
-        if price <= 0 or portfolio_value <= 0:
-            return 0.0
-        quantity = (portfolio_value * risk_pct) / price
-        precision = int(self.params.get("qty_precision", 6))
-        min_qty = float(self.params.get("min_qty", 0.0))
-        quantity = round(quantity, precision)
-        if min_qty > 0 and quantity < min_qty:
-            return 0.0
-        return quantity
+        return isinstance(self, BaseOptionStrategy) or self.__class__ is StrategyBase
 
 
 class BaseOptionStrategy(StrategyBase, ABC):

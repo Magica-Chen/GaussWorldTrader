@@ -1,4 +1,10 @@
-from .base import StrategyBase, StrategyMeta, StrategySignal, BaseOptionStrategy, BaseCryptoStrategy
+from .base import (
+    StrategyBase,
+    StrategyMeta,
+    StrategySignal,
+    MarketDataContext,
+    BaseOptionStrategy,
+)
 from .registry import get_strategy_registry, StrategyRegistry
 from .option import WheelStrategy
 from .crypto import CryptoMomentumStrategy
@@ -14,8 +20,8 @@ __all__ = [
     "StrategyBase",
     "StrategyMeta",
     "StrategySignal",
+    "MarketDataContext",
     "BaseOptionStrategy",
-    "BaseCryptoStrategy",
     "StrategyRegistry",
     "get_strategy_registry",
     "CryptoMomentumStrategy",
