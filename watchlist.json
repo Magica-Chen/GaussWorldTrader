@@ -1,15 +1,33 @@
 {
   "watchlist": [
-    {"symbol": "AAPL", "asset_type": "stock"},
-    {"symbol": "MSFT", "asset_type": "stock"},
-    {"symbol": "NVDA", "asset_type": "stock"},
-    {"symbol": "GOOG", "asset_type": "stock"},
-    {"symbol": "BTC/USD", "asset_type": "crypto"},
-    {"symbol": "ETH/USD", "asset_type": "crypto"}
+    {
+      "symbol": "AAPL",
+      "asset_type": "stock"
+    },
+    {
+      "symbol": "MSFT",
+      "asset_type": "stock"
+    },
+    {
+      "symbol": "NVDA",
+      "asset_type": "stock"
+    },
+    {
+      "symbol": "BTC/USD",
+      "asset_type": "crypto"
+    },
+    {
+      "symbol": "ETH/USD",
+      "asset_type": "crypto"
+    },
+    {
+      "symbol": "DFDV",
+      "asset_type": "stock"
+    }
   ],
   "metadata": {
     "created": "2025-08-21",
-    "last_updated": "2026-01-16 00:11:10",
+    "last_updated": "2026-01-24 17:24:43",
     "description": "Gauss World Trader Default Watchlist",
     "version": "2.0"
   }

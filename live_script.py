@@ -13,9 +13,9 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
-from src.script.crypto import create_crypto_engines, get_default_crypto_symbols
-from src.script.option import create_option_engines, get_default_option_symbols
-from src.script.stock import create_stock_engines, get_default_stock_symbols
+from src.trade.live_trading_crypto import create_crypto_engines, get_default_crypto_symbols
+from src.trade.live_trading_option import create_option_engines, get_default_option_symbols
+from src.trade.live_trading_stock import create_stock_engines, get_default_stock_symbols
 from src.strategy.registry import get_strategy_registry
 from src.trade.live_runner import run_live_engines
 from src.agent.watchlist_manager import WatchlistManager

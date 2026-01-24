@@ -91,8 +91,10 @@ packages = [
     "src.agent",
     "src.analysis",
     "src.data",
-    "src.option_strategy",
     "src.strategy",
+    "src.strategy.crypto",
+    "src.strategy.option",
+    "src.strategy.stock",
     "src.trade",
     "src.ui",
     "src.utils"

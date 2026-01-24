@@ -262,6 +262,9 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             if logo_path.exists():
                 st.image(str(logo_path), width=150)
 
+            self.render_account_tier_sidebar()
+            st.divider()
+
             st.header("Navigation")
             selected_tab = st.radio(
                 "Choose a section:",
@@ -861,8 +864,8 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             if len(st.session_state.news_stream_messages) > max_keep:
                 st.session_state.news_stream_messages = st.session_state.news_stream_messages[-max_keep:]
 
-    def render_header_info(self):
-        """Render header with account tier and data source info."""
+    def render_account_tier_sidebar(self):
+        """Render account tier and data source info in sidebar."""
         current_time = now_et()
         try:
             provider = AlpacaDataProvider()
@@ -872,20 +875,23 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             account_tier = "VIP Account" if vip else "Free Tier"
             is_trading_day = current_time.weekday() < 5
 
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if vip:
-                    st.success(f"✨ {account_tier}")
+            if vip:
+                st.success(f"✨ {account_tier}")
+            else:
+                st.info(f"🆓 {account_tier}")
+
+            if not vip and is_trading_day:
+                if using_iex:
+                    st.info("📊 15 Mins Delay")
                 else:
-                    st.info(f"🆓 {account_tier}")
-            with col2:
-                if not vip and is_trading_day:
-                    if using_iex:
-                        st.info("📊 15 Mins Delay")
-                    else:
-                        st.info("📊 Live Data")
+                    st.info("📊 Live Data")
+            elif vip:
+                st.success("📊 Live Data")
+            else:
+                st.info("📊 Market Closed")
         except Exception:
             st.info("🆓 Free Tier")
+            st.info("📊 Unknown")
 
     def run_dashboard(self):
         """Main dashboard execution."""
@@ -893,7 +899,6 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             st.markdown("<h1 style='text-align: center;'>🌍 Gauss World Trader</h1>", unsafe_allow_html=True)
             st.markdown("<p style='text-align: center; font-style: italic;'>Advanced Trading Platform with Comprehensive Market Analysis</p>",
                         unsafe_allow_html=True)
-            self.render_header_info()
             st.divider()
             self.create_main_navigation()
             st.divider()

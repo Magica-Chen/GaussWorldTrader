@@ -222,12 +222,11 @@ GaussWorldTrader/
 ├── 📄 watchlist.json       # Watchlist entries with asset_type
 ├── 📁 src/
 │   ├── 📁 strategy/        # Trading strategies & templates
-│   ├── 📁 script/          # Live trading modules (stock, crypto, option)
-│   ├── 📁 agent/           # AI analysis, watchlist manager, live utils
+│   ├── 📁 agent/           # AI analysis, watchlist manager, notifications
 │   ├── 📁 ui/              # Dashboard (mixin-based architecture)
-│   ├── 📁 trade/           # Trading engine & backtester
+│   ├── 📁 trade/           # Trading engine, backtester, live trading helpers
 │   ├── 📁 data/            # Market data providers
-│   ├── 📁 account/         # Portfolio & position tracking
+│   ├── 📁 account/         # Account, positions, portfolio tracking
 │   └── 📁 utils/           # Core utilities (asset, timezone, logger)
 └── 📁 docs/                # Documentation and images
 ```

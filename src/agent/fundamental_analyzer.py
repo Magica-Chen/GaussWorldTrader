@@ -13,7 +13,6 @@ import json
 
 from src.data.finnhub_provider import FinnhubProvider
 from src.data.fred_provider import FREDProvider
-from src.data.market_info_provider import get_comprehensive_market_data
 from .llm_providers import create_provider, get_available_providers
 
 class FundamentalAnalyzer:
@@ -43,11 +42,7 @@ class FundamentalAnalyzer:
         self.logger.info(f"Starting fundamental analysis for {symbol}")
         
         # Gather all data
-        market_data = get_comprehensive_market_data(
-            symbol, 
-            self.finnhub.api_key, 
-            self.fred.api_key
-        )
+        market_data = self._get_comprehensive_market_data(symbol)
         
         # Perform financial ratio analysis
         financial_analysis = self._analyze_financial_ratios(market_data.get('basic_financials', {}))
@@ -89,6 +84,27 @@ class FundamentalAnalyzer:
                 analysis_result['ai_insights'] = {"error": str(e)}
         
         return analysis_result
+
+    def _get_comprehensive_market_data(self, symbol: str) -> Dict[str, Any]:
+        """Get comprehensive market data from multiple sources."""
+        data: Dict[str, Any] = {}
+
+        # Finnhub data
+        data['company_profile'] = self.finnhub.get_company_profile(symbol)
+        data['basic_financials'] = self.finnhub.get_basic_financials(symbol)
+        data['company_news'] = self.finnhub.get_company_news(symbol)
+        data['recommendations'] = self.finnhub.get_recommendation_trends(symbol)
+        data['price_target'] = self.finnhub.get_price_target(symbol)
+        data['quote'] = self.finnhub.get_quote(symbol)
+        data['earnings_surprises'] = self.finnhub.get_earnings_surprises(symbol)
+        data['insider_transactions'] = self.finnhub.get_insider_transactions(symbol)
+        data['insider_sentiment'] = self.finnhub.get_insider_sentiment(symbol)
+
+        # FRED economic data
+        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+        data['economic_indicators'] = self.fred.get_economic_indicators(start_date)
+
+        return data
     
     def _analyze_financial_ratios(self, financials: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze key financial ratios"""
