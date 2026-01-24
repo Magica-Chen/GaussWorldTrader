@@ -24,15 +24,15 @@ GaussWorldTrader/
 │   └── config.py
 │
 ├── src/                   # Source code
-│   ├── account/           # Account and portfolio management
-│   ├── agent/             # AI/LLM analysis, watchlist, notifications
+│   ├── account/           # Account and position management
+│   ├── agent/             # LLM helpers, watchlist, notifications
 │   │   ├── watchlist_manager.py  # Watchlist management
 │   │   └── ...
-│   ├── analysis/          # Indicators and analytics
+│   ├── analysis/          # Technical analysis (metrics re-exported)
 │   ├── data/              # Market data providers
 │   ├── pic/               # Images used in code (logo2.png)
-│   ├── strategy/          # Strategy template + built-ins
-│   ├── trade/             # Trading engine + backtester + live trading helpers
+│   ├── strategy/          # Strategy base, registry, per-asset strategies
+│   ├── trade/             # Trading engines, backtester, live trading, portfolio analytics
 │   ├── ui/                # Streamlit dashboard (mixin-based)
 │   │   ├── dashboard.py        # Main dashboard orchestrator
 │   │   ├── market_views.py     # Market overview views
@@ -60,8 +60,17 @@ All strategies live under:
 - `src/strategy/option/`
 
 Key concepts:
-- `StrategyBase` and specialized base classes in `src/strategy/base.py`
+- `StrategyBase`, `BaseOptionStrategy`, and helpers in `src/strategy/base.py`
 - `StrategyRegistry` in `src/strategy/registry.py`
+- `crypto_momentum` is a factory alias for `MomentumStrategy` with crypto defaults
+
+## Live Trading Helpers
+
+Live trading modules live in `src/trade/`:
+- `src/trade/live_trading_stock.py`
+- `src/trade/live_trading_crypto.py`
+- `src/trade/live_trading_option.py`
+- `src/trade/live_runner.py` (shared websocket runner)
 
 ## Entry Points
 
@@ -75,4 +84,9 @@ python main_cli.py backtest momentum AAPL
 ### Dashboard
 ```
 python dashboard.py
+```
+
+### Live Trading CLI
+```
+python live_script.py
 ```

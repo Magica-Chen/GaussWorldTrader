@@ -62,6 +62,7 @@ Whether you're a beginner learning about markets or an experienced trader buildi
 **Step 3: Choose Your Interface**
 - **Dashboard** — Launch the web-based Streamlit interface for visual analysis and monitoring
 - **CLI** — Use the command-line interface for scripting and automation
+- **Live Trading CLI** — Use the unified interactive CLI for live trading sessions
 
 **Step 4: Start with Paper Trading**
 - Always begin with Alpaca's paper trading mode to test strategies without risking real money
@@ -111,12 +112,13 @@ python main_cli.py list-strategies
 
 ---
 
-## 🎯 Two Entry Points
+## 🎯 Entry Points
 
 | Entry Point | Command | Description |
 |-------------|---------|-------------|
 | **CLI** | `python main_cli.py` | Command-line interface for scripting and automation |
 | **Dashboard** | `python dashboard.py` | Interactive Streamlit web interface at `http://localhost:3721` |
+| **Live Trading CLI** | `python live_script.py` | Unified interactive live trading menu |
 
  ![Trading Dashboard](/docs/screenshot2.png)
 
@@ -150,6 +152,8 @@ The unified CLI provides:
 | Stock | momentum, value, trend_following, scalping, statistical_arbitrage |
 | Crypto | crypto_momentum |
 | Option | wheel |
+
+Note: `crypto_momentum` is the unified MomentumStrategy configured with crypto defaults.
 
 Notes:
 - Multi-symbol runs share a single websocket per asset type to stay within Alpaca connection limits.
@@ -204,6 +208,7 @@ order = engine.place_market_order("BTC/USD", 0.001, "buy")  # Triggers SUBMITTED
 | Strategy | Category | Dashboard |
 |----------|----------|-----------|
 | 📈 Momentum | Signal | ✅ |
+| 🪙 Crypto Momentum | Signal | ✅ |
 | 💰 Value | Signal | ✅ |
 | 📉 Trend Following | Signal | ✅ |
 | ⚡ Scalping | Signal | ✅ |
@@ -221,12 +226,13 @@ GaussWorldTrader/
 ├── 📄 live_script.py       # Unified live trading CLI
 ├── 📄 watchlist.json       # Watchlist entries with asset_type
 ├── 📁 src/
-│   ├── 📁 strategy/        # Trading strategies & templates
-│   ├── 📁 agent/           # AI analysis, watchlist manager, notifications
-│   ├── 📁 ui/              # Dashboard (mixin-based architecture)
-│   ├── 📁 trade/           # Trading engine, backtester, live trading helpers
+│   ├── 📁 strategy/        # Strategy base, registry, per-asset strategies
+│   ├── 📁 trade/           # Trading engines, backtester, live trading, portfolio analytics
 │   ├── 📁 data/            # Market data providers
-│   ├── 📁 account/         # Account, positions, portfolio tracking
+│   ├── 📁 account/         # Account + positions management
+│   ├── 📁 analysis/        # Technical analysis (metrics re-exported)
+│   ├── 📁 agent/           # Watchlist, fundamentals, notifications
+│   ├── 📁 ui/              # Dashboard (mixin-based architecture)
 │   └── 📁 utils/           # Core utilities (asset, timezone, logger)
 └── 📁 docs/                # Documentation and images
 ```
@@ -262,6 +268,9 @@ class MyStrategy(StrategyBase):
             )
         ])
 ```
+
+Register your strategy in `src/strategy/registry.py`. For crypto strategies, set
+`asset_type="crypto"` in `StrategyMeta` (or use the built-in `crypto_momentum` alias).
 
 ---
 
