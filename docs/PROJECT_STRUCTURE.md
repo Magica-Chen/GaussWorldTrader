@@ -32,7 +32,8 @@ GaussWorldTrader/
 │   ├── data/              # Market data providers
 │   ├── pic/               # Images used in code (logo2.png)
 │   ├── strategy/          # Strategy base, registry, per-asset strategies
-│   ├── trade/             # Trading engines, backtester, live trading, portfolio analytics
+│   ├── trade/             # Trading engines, execution, backtester, live trading, portfolio analytics
+│   │   ├── execution.py   # ExecutionEngine (sizing, order type, account limits)
 │   ├── ui/                # Streamlit dashboard (mixin-based)
 │   │   ├── dashboard.py        # Main dashboard orchestrator
 │   │   ├── market_views.py     # Market overview views
@@ -60,9 +61,22 @@ All strategies live under:
 - `src/strategy/option/`
 
 Key concepts:
-- `StrategyBase`, `BaseOptionStrategy`, and helpers in `src/strategy/base.py`
+- `StrategyBase`, `BaseOptionStrategy`, `SignalSnapshot`, `ActionPlan`, and helpers in `src/strategy/base.py`
 - `StrategyRegistry` in `src/strategy/registry.py`
 - `crypto_momentum` is a factory alias for `MomentumStrategy` with crypto defaults
+
+Strategy flow:
+- `get_signal()` computes indicators and detects signals.
+- `get_action_plan()` turns signals into an abstract plan (target price, stop loss, take profit, intent).
+- `generate_signals()` remains as a legacy wrapper for dashboard/backtests.
+
+## Execution Layer
+
+The execution layer converts action plans into concrete orders:
+- `ExecutionEngine` in `src/trade/execution.py` sizes quantity, applies order type policy, and enforces
+  account constraints (fractional trading, shorting, margin).
+- Order type `auto` uses limit orders when a target price is present (with minimal price improvement);
+  otherwise it uses market orders.
 
 ## Live Trading Helpers
 
@@ -70,6 +84,7 @@ Live trading modules live in `src/trade/`:
 - `src/trade/live_trading_stock.py`
 - `src/trade/live_trading_crypto.py`
 - `src/trade/live_trading_option.py`
+- `src/trade/live_trading_base.py` (strategy -> plan -> execution loop)
 - `src/trade/live_runner.py` (shared websocket runner)
 
 ## Entry Points

@@ -81,8 +81,24 @@ Whether you're a beginner learning about markets or an experienced trader buildi
 - **🚀 Modern Async Architecture** — Built for Python 3.12+ with async/await patterns
 - **📊 Multiple Trading Strategies** — Momentum, Value, Trend Following, Statistical Arbitrage, and more
 - **📈 Real-time Dashboard** — Interactive Streamlit interface for monitoring and analysis
+- **Strategy and Execution Layers** — Signals and plans live in strategies; sizing and orders live in execution
 - **💼 Portfolio Management** — Advanced position tracking and risk management
 - **🔌 Multi-source Data Feeds** — Alpaca, Finnhub, FRED, and News integrations
+
+---
+
+## Architecture: Strategy -> Plan -> Execution
+
+- **Strategy layer** builds indicators and signals in `get_signal()`, then maps them to an abstract
+  `ActionPlan` in `get_action_plan()` (target price, stop loss, take profit, intent).
+- **Execution layer** (`ExecutionEngine`) turns an `ActionPlan` into concrete orders: sizes quantity,
+  enforces account limits (fractional, shorting, margin), and applies order type policy.
+- **Live trading** runs on `live_trading_*.py` using the execution layer, while the dashboard/backtester
+  still uses `generate_signals()` as a legacy wrapper.
+
+Order type default (`auto`): if a plan provides a target price, a limit order is used (price improved by
+the minimum tick); otherwise a market order is used. Sell-to-open is disabled by default and only used
+when the user opts in and the account supports margin + shorting.
 
 ---
 
@@ -116,7 +132,7 @@ python main_cli.py list-strategies
 
 | Entry Point | Command | Description |
 |-------------|---------|-------------|
-| **CLI** | `python main_cli.py` | Command-line interface for scripting and automation |
+| **CLI** | `python main_cli.py` | Typer-based command-line interface for scripting and automation |
 | **Dashboard** | `python dashboard.py` | Interactive Streamlit web interface at `http://localhost:3721` |
 | **Live Trading CLI** | `python live_script.py` | Unified interactive live trading menu |
 
@@ -160,6 +176,8 @@ Notes:
 - Due to Alpaca connection limits, multiple asset types run sequentially (press Ctrl+C to advance).
 - Stock and option engines check market hours before trading.
 - Defaults are pulled from `watchlist.json` + current positions for each asset type.
+- Live trading checks account capabilities up front; fractional/shorting prompts appear only when supported.
+- Sell-to-open remains disabled unless the user explicitly enables it.
 
 ---
 
