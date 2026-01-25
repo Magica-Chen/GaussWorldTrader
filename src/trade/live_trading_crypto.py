@@ -36,6 +36,7 @@ class LiveTradingCrypto(LiveTradingEngine):
         execute: bool = True,
         auto_exit: bool = True,
         strategy: str = "crypto_momentum",
+        order_type: str = "auto",
     ) -> None:
         self.crypto_loc = crypto_loc
         self.strategy_name = strategy
@@ -48,6 +49,9 @@ class LiveTradingCrypto(LiveTradingEngine):
             take_profit_pct=take_profit_pct,
             execute=execute,
             auto_exit=auto_exit,
+            asset_type="crypto",
+            allow_sell_to_open=False,
+            order_type=order_type,
         )
 
     def _normalize_symbol(self, symbol: str) -> str:
@@ -109,6 +113,7 @@ def create_crypto_engines(
     execute: bool = True,
     auto_exit: bool = True,
     strategy: str = "crypto_momentum",
+    order_type: str = "auto",
 ) -> List[LiveTradingCrypto]:
     """Create crypto trading engines without starting them.
 
@@ -130,6 +135,7 @@ def create_crypto_engines(
             execute=execute,
             auto_exit=auto_exit,
             strategy=strategy,
+            order_type=order_type,
         )
         for symbol in trading_symbols
     ]
@@ -146,6 +152,7 @@ def run_crypto_trading(
     execute: bool = True,
     auto_exit: bool = True,
     strategy: str = "crypto_momentum",
+    order_type: str = "auto",
 ) -> None:
     """Run live cryptocurrency trading.
 
@@ -173,6 +180,7 @@ def run_crypto_trading(
         execute=execute,
         auto_exit=auto_exit,
         strategy=strategy,
+        order_type=order_type,
     )
 
     for engine in engines:

@@ -19,6 +19,9 @@ from src.trade.live_trading_stock import create_stock_engines, get_default_stock
 from src.strategy.registry import get_strategy_registry
 from src.trade.live_runner import run_live_engines
 from src.agent.watchlist_manager import WatchlistManager
+from config import Config
+from src.trade.execution import ExecutionContext, ExecutionEngine
+from src.trade.stock_engine import TradingStockEngine
 
 console = Console()
 
@@ -56,6 +59,12 @@ class TradingConfig:
     # Stock-specific
     fractional: bool = False
     extended_hours: bool = False
+    allow_sell_to_open: bool = False
+    order_type: str = "auto"
+    requested_fractional: Optional[bool] = None
+    requested_sell_to_open: Optional[bool] = None
+    supports_fractional: Optional[bool] = None
+    supports_sell_to_open: Optional[bool] = None
     # Crypto-specific
     crypto_loc: str = "us"
     # Option-specific
@@ -84,6 +93,59 @@ def show_watchlist_summary() -> None:
             table.add_row(asset_type.upper(), "[dim]None[/dim]")
 
     console.print(table)
+    console.print()
+
+
+def load_account_context() -> Optional[ExecutionContext]:
+    """Load account and configuration capabilities for validation."""
+    try:
+        logging.getLogger("TradingStockEngine").setLevel(logging.WARNING)
+        logging.getLogger("src.account.account_manager").setLevel(logging.WARNING)
+        engine = TradingStockEngine()
+        executor = ExecutionEngine(engine, asset_type="stock", execute=False)
+        return executor.load_context()
+    except Exception as exc:
+        console.print(f"[red]Failed to load account info: {exc}[/red]")
+        return None
+
+
+def show_account_summary(context: ExecutionContext) -> None:
+    """Display account capability summary."""
+    console.print(Panel("[bold]Account Summary[/bold]", style="blue"))
+
+    mode = "Paper Trading" if "paper" in Config.ALPACA_BASE_URL else "Live Trading"
+    info = context.account_info or {}
+    overview = Table(title="Account Info", show_header=True, header_style="bold")
+    overview.add_column("Field", style="cyan")
+    overview.add_column("Value", style="green")
+    overview.add_row("Mode", mode)
+    overview.add_row("Account ID", str(info.get("account_id", "N/A")))
+    overview.add_row("Buying Power", f"${context.buying_power:,.2f}")
+    overview.add_row("Non-marginable BP", f"${float(info.get('non_marginable_buying_power', 0.0)):,.2f}")
+    overview.add_row("Daytrading BP", f"${float(info.get('daytrading_buying_power', 0.0)):,.2f}")
+    overview.add_row("Cash", f"${context.cash:,.2f}")
+    overview.add_row("Portfolio Value", f"${context.portfolio_value:,.2f}")
+    overview.add_row("Pattern Day Trader", "Yes" if info.get("pattern_day_trader", False) else "No")
+    overview.add_row(
+        "Daytrade Count",
+        str(info.get("daytrade_count", info.get("day_trade_count", "N/A"))),
+    )
+    console.print(overview)
+
+    config = context.account_config or {}
+    config_table = Table(title="Account Settings", show_header=True, header_style="bold")
+    config_table.add_column("Setting", style="cyan")
+    config_table.add_column("Value", style="green")
+    config_table.add_row(
+        "Fractional Trading",
+        "Enabled" if config.get("fractional_trading", False) else "Disabled",
+    )
+    config_table.add_row("Shorting Enabled", "Yes" if context.shorting_enabled else "No")
+    config_table.add_row("Margin Enabled", "Yes" if context.margin_enabled else "No")
+    config_table.add_row("Max Margin Multiplier", str(config.get("max_margin_multiplier", "N/A")))
+    config_table.add_row("PDT Check", str(config.get("pdt_check", "N/A")))
+    config_table.add_row("Multiplier", str(info.get("multiplier", "N/A")))
+    console.print(config_table)
     console.print()
 
 
@@ -201,8 +263,11 @@ def configure_strategies(asset_types: List[str]) -> Dict[str, str]:
     return strategies
 
 
-def configure_parameters(config: TradingConfig) -> TradingConfig:
+def configure_parameters(config: TradingConfig, context: Optional[ExecutionContext]) -> TradingConfig:
     """Configure trading parameters interactively."""
+    if context:
+        config.supports_fractional = context.fractional_enabled
+        config.supports_sell_to_open = context.margin_enabled and context.shorting_enabled
     console.print()
     console.print(Panel("[bold]Trading Parameters[/bold]", style="blue"))
 
@@ -219,6 +284,8 @@ def configure_parameters(config: TradingConfig) -> TradingConfig:
     table.add_row("Take Profit", f"{config.take_profit_pct:.1%}", "Take-profit percentage")
     table.add_row("Execute", str(config.execute), "Execute live trades")
     table.add_row("Auto Exit", str(config.auto_exit), "Auto-close on SL/TP")
+    table.add_row("Order Type", config.order_type, "auto, market, or limit")
+    table.add_row("Sell to Open", str(config.allow_sell_to_open), "Allow shorting")
 
     console.print(table)
     console.print()
@@ -241,15 +308,51 @@ def configure_parameters(config: TradingConfig) -> TradingConfig:
         ))
         config.execute = Confirm.ask("Execute live trades?", default=config.execute)
         config.auto_exit = Confirm.ask("Auto-exit on SL/TP?", default=config.auto_exit)
+        config.order_type = Prompt.ask(
+            "Order type",
+            choices=["auto", "market", "limit"],
+            default=config.order_type,
+        )
 
         if "stock" in config.asset_types:
-            config.fractional = Confirm.ask("Allow fractional shares?", default=False)
+            if context and context.fractional_enabled:
+                config.requested_fractional = Confirm.ask(
+                    "Allow fractional shares?", default=False
+                )
+                config.fractional = config.requested_fractional
             config.extended_hours = Confirm.ask("Trade extended hours?", default=False)
+
+            if context and context.margin_enabled and context.shorting_enabled:
+                config.requested_sell_to_open = Confirm.ask(
+                    "Allow sell-to-open (shorting)?", default=False
+                )
+                config.allow_sell_to_open = config.requested_sell_to_open
 
     return config
 
 
-def show_final_config(config: TradingConfig) -> None:
+def apply_account_constraints(
+    config: TradingConfig, context: Optional[ExecutionContext]
+) -> TradingConfig:
+    """Resolve user config against account capabilities."""
+    if not context:
+        return config
+
+    config.supports_fractional = context.fractional_enabled
+    config.supports_sell_to_open = context.margin_enabled and context.shorting_enabled
+
+    if config.fractional and not context.fractional_enabled:
+        console.print("[yellow]Account does not support fractional trading. Disabled.[/yellow]")
+        config.fractional = False
+
+    if config.allow_sell_to_open and (not context.margin_enabled or not context.shorting_enabled):
+        console.print("[yellow]Sell-to-open not allowed for this account. Disabled.[/yellow]")
+        config.allow_sell_to_open = False
+
+    return config
+
+
+def show_final_config(config: TradingConfig, context: Optional[ExecutionContext]) -> None:
     """Display final configuration before starting."""
     console.print()
     console.print(Panel("[bold]Trading Configuration Summary[/bold]", style="green"))
@@ -270,6 +373,7 @@ def show_final_config(config: TradingConfig) -> None:
     table.add_row("Take Profit", f"{config.take_profit_pct:.1%}")
     table.add_row("Execute", "[green]Yes[/green]" if config.execute else "[red]No (Dry Run)[/red]")
     table.add_row("Auto Exit", "[green]Yes[/green]" if config.auto_exit else "[yellow]No[/yellow]")
+    table.add_row("Order Type", config.order_type)
 
     console.print(table)
     console.print()
@@ -306,6 +410,8 @@ def run_trading(config: TradingConfig) -> None:
                 fractional=config.fractional,
                 extended_hours=config.extended_hours,
                 strategy=strategy,
+                allow_sell_to_open=config.allow_sell_to_open,
+                order_type=config.order_type,
             )
             if engines:
                 engine_groups["stock"] = engines
@@ -321,6 +427,7 @@ def run_trading(config: TradingConfig) -> None:
                 execute=config.execute,
                 auto_exit=config.auto_exit,
                 strategy=strategy,
+                order_type=config.order_type,
             )
             if engines:
                 engine_groups["crypto"] = engines
@@ -336,6 +443,8 @@ def run_trading(config: TradingConfig) -> None:
                 auto_exit=config.auto_exit,
                 roll_days=config.roll_days,
                 strategy=strategy,
+                allow_sell_to_open=config.allow_sell_to_open,
+                order_type=config.order_type,
             )
             if engines:
                 engine_groups["option"] = engines
@@ -427,6 +536,9 @@ def main() -> None:
         console.clear()
         show_banner()
         show_watchlist_summary()
+        account_context = load_account_context()
+        if account_context:
+            show_account_summary(account_context)
 
         # Main menu
         console.print(Panel("[bold]Trading Mode Selection[/bold]", style="blue"))
@@ -448,10 +560,11 @@ def main() -> None:
             config.asset_types = select_asset_types()
             config.symbols = configure_symbols(config.asset_types)
             config.strategies = configure_strategies(config.asset_types)
-            config = configure_parameters(config)
+            config = configure_parameters(config, account_context)
 
         if config:
-            show_final_config(config)
+            config = apply_account_constraints(config, account_context)
+            show_final_config(config, account_context)
             if Confirm.ask("[bold]Start trading?[/bold]", default=True):
                 run_trading(config)
             else:

@@ -12,6 +12,9 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 from src.data import AlpacaDataProvider
 from src.utils.timezone_utils import now_et
 from src.account.position_manager import convert_crypto_symbol_for_display
+from src.account.account_manager import AccountManager
+from src.strategy.base import ActionPlan, SignalSnapshot
+from .execution import ExecutionEngine
 
 if TYPE_CHECKING:
     from src.strategy.base import StrategyBase
@@ -49,6 +52,10 @@ class LiveTradingEngine(ABC):
         take_profit_pct: float,
         execute: bool,
         auto_exit: bool,
+        asset_type: str = "stock",
+        allow_sell_to_open: bool = False,
+        order_type: str = "auto",
+        account_manager: Optional[AccountManager] = None,
     ) -> None:
         self.raw_symbol = symbol
         self.symbol = self._normalize_symbol(symbol)
@@ -56,6 +63,9 @@ class LiveTradingEngine(ABC):
         self.lookback_days = lookback_days
         self.execute = execute
         self.auto_exit = auto_exit
+        self.asset_type = asset_type
+        self.allow_sell_to_open = allow_sell_to_open
+        self.order_type = order_type
 
         self.provider = AlpacaDataProvider()
         self.engine = self._get_trading_engine()
@@ -65,6 +75,14 @@ class LiveTradingEngine(ABC):
             "stop_loss_pct": stop_loss_pct,
             "take_profit_pct": take_profit_pct,
         })
+        self.executor = ExecutionEngine(
+            trading_engine=self.engine,
+            asset_type=self.asset_type,
+            allow_sell_to_open=self.allow_sell_to_open,
+            order_type=self.order_type,
+            execute=self.execute,
+            account_manager=account_manager,
+        )
 
         self._lock = threading.Lock()
         self._exit_lock = threading.Lock()
@@ -234,27 +252,37 @@ class LiveTradingEngine(ABC):
     def _run_signal_cycle(self) -> None:
         """Run one signal generation and execution cycle."""
         self._refresh_position_state()
-        signal = self._get_latest_signal()
-        if not signal:
+        action_plan = self._get_latest_action_plan()
+        if not action_plan:
             self.logger.info("Signal: HOLD")
             return
 
-        action = signal.get("action", "HOLD")
-        self.logger.info("Signal: %s (%s)", action, signal.get("reason", ""))
+        self.logger.info("Signal: %s (%s)", action_plan.action, action_plan.reason)
 
-        if action == "BUY":
-            if self.position.side == "long":
-                self.logger.info("Already long; skipping buy.")
-                return
-            self._place_order("buy", signal)
-        elif action == "SELL":
-            if self.position.side != "long":
-                self.logger.info("No long position to close; skipping sell.")
-                return
-            self._close_position("signal_sell")
+        context = self.executor.load_context()
+        risk_pct = float(self.strategy.params.get("risk_pct", 0.05))
+        current_price = action_plan.metadata.get("current_price") if action_plan.metadata else None
+        if current_price is None:
+            current_price = action_plan.target_price or 0.0
+        decision = self.executor.build_decision(
+            action_plan=action_plan,
+            context=context,
+            position=self.position,
+            risk_pct=risk_pct,
+            current_price=current_price,
+        )
+        if not decision:
+            return
 
-    def _get_latest_signal(self) -> Optional[Dict[str, Any]]:
-        """Generate the latest signal from the strategy."""
+        executed = self.executor.execute_decision(decision)
+        if executed:
+            with self._lock:
+                self.position.stop_loss = decision.stop_loss
+                self.position.take_profit = decision.take_profit
+            self._refresh_position_state()
+
+    def _get_latest_action_plan(self) -> Optional[ActionPlan]:
+        """Generate the latest action plan from the strategy."""
         start_date = now_et() - timedelta(days=self.lookback_days)
         bars = self.provider.get_bars(self.symbol, self.timeframe, start_date)
         if bars.empty:
@@ -282,33 +310,20 @@ class LiveTradingEngine(ABC):
             def get_portfolio_value(self, _prices: Dict[str, float]) -> float:
                 return self.value
 
-        signals = self.strategy.generate_signals(
+        snapshot = self.strategy.get_signal(
+            symbol=self.symbol,
             current_date=now_et(),
-            current_prices={self.symbol: current_price},
-            current_data={self.symbol: current_data},
-            historical_data={self.symbol: bars},
+            current_price=current_price,
+            current_data=current_data,
+            historical_data=bars,
             portfolio=_PortfolioProxy(portfolio_value),
         )
-        return signals[0] if signals else None
-
-    def _place_order(self, side: str, signal: Dict[str, Any]) -> None:
-        """Place an order based on a signal."""
-        qty = float(signal.get("quantity", 0.0))
-        if qty <= 0:
-            self.logger.info("Signal quantity is zero; skipping order.")
-            return
-
-        if not self.execute:
-            self.logger.info("DRY RUN: would %s %s %s", side, qty, self.symbol)
-            return
-
-        self.engine.place_market_order(self.symbol, qty, side=side)
-        time.sleep(2)
-        with self._lock:
-            self.position.stop_loss = signal.get("stop_loss")
-            self.position.take_profit = signal.get("take_profit")
-        self._refresh_position_state()
-        self.logger.info("Order placed: %s %s %s", side, qty, self.symbol)
+        if snapshot is None:
+            return None
+        plan = self.strategy.get_action_plan(snapshot, current_price, now_et())
+        if plan and plan.metadata is not None:
+            plan.metadata.setdefault("current_price", current_price)
+        return plan
 
     def _close_position(self, reason: str) -> None:
         """Close the current position."""

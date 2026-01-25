@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
+from src.strategy.base import ActionPlan, SignalSnapshot, StrategyBase, StrategyMeta, StrategySignal
 from src.strategy.utils import detect_momentum_crossover, latest_price, rate_of_change
 
 
@@ -101,51 +101,95 @@ class MomentumStrategy(StrategyBase):
         portfolio: Any = None,
     ) -> List[Dict[str, Any]]:
         signals: List[StrategySignal] = []
-        short_period = int(self.params["short_period"])
-        long_period = int(self.params["long_period"])
-        threshold = float(self.params["threshold"])
         risk_pct = float(self.params["risk_pct"])
 
         for symbol, data in historical_data.items():
-            min_bars = long_period + 2
-            if len(data) < min_bars:
-                continue
-
-            prices = data["close"].tolist()
-            short_mom = rate_of_change(prices, short_period)
-            long_mom = rate_of_change(prices, long_period)
-
-            signal_type = detect_momentum_crossover(short_mom, long_mom, threshold)
-            if signal_type == "HOLD":
-                continue
-
             price = current_prices.get(symbol, latest_price(data))
+            snapshot = self.get_signal(
+                symbol=symbol,
+                current_date=current_date,
+                current_price=price,
+                current_data=current_data.get(symbol, {}),
+                historical_data=data,
+                portfolio=portfolio,
+            )
+            if snapshot is None:
+                continue
+            plan = self.get_action_plan(snapshot, price, current_date)
+            if not plan or plan.action == "HOLD":
+                continue
+
             portfolio_value = getattr(
                 portfolio, "get_portfolio_value", lambda *_: 100000
             )(current_prices)
             quantity = self._position_size(price, portfolio_value, risk_pct)
             if quantity <= 0:
                 continue
-
-            side = "long" if signal_type == "BUY" else "short"
-            stop_loss = self.calculate_stop_loss(price, side)
-            take_profit = self.calculate_take_profit(price, side)
-
-            curr_short = short_mom[-1] if short_mom[-1] is not None else 0
-            curr_long = long_mom[-1] if long_mom[-1] is not None else 0
-            reason = f"momentum crossover (short: {curr_short:.2%}, long: {curr_long:.2%})"
-
-            signals.append(
-                StrategySignal(
-                    symbol=symbol,
-                    action=signal_type,
-                    quantity=quantity,
-                    price=price,
-                    reason=reason,
-                    timestamp=current_date,
-                    stop_loss=stop_loss,
-                    take_profit=take_profit,
-                )
-            )
+            signals.append(self._plan_to_signal(plan, quantity, price))
 
         return self._normalize(signals)
+
+    def get_signal(
+        self,
+        symbol: str,
+        current_date: datetime,
+        current_price: float,
+        current_data: Dict[str, Any],
+        historical_data: pd.DataFrame,
+        portfolio: Any = None,
+    ) -> Optional[SignalSnapshot]:
+        short_period = int(self.params["short_period"])
+        long_period = int(self.params["long_period"])
+        threshold = float(self.params["threshold"])
+
+        min_bars = long_period + 2
+        if len(historical_data) < min_bars:
+            return None
+
+        prices = historical_data["close"].tolist()
+        short_mom = rate_of_change(prices, short_period)
+        long_mom = rate_of_change(prices, long_period)
+
+        signal_type = detect_momentum_crossover(short_mom, long_mom, threshold)
+        curr_short = short_mom[-1] if short_mom[-1] is not None else 0.0
+        curr_long = long_mom[-1] if long_mom[-1] is not None else 0.0
+        diff = curr_short - curr_long
+
+        reason = f"momentum crossover (short: {curr_short:.2%}, long: {curr_long:.2%})"
+        return SignalSnapshot(
+            symbol=symbol,
+            signal=signal_type,
+            indicators={
+                "short_momentum": float(curr_short),
+                "long_momentum": float(curr_long),
+                "momentum_diff": float(diff),
+                "threshold": float(threshold),
+            },
+            signal_strength=float(diff),
+            reason=reason,
+            timestamp=current_date,
+        )
+
+    def get_action_plan(
+        self,
+        signal: SignalSnapshot,
+        current_price: float,
+        current_date: datetime,
+    ) -> Optional[ActionPlan]:
+        if signal.signal == "HOLD":
+            return None
+
+        side = "long" if signal.signal == "BUY" else "short"
+        stop_loss = self.calculate_stop_loss(current_price, side)
+        take_profit = self.calculate_take_profit(current_price, side)
+
+        return ActionPlan(
+            symbol=signal.symbol,
+            action=signal.signal,
+            target_price=current_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            reason=signal.reason,
+            strength=abs(signal.signal_strength),
+            timestamp=signal.timestamp or current_date,
+        )

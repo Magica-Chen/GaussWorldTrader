@@ -6,13 +6,17 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import typer
 
 from src.data import AlpacaDataProvider
 from src.strategy import get_strategy_registry
 from src.trade import Backtester, TradingEngine
+from src.trade.execution import ExecutionEngine
+from src.trade.stock_engine import TradingStockEngine
+from src.account.account_manager import AccountManager
+from config import Config
 from src.utils.timezone_utils import now_et
 from src.agent.watchlist_manager import WatchlistManager
 
@@ -29,6 +33,20 @@ def _load_symbols(symbols: Optional[List[str]]) -> List[str]:
     return ["AAPL", "MSFT", "GOOGL"]
 
 
+def _parse_quantity_overrides(entries: List[str]) -> Dict[str, float]:
+    overrides: Dict[str, float] = {}
+    for entry in entries:
+        if not entry or "=" not in entry:
+            continue
+        symbol, qty = entry.split("=", 1)
+        symbol = symbol.strip().upper()
+        try:
+            overrides[symbol] = float(qty.strip())
+        except ValueError:
+            continue
+    return overrides
+
+
 @app.command("list-strategies")
 def list_strategies(dashboard_only: bool = False) -> None:
     """List available strategies."""
@@ -43,7 +61,7 @@ def list_strategies(dashboard_only: bool = False) -> None:
 @app.command("account-info")
 def account_info() -> None:
     """Show account information."""
-    engine = TradingEngine()
+    engine = TradingStockEngine()
     info = engine.get_account_info()
     if not info:
         raise typer.Exit(1)
@@ -57,6 +75,20 @@ def run_strategy(
     symbols: Optional[List[str]] = typer.Argument(None, help="Symbols to run"),
     days: int = typer.Option(60, help="Lookback window in days"),
     execute: bool = typer.Option(False, help="Place orders for signals"),
+    order_type: str = typer.Option(
+        "auto",
+        help="Order type: auto, market, or limit",
+    ),
+    allow_sell_to_open: bool = typer.Option(
+        False,
+        help="Allow sell-to-open (shorting) when account supports it",
+    ),
+    quantity: Optional[List[str]] = typer.Option(
+        None,
+        "--quantity",
+        "-q",
+        help="Per-symbol quantity override, e.g. AAPL=10",
+    ),
 ) -> None:
     """Run a strategy on recent data and print signals."""
     registry = get_strategy_registry()
@@ -92,29 +124,74 @@ def run_strategy(
     except KeyError as exc:
         print(exc)
         raise typer.Exit(1)
-    signals = strategy_instance.generate_signals(
-        current_date=now_et(),
-        current_prices=current_prices,
-        current_data=current_data,
-        historical_data=historical_data,
-        portfolio=None,
-    )
+    qty_overrides = _parse_quantity_overrides(quantity or [])
+    order_type = order_type.lower().strip()
+    if order_type not in {"auto", "market", "limit"}:
+        print("order-type must be one of: auto, market, limit")
+        raise typer.Exit(1)
 
-    if not signals:
-        print("No signals generated.")
+    account_manager = AccountManager(base_url=Config.ALPACA_BASE_URL)
+    account_config = account_manager.get_account_configurations() or {}
+    if "error" in account_config:
+        account_config = {}
+    fractional_enabled = bool(account_config.get("fractional_trading", False))
+
+    engine = TradingStockEngine(allow_fractional=fractional_enabled)
+    executor = ExecutionEngine(
+        trading_engine=engine,
+        asset_type="stock",
+        allow_sell_to_open=allow_sell_to_open,
+        order_type=order_type,
+        execute=execute,
+        account_manager=account_manager,
+    )
+    context = executor.load_context()
+    positions = {p.get("symbol"): p for p in engine.get_current_positions()}
+
+    risk_pct = float(strategy_instance.params.get("risk_pct", 0.05))
+    decisions = []
+
+    for symbol in symbols_list:
+        price = current_prices.get(symbol)
+        data = historical_data.get(symbol)
+        if price is None or data is None:
+            continue
+        snapshot = strategy_instance.get_signal(
+            symbol=symbol,
+            current_date=now_et(),
+            current_price=price,
+            current_data=current_data.get(symbol, {}),
+            historical_data=data,
+            portfolio=None,
+        )
+        if snapshot is None:
+            continue
+        plan = strategy_instance.get_action_plan(snapshot, price, now_et())
+        if not plan or plan.action == "HOLD":
+            continue
+        decision = executor.build_decision(
+            action_plan=plan,
+            context=context,
+            position=positions.get(symbol, {"qty": 0.0, "side": "flat"}),
+            risk_pct=risk_pct,
+            current_price=price,
+            override_qty=qty_overrides.get(symbol),
+            order_pref=order_type,
+        )
+        if decision is None:
+            continue
+        decisions.append(decision)
+
+    if not decisions:
+        print("No actionable decisions.")
         return
 
-    print("Signals:")
-    for signal in signals:
-        print(signal)
+    print("Decisions:")
+    for decision in decisions:
+        print(decision)
 
-    if execute:
-        engine = TradingEngine()
-        for signal in signals:
-            if signal["action"] == "BUY":
-                engine.place_market_order(signal["symbol"], signal["quantity"], side="buy")
-            elif signal["action"] == "SELL":
-                engine.place_market_order(signal["symbol"], signal["quantity"], side="sell")
+    for decision in decisions:
+        executor.execute_decision(decision)
 
 
 @app.command("backtest")

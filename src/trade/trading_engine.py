@@ -156,10 +156,16 @@ class TradingEngine(ABC):
             account = self.api.get_account()
             return {
                 'account_id': account.id,
+                'multiplier': float(getattr(account, 'multiplier', 1) or 1),
                 'buying_power': float(account.buying_power),
+                'daytrading_buying_power': float(getattr(account, 'daytrading_buying_power', 0) or 0),
+                'non_marginable_buying_power': float(
+                    getattr(account, 'non_marginable_buying_power', 0) or 0
+                ),
                 'cash': float(account.cash),
                 'portfolio_value': float(account.portfolio_value),
                 'equity': float(account.equity),
+                'daytrade_count': int(getattr(account, 'daytrade_count', 0)),
                 'day_trade_count': int(getattr(account, 'daytrade_count', 0)),
                 'pattern_day_trader': getattr(account, 'pattern_day_trader', False),
                 'trading_blocked': getattr(account, 'trading_blocked', False),

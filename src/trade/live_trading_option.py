@@ -46,6 +46,8 @@ class LiveTradingOption(LiveTradingEngine):
         auto_exit: bool = True,
         roll_days_before_expiry: int = 5,
         strategy: str = "wheel",
+        allow_sell_to_open: bool = False,
+        order_type: str = "auto",
     ) -> None:
         self.underlying_symbol = underlying_symbol.strip().upper()
         self.roll_days_before_expiry = roll_days_before_expiry
@@ -59,6 +61,9 @@ class LiveTradingOption(LiveTradingEngine):
             take_profit_pct=take_profit_pct,
             execute=execute,
             auto_exit=auto_exit,
+            asset_type="option",
+            allow_sell_to_open=allow_sell_to_open,
+            order_type=order_type,
         )
 
     def _normalize_symbol(self, symbol: str) -> str:
@@ -224,6 +229,8 @@ def create_option_engines(
     auto_exit: bool = True,
     roll_days: int = 5,
     strategy: str = "wheel",
+    allow_sell_to_open: bool = False,
+    order_type: str = "auto",
 ) -> List[LiveTradingOption]:
     """Create option trading engines without starting them.
 
@@ -245,6 +252,8 @@ def create_option_engines(
             auto_exit=auto_exit,
             roll_days_before_expiry=roll_days,
             strategy=strategy,
+            allow_sell_to_open=allow_sell_to_open,
+            order_type=order_type,
         )
         for underlying in underlyings
     ]
@@ -261,6 +270,8 @@ def run_option_trading(
     auto_exit: bool = True,
     roll_days: int = 5,
     strategy: str = "wheel",
+    allow_sell_to_open: bool = False,
+    order_type: str = "auto",
 ) -> None:
     """Run live options trading.
 
@@ -288,6 +299,8 @@ def run_option_trading(
         auto_exit=auto_exit,
         roll_days=roll_days,
         strategy=strategy,
+        allow_sell_to_open=allow_sell_to_open,
+        order_type=order_type,
     )
 
     if engines and not engines[0].is_market_open():

@@ -49,6 +49,8 @@ class LiveTradingStock(LiveTradingEngine):
         allow_fractional: bool = False,
         extended_hours: bool = False,
         strategy: str = "momentum",
+        allow_sell_to_open: bool = False,
+        order_type: str = "auto",
     ) -> None:
         self.allow_fractional = allow_fractional
         self.extended_hours = extended_hours
@@ -62,6 +64,9 @@ class LiveTradingStock(LiveTradingEngine):
             take_profit_pct=take_profit_pct,
             execute=execute,
             auto_exit=auto_exit,
+            asset_type="stock",
+            allow_sell_to_open=allow_sell_to_open,
+            order_type=order_type,
         )
 
     def _normalize_symbol(self, symbol: str) -> str:
@@ -180,6 +185,8 @@ def create_stock_engines(
     fractional: bool = False,
     extended_hours: bool = False,
     strategy: str = "momentum",
+    allow_sell_to_open: bool = False,
+    order_type: str = "auto",
 ) -> List[LiveTradingStock]:
     """Create stock trading engines without starting them.
 
@@ -202,6 +209,8 @@ def create_stock_engines(
             allow_fractional=fractional,
             extended_hours=extended_hours,
             strategy=strategy,
+            allow_sell_to_open=allow_sell_to_open,
+            order_type=order_type,
         )
         for symbol in trading_symbols
     ]
@@ -219,6 +228,8 @@ def run_stock_trading(
     fractional: bool = False,
     extended_hours: bool = False,
     strategy: str = "momentum",
+    allow_sell_to_open: bool = False,
+    order_type: str = "auto",
 ) -> None:
     """Run live stock trading.
 
@@ -248,6 +259,8 @@ def run_stock_trading(
         fractional=fractional,
         extended_hours=extended_hours,
         strategy=strategy,
+        allow_sell_to_open=allow_sell_to_open,
+        order_type=order_type,
     )
 
     if engines and not engines[0].is_market_open():

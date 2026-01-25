@@ -4,12 +4,12 @@ Uses a rolling z-score of recent returns to trade mean reversion extremes.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 import pandas as pd
 
-from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
+from src.strategy.base import ActionPlan, SignalSnapshot, StrategyBase, StrategyMeta, StrategySignal
 from src.strategy.utils import latest_price
 
 
@@ -39,44 +39,99 @@ class StatisticalArbitrageStrategy(StrategyBase):
         portfolio: Any = None,
     ) -> List[Dict[str, Any]]:
         signals: List[StrategySignal] = []
-        window = int(self.params["window"])
-        zscore = float(self.params["zscore"])
         risk_pct = float(self.params["risk_pct"])
 
         for symbol, data in historical_data.items():
-            if len(data) < window + 2:
-                continue
-            returns = data["close"].pct_change().dropna().iloc[-window:]
-            if returns.empty:
-                continue
-            mean = float(returns.mean())
-            std = float(returns.std()) or 1e-6
-            score = (returns.iloc[-1] - mean) / std
             price = current_prices.get(symbol, latest_price(data))
-            portfolio_value = getattr(portfolio, "get_portfolio_value", lambda *_: 100000)(current_prices)
-            quantity = self._position_size(price, portfolio_value, risk_pct)
+            snapshot = self.get_signal(
+                symbol=symbol,
+                current_date=current_date,
+                current_price=price,
+                current_data=current_data.get(symbol, {}),
+                historical_data=data,
+                portfolio=portfolio,
+            )
+            if snapshot is None:
+                continue
+            plan = self.get_action_plan(snapshot, price, current_date)
+            if not plan or plan.action == "HOLD":
+                continue
 
-            if score <= -zscore:
-                signals.append(
-                    StrategySignal(
-                        symbol=symbol,
-                        action="BUY",
-                        quantity=quantity,
-                        price=price,
-                        reason=f"z-score {score:.2f} oversold",
-                        timestamp=current_date,
-                    )
-                )
-            elif score >= zscore:
-                signals.append(
-                    StrategySignal(
-                        symbol=symbol,
-                        action="SELL",
-                        quantity=quantity,
-                        price=price,
-                        reason=f"z-score {score:.2f} overbought",
-                        timestamp=current_date,
-                    )
-                )
+            portfolio_value = getattr(portfolio, "get_portfolio_value", lambda *_: 100000)(
+                current_prices
+            )
+            quantity = self._position_size(price, portfolio_value, risk_pct)
+            if quantity <= 0:
+                continue
+            signals.append(self._plan_to_signal(plan, quantity, price))
 
         return self._normalize(signals)
+
+    def get_signal(
+        self,
+        symbol: str,
+        current_date: datetime,
+        current_price: float,
+        current_data: Dict[str, Any],
+        historical_data: pd.DataFrame,
+        portfolio: Any = None,
+    ) -> Optional[SignalSnapshot]:
+        window = int(self.params["window"])
+        zscore = float(self.params["zscore"])
+
+        if len(historical_data) < window + 2:
+            return None
+        returns = historical_data["close"].pct_change().dropna().iloc[-window:]
+        if returns.empty:
+            return None
+        mean = float(returns.mean())
+        std = float(returns.std()) or 1e-6
+        score = (returns.iloc[-1] - mean) / std
+
+        if score <= -zscore:
+            signal = "BUY"
+            reason = f"z-score {score:.2f} oversold"
+        elif score >= zscore:
+            signal = "SELL"
+            reason = f"z-score {score:.2f} overbought"
+        else:
+            signal = "HOLD"
+            reason = "z-score within range"
+
+        return SignalSnapshot(
+            symbol=symbol,
+            signal=signal,
+            indicators={
+                "zscore": float(score),
+                "threshold": float(zscore),
+                "mean": float(mean),
+                "std": float(std),
+            },
+            signal_strength=float(score),
+            reason=reason,
+            timestamp=current_date,
+        )
+
+    def get_action_plan(
+        self,
+        signal: SignalSnapshot,
+        current_price: float,
+        current_date: datetime,
+    ) -> Optional[ActionPlan]:
+        if signal.signal == "HOLD":
+            return None
+
+        side = "long" if signal.signal == "BUY" else "short"
+        stop_loss = self.calculate_stop_loss(current_price, side)
+        take_profit = self.calculate_take_profit(current_price, side)
+
+        return ActionPlan(
+            symbol=signal.symbol,
+            action=signal.signal,
+            target_price=current_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            reason=signal.reason,
+            strength=abs(signal.signal_strength),
+            timestamp=signal.timestamp or current_date,
+        )

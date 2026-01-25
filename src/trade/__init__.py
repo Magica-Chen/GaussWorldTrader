@@ -2,6 +2,7 @@ from .trading_engine import TradingEngine
 from .crypto_engine import TradingCryptoEngine
 from .stock_engine import TradingStockEngine
 from .option_engine import TradingOptionEngine
+from .execution import ExecutionEngine, ExecutionContext, ExecutionDecision
 from .portfolio import Portfolio, FinancialMetrics, PerformanceAnalyzer, PortfolioTracker
 from .backtester import Backtester
 from .live_trading_base import LiveTradingEngine, PositionState
@@ -11,6 +12,9 @@ __all__ = [
     'TradingCryptoEngine',
     'TradingStockEngine',
     'TradingOptionEngine',
+    'ExecutionEngine',
+    'ExecutionContext',
+    'ExecutionDecision',
     'Portfolio',
     'FinancialMetrics',
     'PerformanceAnalyzer',

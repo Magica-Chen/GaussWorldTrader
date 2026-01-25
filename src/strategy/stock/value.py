@@ -5,13 +5,13 @@ or premium crosses the configured threshold.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 import pandas as pd
 
 from src.analysis.technical_analysis import TechnicalAnalysis
-from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
+from src.strategy.base import ActionPlan, SignalSnapshot, StrategyBase, StrategyMeta, StrategySignal
 from src.strategy.utils import latest_price, safe_series
 
 
@@ -44,43 +44,97 @@ class ValueStrategy(StrategyBase):
         portfolio: Any = None,
     ) -> List[Dict[str, Any]]:
         signals: List[StrategySignal] = []
-        period = int(self.params["sma_period"])
-        discount = float(self.params["discount_pct"])
         risk_pct = float(self.params["risk_pct"])
 
         for symbol, data in historical_data.items():
-            if len(data) < period + 1:
-                continue
-            sma = ta.sma(data["close"], period)
-            sma_value = safe_series(sma)
             price = current_prices.get(symbol, latest_price(data))
-            if sma_value <= 0:
+            snapshot = self.get_signal(
+                symbol=symbol,
+                current_date=current_date,
+                current_price=price,
+                current_data=current_data.get(symbol, {}),
+                historical_data=data,
+                portfolio=portfolio,
+            )
+            if snapshot is None:
                 continue
-            deviation = (price - sma_value) / sma_value
-            portfolio_value = getattr(portfolio, "get_portfolio_value", lambda *_: 100000)(current_prices)
-            quantity = self._position_size(price, portfolio_value, risk_pct)
+            plan = self.get_action_plan(snapshot, price, current_date)
+            if not plan or plan.action == "HOLD":
+                continue
 
-            if deviation <= -discount:
-                signals.append(
-                    StrategySignal(
-                        symbol=symbol,
-                        action="BUY",
-                        quantity=quantity,
-                        price=price,
-                        reason=f"{deviation:.2%} below SMA{period}",
-                        timestamp=current_date,
-                    )
-                )
-            elif deviation >= discount:
-                signals.append(
-                    StrategySignal(
-                        symbol=symbol,
-                        action="SELL",
-                        quantity=quantity,
-                        price=price,
-                        reason=f"{deviation:.2%} above SMA{period}",
-                        timestamp=current_date,
-                    )
-                )
+            portfolio_value = getattr(portfolio, "get_portfolio_value", lambda *_: 100000)(
+                current_prices
+            )
+            quantity = self._position_size(price, portfolio_value, risk_pct)
+            if quantity <= 0:
+                continue
+            signals.append(self._plan_to_signal(plan, quantity, price))
 
         return self._normalize(signals)
+
+    def get_signal(
+        self,
+        symbol: str,
+        current_date: datetime,
+        current_price: float,
+        current_data: Dict[str, Any],
+        historical_data: pd.DataFrame,
+        portfolio: Any = None,
+    ) -> Optional[SignalSnapshot]:
+        period = int(self.params["sma_period"])
+        discount = float(self.params["discount_pct"])
+
+        if len(historical_data) < period + 1:
+            return None
+        sma = ta.sma(historical_data["close"], period)
+        sma_value = safe_series(sma)
+        if sma_value <= 0:
+            return None
+        deviation = (current_price - sma_value) / sma_value
+
+        if deviation <= -discount:
+            signal = "BUY"
+            reason = f"{deviation:.2%} below SMA{period}"
+        elif deviation >= discount:
+            signal = "SELL"
+            reason = f"{deviation:.2%} above SMA{period}"
+        else:
+            signal = "HOLD"
+            reason = "within value band"
+
+        return SignalSnapshot(
+            symbol=symbol,
+            signal=signal,
+            indicators={
+                "sma": float(sma_value),
+                "deviation": float(deviation),
+                "discount_pct": float(discount),
+            },
+            signal_strength=float(deviation),
+            reason=reason,
+            timestamp=current_date,
+        )
+
+    def get_action_plan(
+        self,
+        signal: SignalSnapshot,
+        current_price: float,
+        current_date: datetime,
+    ) -> Optional[ActionPlan]:
+        if signal.signal == "HOLD":
+            return None
+
+        side = "long" if signal.signal == "BUY" else "short"
+        stop_loss = self.calculate_stop_loss(current_price, side)
+        take_profit = self.calculate_take_profit(current_price, side)
+
+        return ActionPlan(
+            symbol=signal.symbol,
+            action=signal.signal,
+            target_price=current_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            reason=signal.reason,
+            strength=abs(signal.signal_strength),
+            timestamp=signal.timestamp or current_date,
+        )

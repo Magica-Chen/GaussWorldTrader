@@ -10,7 +10,7 @@ import pandas as pd
 from typing import Dict, List, Any, Optional
 import logging
 
-from src.strategy.base import BaseOptionStrategy, StrategyMeta
+from src.strategy.base import ActionPlan, BaseOptionStrategy, SignalSnapshot, StrategyMeta
 
 
 class WheelStrategy(BaseOptionStrategy):
@@ -163,6 +163,61 @@ class WheelStrategy(BaseOptionStrategy):
         except Exception as e:
             self.logger.error(f"Error generating wheel strategy signals: {e}")
             return []
+
+    def get_signal(
+        self,
+        symbol: str,
+        current_date: datetime,
+        current_price: float,
+        current_data: Dict[str, Any],
+        historical_data: pd.DataFrame,
+        portfolio: Any = None,
+    ) -> Optional[SignalSnapshot]:
+        """Wrap legacy multi-symbol logic into a per-symbol snapshot."""
+        legacy_signals = self.generate_signals(
+            current_date=current_date,
+            current_prices={symbol: current_price},
+            current_data={symbol: current_data},
+            historical_data={symbol: historical_data},
+            portfolio=portfolio,
+        )
+        if not legacy_signals:
+            return None
+        legacy = legacy_signals[0]
+        action = legacy.get("action", "HOLD")
+        reason = legacy.get("reason", "legacy wheel signal")
+        return SignalSnapshot(
+            symbol=legacy.get("symbol", symbol),
+            signal=action,
+            indicators={},
+            signal_strength=1.0,
+            reason=reason,
+            timestamp=legacy.get("timestamp") or current_date,
+            metadata={"legacy_signal": legacy},
+        )
+
+    def get_action_plan(
+        self,
+        signal: SignalSnapshot,
+        current_price: float,
+        current_date: datetime,
+    ) -> Optional[ActionPlan]:
+        """Convert a legacy wheel signal into an action plan."""
+        legacy = signal.metadata.get("legacy_signal", {}) if signal.metadata else {}
+        action = legacy.get("action", signal.signal)
+        if action == "HOLD":
+            return None
+        return ActionPlan(
+            symbol=legacy.get("symbol", signal.symbol),
+            action=action,
+            target_price=legacy.get("price"),
+            stop_loss=legacy.get("stop_loss"),
+            take_profit=legacy.get("take_profit"),
+            reason=legacy.get("reason", signal.reason),
+            strength=signal.signal_strength,
+            timestamp=legacy.get("timestamp") or signal.timestamp or current_date,
+            metadata={"legacy_signal": legacy} if legacy else {},
+        )
 
     def _manage_existing_positions(self, current_prices: Dict[str, float],
                                  portfolio: Any) -> List[Dict[str, Any]]:

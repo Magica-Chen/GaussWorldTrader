@@ -90,6 +90,34 @@ class StrategySignal:
         return result
 
 
+@dataclass(frozen=True)
+class SignalSnapshot:
+    """Pure signal snapshot with indicators and direction, no sizing."""
+
+    symbol: str
+    signal: str  # BUY|SELL|HOLD or strategy-specific
+    indicators: Dict[str, float]
+    signal_strength: float
+    reason: str = ""
+    timestamp: Optional[datetime] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ActionPlan:
+    """Abstract action recommendation without quantity."""
+
+    symbol: str
+    action: str  # BUY|SELL|SELL_TO_OPEN|BUY_TO_CLOSE|HOLD
+    target_price: Optional[float]
+    stop_loss: Optional[float]
+    take_profit: Optional[float]
+    reason: str = ""
+    strength: float = 0.0
+    timestamp: Optional[datetime] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass
 class MarketDataContext:
     """Container for all market data passed to strategy.generate_signals().
@@ -170,6 +198,44 @@ class StrategyBase:
         portfolio: Any = None,
     ) -> List[Dict[str, Any]]:
         raise NotImplementedError
+
+    def get_signal(
+        self,
+        symbol: str,
+        current_date: datetime,
+        current_price: float,
+        current_data: Dict[str, Any],
+        historical_data: pd.DataFrame,
+        portfolio: Any = None,
+    ) -> Optional[SignalSnapshot]:
+        """Compute per-symbol signal snapshot (no sizing)."""
+        raise NotImplementedError
+
+    def get_action_plan(
+        self,
+        signal: SignalSnapshot,
+        current_price: float,
+        current_date: datetime,
+    ) -> Optional[ActionPlan]:
+        """Translate a signal snapshot into an abstract action plan."""
+        raise NotImplementedError
+
+    def _plan_to_signal(
+        self,
+        plan: ActionPlan,
+        quantity: float,
+        price: Optional[float] = None,
+    ) -> StrategySignal:
+        return StrategySignal(
+            symbol=plan.symbol,
+            action=plan.action,
+            quantity=quantity,
+            price=price if price is not None else plan.target_price,
+            reason=plan.reason,
+            timestamp=plan.timestamp,
+            stop_loss=plan.stop_loss,
+            take_profit=plan.take_profit,
+        )
 
     def generate_trading_plan(
         self,
