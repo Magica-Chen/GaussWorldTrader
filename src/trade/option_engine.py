@@ -8,8 +8,16 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from alpaca.trading.requests import (
     MarketOrderRequest,
     LimitOrderRequest,
+    GetOptionContractsRequest,
+    OptionLegRequest,
 )
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.enums import (
+    OrderSide,
+    TimeInForce,
+    OrderClass,
+    OrderType,
+    ContractType,
+)
 
 from .trading_engine import TradingEngine
 
@@ -32,6 +40,45 @@ class TradingOptionEngine(TradingEngine):
     def __init__(self, paper_trading: bool = True,
                  notification_service: "NotificationService" = None) -> None:
         super().__init__(paper_trading, notification_service)
+
+    @staticmethod
+    def _enum_value(value: Any) -> Any:
+        if hasattr(value, "value"):
+            return value.value
+        return value
+
+    def _coerce_time_in_force(self, time_in_force: str | TimeInForce) -> TimeInForce:
+        if isinstance(time_in_force, TimeInForce):
+            return time_in_force
+        value = str(time_in_force).lower()
+        if value == "day":
+            return TimeInForce.DAY
+        if value == "gtc":
+            return TimeInForce.GTC
+        raise ValueError("time_in_force must be 'day' or 'gtc'")
+
+    def _coerce_contract_type(self, contract_type: str | ContractType) -> ContractType:
+        if isinstance(contract_type, ContractType):
+            return contract_type
+        value = str(contract_type).lower()
+        if value in {"put", "p"}:
+            return ContractType.PUT
+        if value in {"call", "c"}:
+            return ContractType.CALL
+        raise ValueError("contract_type must be 'call' or 'put'")
+
+    def _serialize_legs(self, legs: List[Any] | None) -> List[Dict[str, Any]] | None:
+        if not legs:
+            return None
+        serialized = []
+        for leg in legs:
+            serialized.append({
+                "symbol": getattr(leg, "symbol", None),
+                "ratio_qty": getattr(leg, "ratio_qty", None),
+                "side": self._enum_value(getattr(leg, "side", None)),
+                "position_intent": self._enum_value(getattr(leg, "position_intent", None)),
+            })
+        return serialized
 
     def validate_order(self, symbol: str, qty: float, side: str) -> None:
         """Validate option order - whole contracts, valid expiration."""
@@ -93,6 +140,76 @@ class TradingOptionEngine(TradingEngine):
         strike_str = f"{strike_int:08d}"
 
         return f"{underlying.strip()}{date_str}{type_char}{strike_str}"
+
+    def find_option_contract_symbol(
+        self,
+        underlying: str,
+        expiration: date,
+        strike: float,
+        contract_type: str | ContractType = "put",
+    ) -> str:
+        """Find an option contract symbol via Alpaca contracts endpoint."""
+        underlying = self.normalize_symbol(underlying)
+        contract_type_enum = self._coerce_contract_type(contract_type)
+
+        request = GetOptionContractsRequest(
+            underlying_symbols=[underlying],
+            expiration_date=expiration.isoformat(),
+            type=contract_type_enum,
+            strike_price_gte=str(strike),
+            strike_price_lte=str(strike),
+            limit=1000,
+        )
+        response = self.api.get_option_contracts(request)
+
+        contracts = (
+            getattr(response, "option_contracts", None)
+            or getattr(response, "contracts", None)
+            or []
+        )
+        if not contracts:
+            raise ValueError(
+                f"No contracts found for {underlying} {expiration} {contract_type_enum} strike={strike}"
+            )
+
+        return contracts[0].symbol
+
+    def submit_mleg_limit_order(
+        self,
+        legs: List[OptionLegRequest],
+        qty: int = 1,
+        limit_price: float | None = None,
+        time_in_force: str | TimeInForce = "day",
+    ) -> Dict[str, Any]:
+        """Submit a multi-leg (MLEG) limit order."""
+        if not legs:
+            raise ValueError("Multi-leg order requires at least one leg")
+        if qty <= 0 or qty != int(qty):
+            raise ValueError(f"Option contracts must be whole numbers, got {qty}")
+        if limit_price is None:
+            raise ValueError("limit_price is required for multi-leg orders")
+
+        order_request = LimitOrderRequest(
+            order_class=OrderClass.MLEG,
+            qty=int(qty),
+            type=OrderType.LIMIT,
+            time_in_force=self._coerce_time_in_force(time_in_force),
+            limit_price=limit_price,
+            legs=legs,
+        )
+        order = self.api.submit_order(order_request)
+
+        order_dict = self._build_order_dict(order)
+        order_dict["order_class"] = self._enum_value(getattr(order, "order_class", None))
+        order_dict["legs"] = self._serialize_legs(getattr(order, "legs", None)) or self._serialize_legs(legs)
+
+        self.logger.info(
+            "Option multi-leg limit order placed: qty %s at %s",
+            int(qty),
+            limit_price,
+        )
+        self._notify_order(order_dict)
+        return order_dict
 
     def check_expiration(self, symbol: str) -> Optional[int]:
         """Check days until expiration for an option symbol.

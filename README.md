@@ -84,6 +84,7 @@ Whether you're a beginner learning about markets or an experienced trader buildi
 - **Strategy and Execution Layers** — Signals and plans live in strategies; sizing and orders live in execution
 - **💼 Portfolio Management** — Advanced position tracking and risk management
 - **🔌 Multi-source Data Feeds** — Alpaca, Finnhub, FRED, and News integrations
+- **🧩 Options Multi-Leg Orders** — `TradingOptionEngine` supports MLEG submissions
 
 ---
 
