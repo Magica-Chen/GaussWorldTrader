@@ -85,6 +85,7 @@ Whether you're a beginner learning about markets or an experienced trader buildi
 - **💼 Portfolio Management** — Advanced position tracking and risk management
 - **🔌 Multi-source Data Feeds** — Alpaca, Finnhub, FRED, and News integrations
 - **🧩 Options Multi-Leg Orders** — `TradingOptionEngine` supports MLEG submissions
+- **🧮 Options Vertical Spreads** — IV/greeks-filtered bull/bear call/put spreads via multi-leg orders
 
 ---
 
@@ -233,6 +234,7 @@ order = engine.place_market_order("BTC/USD", 0.001, "buy")  # Triggers SUBMITTED
 | ⚡ Scalping | Signal | ✅ |
 | 📐 Statistical Arbitrage | Signal | ✅ |
 | 🎡 Wheel (Options) | Options | ❌ |
+| 🧩 Vertical Spread (Options) | Options | ❌ |
 
 ---
 

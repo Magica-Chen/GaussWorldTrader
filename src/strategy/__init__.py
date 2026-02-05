@@ -6,7 +6,7 @@ from .base import (
     BaseOptionStrategy,
 )
 from .registry import get_strategy_registry, StrategyRegistry
-from .option import WheelStrategy
+from .option import WheelStrategy, VerticalSpreadStrategy
 from .crypto import CryptoMomentumStrategy
 from .stock import (
     MomentumStrategy,
@@ -31,4 +31,5 @@ __all__ = [
     "ScalpingStrategy",
     "StatisticalArbitrageStrategy",
     "WheelStrategy",
+    "VerticalSpreadStrategy",
 ]

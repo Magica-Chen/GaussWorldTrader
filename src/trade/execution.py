@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, datetime
 import logging
 from typing import Any, Dict, Optional
+
+from alpaca.trading.requests import OptionLegRequest
+from alpaca.trading.enums import OrderSide
 
 from config import Config
 from src.account.account_manager import AccountManager
@@ -120,6 +124,8 @@ class ExecutionEngine:
         if action == "HOLD":
             return None
 
+        metadata = action_plan.metadata or {}
+
         pos_side = self._position_side(position)
         pos_qty = abs(self._position_qty(position))
 
@@ -142,6 +148,11 @@ class ExecutionEngine:
         if intent == "open_short" and pos_side == "short":
             return None
 
+        if override_qty is None and metadata:
+            meta_override = metadata.get("override_qty")
+            if meta_override is not None:
+                override_qty = float(meta_override)
+
         quantity = self._resolve_quantity(
             action_plan=action_plan,
             intent=intent,
@@ -154,9 +165,15 @@ class ExecutionEngine:
         if quantity <= 0:
             return None
 
-        order_type, limit_price = self._resolve_order_type(
-            action_plan, side, current_price, order_pref
-        )
+        if metadata.get("order_class") == "mleg":
+            order_type = "limit"
+            limit_price = action_plan.target_price
+            if limit_price is None:
+                return None
+        else:
+            order_type, limit_price = self._resolve_order_type(
+                action_plan, side, current_price, order_pref
+            )
 
         return ExecutionDecision(
             symbol=action_plan.symbol,
@@ -168,23 +185,33 @@ class ExecutionEngine:
             reason=action_plan.reason,
             stop_loss=action_plan.stop_loss,
             take_profit=action_plan.take_profit,
-            metadata=action_plan.metadata,
+            metadata=metadata,
         )
 
     def execute_decision(self, decision: ExecutionDecision) -> bool:
         if decision is None:
             return False
         if not self.execute:
-            self.logger.info(
-                "DRY RUN: would %s %s %s (%s)",
-                decision.side,
-                decision.quantity,
-                decision.symbol,
-                decision.order_type,
-            )
+            if decision.metadata.get("order_class") == "mleg":
+                self.logger.info(
+                    "DRY RUN: would submit multi-leg order %s qty %s at %s",
+                    decision.symbol,
+                    decision.quantity,
+                    decision.limit_price,
+                )
+            else:
+                self.logger.info(
+                    "DRY RUN: would %s %s %s (%s)",
+                    decision.side,
+                    decision.quantity,
+                    decision.symbol,
+                    decision.order_type,
+                )
             return False
 
         if isinstance(self.trading_engine, TradingOptionEngine):
+            if decision.metadata.get("order_class") == "mleg":
+                return self._execute_option_mleg(decision)
             return self._execute_option_decision(decision)
 
         if decision.order_type == "limit" and decision.limit_price is not None:
@@ -201,6 +228,79 @@ class ExecutionEngine:
                 side=decision.side,
             )
         return True
+
+    def _execute_option_mleg(self, decision: ExecutionDecision) -> bool:
+        engine = self.trading_engine
+        if not isinstance(engine, TradingOptionEngine):
+            return False
+        if decision.limit_price is None:
+            self.logger.error("Multi-leg order missing limit price.")
+            return False
+
+        metadata = decision.metadata or {}
+        legs_meta = metadata.get("legs") or []
+        if not legs_meta:
+            self.logger.error("Multi-leg order missing legs metadata.")
+            return False
+
+        underlying = metadata.get("underlying_symbol") or metadata.get("underlying") or decision.symbol
+        legs: list[OptionLegRequest] = []
+        for leg in legs_meta:
+            symbol = leg.get("symbol")
+            if not symbol:
+                expiration = leg.get("expiration")
+                strike = leg.get("strike")
+                option_type = leg.get("option_type")
+                if expiration is None or strike is None or option_type is None:
+                    self.logger.error("Leg missing expiration/strike/option_type: %s", leg)
+                    return False
+                exp_date = self._parse_expiration(expiration)
+                if exp_date is None:
+                    self.logger.error("Could not parse expiration %s", expiration)
+                    return False
+                symbol = engine.find_option_contract_symbol(
+                    underlying=underlying,
+                    expiration=exp_date,
+                    strike=float(strike),
+                    contract_type=str(option_type),
+                )
+
+            ratio = int(leg.get("ratio") or leg.get("ratio_qty") or 1)
+            side = str(leg.get("side") or "buy").lower()
+            side_enum = OrderSide.BUY if side == "buy" else OrderSide.SELL
+
+            legs.append(
+                OptionLegRequest(
+                    symbol=symbol,
+                    ratio_qty=ratio,
+                    side=side_enum,
+                )
+            )
+
+        time_in_force = metadata.get("time_in_force", "day")
+        engine.submit_mleg_limit_order(
+            legs=legs,
+            qty=int(decision.quantity),
+            limit_price=float(decision.limit_price),
+            time_in_force=time_in_force,
+        )
+        return True
+
+    @staticmethod
+    def _parse_expiration(value: Any) -> Optional[date]:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value).date()
+            except ValueError:
+                try:
+                    return datetime.strptime(value, "%Y-%m-%d").date()
+                except ValueError:
+                    return None
+        return None
 
     def _execute_option_decision(self, decision: ExecutionDecision) -> bool:
         engine = self.trading_engine

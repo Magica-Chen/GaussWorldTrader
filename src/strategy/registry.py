@@ -7,7 +7,7 @@ from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from .base import StrategyBase, StrategyMeta
-from .option import WheelStrategy
+from .option import WheelStrategy, VerticalSpreadStrategy
 from .stock import (
     MomentumStrategy,
     ValueStrategy,
@@ -58,6 +58,7 @@ class StrategyRegistry:
             "statistical_arbitrage": StatisticalArbitrageStrategy,
             "crypto_momentum": _create_crypto_momentum,
             "wheel": WheelStrategy,
+            "vertical_spread": VerticalSpreadStrategy,
         }
         # Separate meta registry for factories that aren't classes
         self._meta_overrides: Dict[str, StrategyMeta] = {

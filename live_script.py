@@ -40,7 +40,7 @@ BANNER = """
 # Strategies available per asset type
 STOCK_STRATEGIES = ["momentum", "value", "trend_following", "scalping", "statistical_arbitrage"]
 CRYPTO_STRATEGIES = ["crypto_momentum"]
-OPTION_STRATEGIES = ["wheel"]
+OPTION_STRATEGIES = ["wheel", "vertical_spread"]
 
 
 @dataclass
@@ -157,7 +157,7 @@ def select_asset_types() -> List[str]:
     options = [
         ("1", "stock", "Stocks (equities)"),
         ("2", "crypto", "Cryptocurrency (24/7)"),
-        ("3", "option", "Options (wheel strategy)"),
+        ("3", "option", "Options (wheel or vertical spread)"),
         ("4", "all", "All asset types"),
     ]
 
