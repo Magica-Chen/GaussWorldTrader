@@ -6,6 +6,8 @@ Import here for backward compatibility.
 
 from src.strategy.stock.momentum import MomentumStrategy
 
+from .btc_volatility_breakout import BTCVolatilityBreakoutStrategy
+
 # Re-export with crypto defaults for backward compatibility
 # Usage: CryptoMomentumStrategy() creates a momentum strategy with asset_type="crypto"
 
@@ -16,4 +18,4 @@ def CryptoMomentumStrategy(params=None):
     return MomentumStrategy(merged)
 
 
-__all__ = ["CryptoMomentumStrategy"]
+__all__ = ["CryptoMomentumStrategy", "BTCVolatilityBreakoutStrategy"]

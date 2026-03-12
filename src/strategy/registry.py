@@ -15,6 +15,7 @@ from .stock import (
     ScalpingStrategy,
     StatisticalArbitrageStrategy,
 )
+from .crypto import BTCVolatilityBreakoutStrategy
 
 
 # Factory type: either a class or a callable that returns a strategy
@@ -57,6 +58,7 @@ class StrategyRegistry:
             "scalping": ScalpingStrategy,
             "statistical_arbitrage": StatisticalArbitrageStrategy,
             "crypto_momentum": _create_crypto_momentum,
+            "btc_volatility_breakout": BTCVolatilityBreakoutStrategy,
             "wheel": WheelStrategy,
             "vertical_spread": VerticalSpreadStrategy,
         }

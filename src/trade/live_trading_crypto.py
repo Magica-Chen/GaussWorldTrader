@@ -35,7 +35,7 @@ class LiveTradingCrypto(LiveTradingEngine):
         take_profit_pct: float = 0.06,
         execute: bool = True,
         auto_exit: bool = True,
-        strategy: str = "crypto_momentum",
+        strategy: str = "btc_volatility_breakout",
         order_type: str = "auto",
     ) -> None:
         self.crypto_loc = crypto_loc
@@ -112,7 +112,7 @@ def create_crypto_engines(
     take_profit_pct: float = 0.06,
     execute: bool = True,
     auto_exit: bool = True,
-    strategy: str = "crypto_momentum",
+    strategy: str = "btc_volatility_breakout",
     order_type: str = "auto",
 ) -> List[LiveTradingCrypto]:
     """Create crypto trading engines without starting them.
@@ -151,7 +151,7 @@ def run_crypto_trading(
     take_profit_pct: float = 0.06,
     execute: bool = True,
     auto_exit: bool = True,
-    strategy: str = "crypto_momentum",
+    strategy: str = "btc_volatility_breakout",
     order_type: str = "auto",
 ) -> None:
     """Run live cryptocurrency trading.
