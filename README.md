@@ -18,16 +18,6 @@
   </p>
 </div>
 
----
-
-## ⚠️ Important Disclaimer
-
-Live trading can result in substantial financial loss. Read [DISCLAIMER.md](DISCLAIMER.md)
-before using this repository for paper trading, live trading, strategy development,
-or investment-related decisions.
-
----
-
 ## 📖 What is Algorithmic Trading?
 
 Algorithmic trading (also called algo trading or automated trading) uses computer programs to execute trades based on predefined rules and strategies. Instead of manually watching charts and clicking buy/sell buttons, algorithms analyze market data and make trading decisions automatically.
@@ -349,6 +339,14 @@ Watchlist entries are typed by asset so the dashboard and live scripts can filte
 ## 📚 Documentation
 
 - [Wheel Options Strategy](docs/wheel_strategy.md) — Detailed guide for the wheel options strategy
+
+---
+
+## ⚠️ Important Disclaimer
+
+Live trading can result in substantial financial loss. Read [DISCLAIMER.md](DISCLAIMER.md)
+before using this repository for paper trading, live trading, strategy development,
+or investment-related decisions.
 
 ---
 
