@@ -18,6 +18,8 @@
   </p>
 </div>
 
+---
+
 ## 📖 What is Algorithmic Trading?
 
 Algorithmic trading (also called algo trading or automated trading) uses computer programs to execute trades based on predefined rules and strategies. Instead of manually watching charts and clicking buy/sell buttons, algorithms analyze market data and make trading decisions automatically.
