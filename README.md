@@ -22,7 +22,9 @@
 
 ## ⚠️ Important Disclaimer
 
-See [DISCLAIMER.md](DISCLAIMER.md) for the full risk and usage disclaimer.
+Live trading can result in substantial financial loss. Read [DISCLAIMER.md](DISCLAIMER.md)
+before using this repository for paper trading, live trading, strategy development,
+or investment-related decisions.
 
 ---
 
