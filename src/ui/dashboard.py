@@ -23,12 +23,12 @@ from src.account.account_manager import AccountManager
 from src.account.order_manager import OrderManager
 from src.account.position_manager import PositionManager
 from src.agent.fundamental_analyzer import FundamentalAnalyzer
-from src.agent.watchlist_manager import WatchlistManager
+from src.watchlist import WatchlistManager
 from src.analysis import TechnicalAnalysis
 from src.data import AlpacaDataProvider, NewsDataProvider
 from src.data import FREDProvider
 from src.strategy import get_strategy_registry
-from src.trade.backtester import Backtester
+from src.backtest import Backtester
 from src.utils.timezone_utils import get_market_status, now_et
 
 from src.ui.market_views import MarketViewsMixin
@@ -258,7 +258,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
     def create_main_navigation(self):
         """Create main navigation tabs in the sidebar."""
         with st.sidebar:
-            logo_path = Path(__file__).parent.parent / "pic" / "logo2.png"
+            logo_path = Path(__file__).resolve().parents[2] / "assets" / "logo2.png"
             if logo_path.exists():
                 st.image(str(logo_path), width=150)
 

@@ -14,11 +14,11 @@ from src.utils.timezone_utils import now_et
 from src.account.position_manager import convert_crypto_symbol_for_display
 from src.account.account_manager import AccountManager
 from src.strategy.base import ActionPlan, SignalSnapshot
-from .execution import ExecutionEngine
+from src.trade.engine import ExecutionEngine
 
 if TYPE_CHECKING:
     from src.strategy.base import StrategyBase
-    from .trading_engine import TradingEngine
+    from src.trade.engine import TradingEngine
 
 
 @dataclass

@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime, timedelta
 import logging
-from .portfolio import Portfolio
+from src.trade.portfolio import Portfolio
 
 class Backtester:
     def __init__(self, initial_cash: float = 100000.0, commission: float = 0.01):

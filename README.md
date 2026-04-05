@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/logo3.png" width="600" alt="Gauss World Trader logo">
+  <img src="assets/logo3.png" width="600" alt="Gauss World Trader logo">
   <p>
     <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
     <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
@@ -138,7 +138,7 @@ python main_cli.py list-strategies
 | **Dashboard** | `python dashboard.py` | Interactive Streamlit web interface at `http://localhost:3721` |
 | **Live Trading CLI** | `python live_script.py` | Unified interactive live trading menu |
 
- ![Trading Dashboard](/docs/screenshot2.png)
+ ![Trading Dashboard](assets/screenshot2.png)
 
 ### CLI Examples
 
@@ -158,7 +158,7 @@ python main_cli.py stream-market --asset-type crypto --crypto-loc eu-1 --symbols
 # Launch unified interactive CLI
 python live_script.py
 ```
- ![live Trading CLI](/docs/screenshot1.png)
+ ![Live Trading CLI](assets/screenshot1.png)
 
 The unified CLI provides:
 - **Quick Start** — Trade all asset types with watchlist defaults

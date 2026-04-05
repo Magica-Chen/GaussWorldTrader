@@ -10,7 +10,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 from .trading_engine import TradingEngine
 
 if TYPE_CHECKING:
-    from src.agent.notification_service import NotificationService
+    from src.notify import NotificationService
 
 
 class TradingStockEngine(TradingEngine):

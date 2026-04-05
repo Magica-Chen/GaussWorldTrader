@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from alpaca.trading.requests import OptionLegRequest
 from alpaca.trading.enums import OrderSide
 
-from config import Config
+from src.settings import Config
 from src.account.account_manager import AccountManager
 from src.strategy.base import ActionPlan
 

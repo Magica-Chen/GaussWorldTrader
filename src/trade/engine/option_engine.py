@@ -22,7 +22,7 @@ from alpaca.trading.enums import (
 from .trading_engine import TradingEngine
 
 if TYPE_CHECKING:
-    from src.agent.notification_service import NotificationService
+    from src.notify import NotificationService
 
 
 class TradingOptionEngine(TradingEngine):

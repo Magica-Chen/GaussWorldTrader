@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
-from config import Config
+from src.settings import Config
 from .finnhub_provider import FinnhubProvider
 
 try:

@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional, Union
 import pandas as pd
 from datetime import datetime, timedelta
 import logging
-from config import Config
+from src.settings import Config
 from src.utils.timezone_utils import EASTERN, now_et
 
 try:

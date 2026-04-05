@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 
 from src.data import AlpacaDataProvider
 from src.strategy.registry import get_strategy_registry
-from src.trade.backtester import Backtester
+from src.backtest import Backtester
 from src.utils.timezone_utils import now_et
 from src.ui.ui_components import UIComponents
 

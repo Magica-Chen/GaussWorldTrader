@@ -13,15 +13,28 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
-from src.trade.live_trading_crypto import create_crypto_engines, get_default_crypto_symbols
-from src.trade.live_trading_option import create_option_engines, get_default_option_symbols
-from src.trade.live_trading_stock import create_stock_engines, get_default_stock_symbols
+from src.trade.live.live_trading_crypto import (
+    create_crypto_engines,
+    get_default_crypto_symbols,
+)
+from src.trade.live.live_trading_option import (
+    create_option_engines,
+    get_default_option_symbols,
+)
+from src.trade.live.live_trading_stock import (
+    create_stock_engines,
+    get_default_stock_symbols,
+)
 from src.strategy.registry import get_strategy_registry
-from src.trade.live_runner import run_live_engines
-from src.agent.watchlist_manager import WatchlistManager
-from config import Config
-from src.trade.execution import ExecutionContext, ExecutionEngine
-from src.trade.stock_engine import TradingStockEngine
+from src.trade.live import run_live_engines
+from src.watchlist import WatchlistManager
+from src.settings import Config
+from src.trade.engine import (
+    ExecutionContext,
+    ExecutionEngine,
+    TradingStockEngine,
+)
+
 
 console = Console()
 

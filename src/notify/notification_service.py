@@ -199,7 +199,7 @@ class TradeStreamHandler:
 
         try:
             from alpaca.trading.stream import TradingStream
-            from config import Config
+            from src.settings import Config
 
             if not Config.validate_alpaca_config():
                 self.logger.error("Alpaca credentials not configured")

@@ -13,7 +13,7 @@ import json
 
 from src.data.finnhub_provider import FinnhubProvider
 from src.data.fred_provider import FREDProvider
-from .llm_providers import create_provider, get_available_providers
+from src.llm import create_provider, get_available_providers
 
 class FundamentalAnalyzer:
     """Comprehensive fundamental analysis with AI insights"""

@@ -12,13 +12,12 @@ import typer
 
 from src.data import AlpacaDataProvider
 from src.strategy import get_strategy_registry
-from src.trade import Backtester, TradingEngine
-from src.trade.execution import ExecutionEngine
-from src.trade.stock_engine import TradingStockEngine
+from src.backtest import Backtester
+from src.trade.engine import ExecutionEngine, TradingStockEngine
 from src.account.account_manager import AccountManager
-from config import Config
+from src.settings import Config
 from src.utils.timezone_utils import now_et
-from src.agent.watchlist_manager import WatchlistManager
+from src.watchlist import WatchlistManager
 
 app = typer.Typer(add_completion=False)
 

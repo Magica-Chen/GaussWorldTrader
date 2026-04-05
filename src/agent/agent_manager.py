@@ -11,7 +11,7 @@ from datetime import datetime
 import json
 
 from .fundamental_analyzer import FundamentalAnalyzer
-from .llm_providers import get_available_providers, create_provider
+from src.llm import get_available_providers, create_provider
 
 class AgentManager:
     """Manages AI agents and analysis workflows"""

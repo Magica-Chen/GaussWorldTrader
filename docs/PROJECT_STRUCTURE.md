@@ -18,19 +18,21 @@ GaussWorldTrader/
 ├── pyproject.toml         # Python project configuration
 ├── requirements.txt       # Dependencies
 ├── watchlist.json         # Default watchlist
-│
-├── config/                # Configuration management
-│   ├── __init__.py
-│   └── config.py
+├── assets/                # Static figures used by the README and UI
+│   ├── logo.png
+│   ├── logo2.png
+│   ├── logo3.png
+│   ├── screenshot1.png
+│   └── screenshot2.png
 │
 ├── src/                   # Source code
+│   ├── settings.py        # Runtime settings loader (.env + optional config.toml)
 │   ├── account/           # Account and position management
 │   ├── agent/             # LLM helpers, watchlist, notifications
 │   │   ├── watchlist_manager.py  # Watchlist management
 │   │   └── ...
 │   ├── analysis/          # Technical analysis (metrics re-exported)
 │   ├── data/              # Market data providers
-│   ├── pic/               # Images used in code (logo2.png)
 │   ├── strategy/          # Strategy base, registry, per-asset strategies
 │   ├── trade/             # Trading engines, execution, backtester, live trading, portfolio analytics
 │   │   ├── execution.py   # ExecutionEngine (sizing, order type, account limits)
@@ -46,11 +48,7 @@ GaussWorldTrader/
 │
 ├── examples/              # Example scripts
 ├── tests/                 # Smoke tests (gitignored)
-└── docs/                  # Documentation and README images
-    ├── logo.png
-    ├── logo3.png
-    ├── screenshot1.png
-    └── screenshot2.png
+└── docs/                  # Documentation
 ```
 
 ## Strategy Template

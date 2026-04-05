@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from src.data import AlpacaDataProvider
-from src.trade.stock_engine import TradingStockEngine
+from src.trade.engine import TradingStockEngine
 
 
 class UIComponents:

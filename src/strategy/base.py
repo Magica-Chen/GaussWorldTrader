@@ -411,7 +411,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
         Returns:
             List of symbols from the watchlist
         """
-        from src.agent.watchlist_manager import WatchlistManager
+        from src.watchlist import WatchlistManager
 
         manager = WatchlistManager()
         symbols = manager.get_watchlist(asset_type="stock")

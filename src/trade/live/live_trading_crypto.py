@@ -4,12 +4,12 @@ from __future__ import annotations
 import logging
 from typing import Any, List, Optional
 
-from src.agent.watchlist_manager import WatchlistManager
+from src.watchlist import WatchlistManager
 from src.strategy.base import StrategyBase
 from src.strategy.registry import get_strategy_registry
 from src.utils.asset_utils import merge_symbol_sources
 
-from .crypto_engine import TradingCryptoEngine
+from src.trade.engine import TradingCryptoEngine
 from .live_trading_base import LiveTradingEngine
 from .live_runner import run_live_engines
 

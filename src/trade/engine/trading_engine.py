@@ -6,14 +6,14 @@ from typing import Any, Dict, List, TYPE_CHECKING
 import logging
 
 if TYPE_CHECKING:
-    from src.agent.notification_service import NotificationService
+    from src.notify import NotificationService
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 
-from config import Config
-from .portfolio import Portfolio
+from src.settings import Config
+from src.trade.portfolio import Portfolio
 
 
 class TradingEngine(ABC):

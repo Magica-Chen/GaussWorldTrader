@@ -1,41 +1,54 @@
-from .trading_engine import TradingEngine
-from .crypto_engine import TradingCryptoEngine
-from .stock_engine import TradingStockEngine
-from .option_engine import TradingOptionEngine
-from .execution import ExecutionEngine, ExecutionContext, ExecutionDecision
-from .portfolio import Portfolio, FinancialMetrics, PerformanceAnalyzer, PortfolioTracker
-from .backtester import Backtester
-from .live_trading_base import LiveTradingEngine, PositionState
+from .engine import (
+    TradingEngine,
+    TradingCryptoEngine,
+    TradingStockEngine,
+    TradingOptionEngine,
+    ExecutionEngine,
+    ExecutionContext,
+    ExecutionDecision,
+)
+from .portfolio import (
+    Portfolio,
+    FinancialMetrics,
+    PerformanceAnalyzer,
+    PortfolioTracker,
+)
+from .live import LiveTradingEngine, PositionState
 
 __all__ = [
-    'TradingEngine',
-    'TradingCryptoEngine',
-    'TradingStockEngine',
-    'TradingOptionEngine',
-    'ExecutionEngine',
-    'ExecutionContext',
-    'ExecutionDecision',
-    'Portfolio',
-    'FinancialMetrics',
-    'PerformanceAnalyzer',
-    'PortfolioTracker',
-    'Backtester',
-    'LiveTradingEngine',
-    'PositionState',
-    'LiveTradingCrypto',
-    'LiveTradingStock',
-    'LiveTradingOption',
+    "TradingEngine",
+    "TradingCryptoEngine",
+    "TradingStockEngine",
+    "TradingOptionEngine",
+    "ExecutionEngine",
+    "ExecutionContext",
+    "ExecutionDecision",
+    "Portfolio",
+    "FinancialMetrics",
+    "PerformanceAnalyzer",
+    "PortfolioTracker",
+    "Backtester",
+    "LiveTradingEngine",
+    "PositionState",
+    "LiveTradingCrypto",
+    "LiveTradingStock",
+    "LiveTradingOption",
 ]
 
 
 def __getattr__(name: str):
-    if name == 'LiveTradingCrypto':
-        from .live_trading_crypto import LiveTradingCrypto
+    if name == "Backtester":
+        from src.backtest import Backtester
+        return Backtester
+    if name == "LiveTradingCrypto":
+        from .live.live_trading_crypto import LiveTradingCrypto
         return LiveTradingCrypto
-    if name == 'LiveTradingStock':
-        from .live_trading_stock import LiveTradingStock
+    if name == "LiveTradingStock":
+        from .live.live_trading_stock import LiveTradingStock
         return LiveTradingStock
-    if name == 'LiveTradingOption':
-        from .live_trading_option import LiveTradingOption
+    if name == "LiveTradingOption":
+        from .live.live_trading_option import LiveTradingOption
         return LiveTradingOption
-    raise AttributeError(f"module 'src.trade' has no attribute {name!r}")
+    raise AttributeError(
+        f"module 'src.trade' has no attribute {name!r}"
+    )

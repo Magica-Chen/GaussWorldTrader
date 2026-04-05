@@ -1,4 +1,4 @@
-"""Live options trading with expiration awareness."""
+"""Live stock trading with market hours awareness."""
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
@@ -7,53 +7,56 @@ from typing import Any, List, Optional
 
 import pytz
 
-from src.agent.watchlist_manager import WatchlistManager
+from src.watchlist import WatchlistManager
 from src.strategy.base import StrategyBase
 from src.strategy.registry import get_strategy_registry
-from src.utils.asset_utils import merge_symbol_sources
+from src.utils.asset_utils import merge_symbol_sources, positions_for_asset_type
 from src.utils.timezone_utils import format_duration
 
-from .live_trading_base import LiveTradingEngine, PositionState
+from .live_trading_base import LiveTradingEngine
 from .live_runner import run_live_engines
-from .option_engine import TradingOptionEngine
+from src.trade.engine import TradingStockEngine
 
 
 EASTERN = pytz.timezone("US/Eastern")
 
 
-class LiveTradingOption(LiveTradingEngine):
-    """Live trading engine for options.
+class LiveTradingStock(LiveTradingEngine):
+    """Live trading engine for stocks.
 
     Features:
     - Market hours awareness (9:30 AM - 4:00 PM ET)
-    - Expiration date tracking
-    - Position rolling support
-    - Underlying price monitoring
+    - Extended hours support (optional)
+    - Signal cycles based on timeframe
+    - PDT rules consideration
     """
 
     MARKET_OPEN = time(9, 30)
     MARKET_CLOSE = time(16, 0)
+    EXTENDED_OPEN = time(4, 0)
+    EXTENDED_CLOSE = time(20, 0)
 
     def __init__(
         self,
-        underlying_symbol: str,
-        timeframe: str = "1Day",
+        symbol: str,
+        timeframe: str = "1Hour",
         lookback_days: int = 30,
-        risk_pct: float = 0.08,
-        stop_loss_pct: float = 0.50,
-        take_profit_pct: float = 0.50,
+        risk_pct: float = 0.05,
+        stop_loss_pct: float = 0.03,
+        take_profit_pct: float = 0.06,
         execute: bool = True,
         auto_exit: bool = True,
-        roll_days_before_expiry: int = 5,
-        strategy: str = "wheel",
+        allow_fractional: bool = False,
+        extended_hours: bool = False,
+        strategy: str = "momentum",
         allow_sell_to_open: bool = False,
         order_type: str = "auto",
     ) -> None:
-        self.underlying_symbol = underlying_symbol.strip().upper()
-        self.roll_days_before_expiry = roll_days_before_expiry
+        self.allow_fractional = allow_fractional
+        self.extended_hours = extended_hours
         self.strategy_name = strategy
         super().__init__(
-            symbol=underlying_symbol,
+            symbol=symbol,
             timeframe=timeframe,
             lookback_days=lookback_days,
             risk_pct=risk_pct,
@@ -61,29 +64,29 @@ class LiveTradingOption(LiveTradingEngine):
             take_profit_pct=take_profit_pct,
             execute=execute,
             auto_exit=auto_exit,
-            asset_type="option",
+            asset_type="stock",
             allow_sell_to_open=allow_sell_to_open,
             order_type=order_type,
         )
 
     def _normalize_symbol(self, symbol: str) -> str:
-        """Normalize underlying symbol (uppercase, trimmed)."""
+        """Normalize stock symbol (uppercase, trimmed)."""
         return symbol.strip().upper()
 
-    def _get_trading_engine(self) -> TradingOptionEngine:
-        """Return options trading engine."""
-        return TradingOptionEngine()
+    def _get_trading_engine(self) -> TradingStockEngine:
+        """Return stock trading engine."""
+        return TradingStockEngine(allow_fractional=self.allow_fractional)
 
     def _get_strategy(self) -> StrategyBase:
         """Return the configured strategy."""
         return get_strategy_registry().create(self.strategy_name)
 
     def _create_stream(self) -> Any:
-        """Create stock data stream for underlying."""
+        """Create stock data stream."""
         return self.provider.create_stock_stream(raw_data=False)
 
     def _subscribe_to_stream(self, handler: Any, symbol: str) -> None:
-        """Subscribe to underlying stock trade stream."""
+        """Subscribe to stock trade stream."""
         self._stream.subscribe_trades(handler, symbol)
 
     def _get_signal_interval_seconds(self) -> float:
@@ -93,9 +96,9 @@ class LiveTradingOption(LiveTradingEngine):
 
         interval_secs = self._seconds_until_next_interval()
         now = datetime.now(EASTERN)
+        close_time = self.EXTENDED_CLOSE if self.extended_hours else self.MARKET_CLOSE
         today_close = now.replace(
-            hour=self.MARKET_CLOSE.hour, minute=self.MARKET_CLOSE.minute,
-            second=0, microsecond=0
+            hour=close_time.hour, minute=close_time.minute, second=0, microsecond=0
         )
         secs_to_close = max(0.0, (today_close - now).total_seconds())
 
@@ -120,129 +123,82 @@ class LiveTradingOption(LiveTradingEngine):
             return False
 
         current_time = now.time()
+
+        if self.extended_hours:
+            return self.EXTENDED_OPEN <= current_time <= self.EXTENDED_CLOSE
+
         return self.MARKET_OPEN <= current_time <= self.MARKET_CLOSE
 
     def _seconds_until_market_open(self) -> float:
         """Calculate seconds until market opens."""
         now = datetime.now(EASTERN)
+        open_time = self.EXTENDED_OPEN if self.extended_hours else self.MARKET_OPEN
 
         days_ahead = 0
         if now.weekday() == 5:
             days_ahead = 2
         elif now.weekday() == 6:
             days_ahead = 1
-        elif now.time() > self.MARKET_CLOSE:
+        elif now.time() > (self.EXTENDED_CLOSE if self.extended_hours else self.MARKET_CLOSE):
             days_ahead = 1
             if now.weekday() == 4:
                 days_ahead = 3
 
         next_open = now.replace(
-            hour=self.MARKET_OPEN.hour, minute=self.MARKET_OPEN.minute,
-            second=0, microsecond=0
+            hour=open_time.hour, minute=open_time.minute, second=0, microsecond=0
         )
         if days_ahead > 0:
             next_open += timedelta(days=days_ahead)
-        elif now.time() >= self.MARKET_OPEN:
+        elif now.time() >= open_time:
             next_open += timedelta(days=1)
 
         return max(1.0, (next_open - now).total_seconds())
 
     def _get_display_symbol(self) -> str:
-        """Return underlying symbol for display."""
-        return self.underlying_symbol
-
-    def _run_signal_cycle(self) -> None:
-        """Run signal cycle with expiration checking."""
-        self._check_expiring_positions()
-        super()._run_signal_cycle()
-
-    def _check_expiring_positions(self) -> None:
-        """Check for positions nearing expiration."""
-        if not isinstance(self.engine, TradingOptionEngine):
-            return
-
-        expiring = self.engine.get_expiring_positions(days=self.roll_days_before_expiry)
-        for pos in expiring:
-            days_left = pos.get('days_to_expiration', 999)
-            self.logger.warning(
-                "Position %s expires in %d days - consider rolling",
-                pos.get('symbol'), days_left
-            )
-
-    def _refresh_position_state(self) -> None:
-        """Refresh position state for options."""
-        if not isinstance(self.engine, TradingOptionEngine):
-            super()._refresh_position_state()
-            return
-
-        positions = self.engine.get_option_positions()
-
-        with self._lock:
-            if not positions:
-                self.position = PositionState()
-                return
-
-            total_value = sum(float(p.get('market_value', 0)) for p in positions)
-            total_qty = sum(float(p.get('qty', 0)) for p in positions)
-
-            if total_qty == 0:
-                self.position = PositionState()
-                return
-
-            side = "long" if total_qty > 0 else "short"
-            avg_cost = sum(float(p.get('cost_basis', 0)) for p in positions) / abs(total_qty)
-
-            self.position = PositionState(
-                qty=total_qty,
-                side=side,
-                entry_price=avg_cost,
-                stop_loss=self.position.stop_loss,
-                take_profit=self.position.take_profit,
-            )
+        """Stock symbols don't need conversion."""
+        return self.symbol
 
 
-def get_default_option_symbols() -> List[str]:
-    """Get default option underlying symbols from watchlist and open positions."""
+def get_default_stock_symbols() -> List[str]:
+    """Get default stock symbols from watchlist and open positions."""
     manager = WatchlistManager()
-    watchlist_symbols = manager.get_watchlist(asset_type="option")
+    watchlist_symbols = manager.get_watchlist(asset_type="stock")
     position_symbols: List[str] = []
     try:
-        engine = TradingOptionEngine()
-        for pos in engine.get_option_positions():
-            underlying = pos.get("underlying")
-            if underlying:
-                position_symbols.append(underlying)
+        engine = TradingStockEngine()
+        position_symbols = positions_for_asset_type(engine.get_current_positions(), "stock")
     except Exception as exc:
-        logging.getLogger(__name__).warning("Failed to load option positions: %s", exc)
-    defaults = merge_symbol_sources("option", watchlist_symbols, position_symbols)
+        logging.getLogger(__name__).warning("Failed to load stock positions: %s", exc)
+    defaults = merge_symbol_sources("stock", watchlist_symbols, position_symbols)
     return defaults or ["AAPL"]
 
 
-def create_option_engines(
+def create_stock_engines(
     symbols: Optional[List[str]] = None,
-    timeframe: str = "1Day",
+    timeframe: str = "1Hour",
     lookback_days: int = 30,
-    risk_pct: float = 0.08,
-    stop_loss_pct: float = 0.50,
-    take_profit_pct: float = 0.50,
+    risk_pct: float = 0.05,
+    stop_loss_pct: float = 0.03,
+    take_profit_pct: float = 0.06,
     execute: bool = True,
     auto_exit: bool = True,
-    roll_days: int = 5,
-    strategy: str = "wheel",
+    fractional: bool = False,
+    extended_hours: bool = False,
+    strategy: str = "momentum",
     allow_sell_to_open: bool = False,
     order_type: str = "auto",
-) -> List[LiveTradingOption]:
-    """Create option trading engines without starting them.
+) -> List[LiveTradingStock]:
+    """Create stock trading engines without starting them.
 
     Returns:
-        List of configured LiveTradingOption engines.
+        List of configured LiveTradingStock engines.
     """
-    underlyings = symbols if symbols else get_default_option_symbols()
-    underlyings = merge_symbol_sources("option", underlyings)
+    trading_symbols = symbols if symbols else get_default_stock_symbols()
+    trading_symbols = merge_symbol_sources("stock", trading_symbols)
 
     return [
-        LiveTradingOption(
-            underlying_symbol=underlying,
+        LiveTradingStock(
+            symbol=symbol,
             timeframe=timeframe,
             lookback_days=lookback_days,
             risk_pct=risk_pct,
@@ -250,33 +206,35 @@ def create_option_engines(
             take_profit_pct=take_profit_pct,
             execute=execute,
             auto_exit=auto_exit,
-            roll_days_before_expiry=roll_days,
+            allow_fractional=fractional,
+            extended_hours=extended_hours,
             strategy=strategy,
             allow_sell_to_open=allow_sell_to_open,
             order_type=order_type,
         )
-        for underlying in underlyings
+        for symbol in trading_symbols
     ]
 
 
-def run_option_trading(
+def run_stock_trading(
     symbols: Optional[List[str]] = None,
-    timeframe: str = "1Day",
+    timeframe: str = "1Hour",
     lookback_days: int = 30,
-    risk_pct: float = 0.08,
-    stop_loss_pct: float = 0.50,
-    take_profit_pct: float = 0.50,
+    risk_pct: float = 0.05,
+    stop_loss_pct: float = 0.03,
+    take_profit_pct: float = 0.06,
     execute: bool = True,
     auto_exit: bool = True,
-    roll_days: int = 5,
-    strategy: str = "wheel",
+    fractional: bool = False,
+    extended_hours: bool = False,
+    strategy: str = "momentum",
     allow_sell_to_open: bool = False,
     order_type: str = "auto",
 ) -> None:
-    """Run live options trading.
+    """Run live stock trading.
 
     Args:
-        symbols: List of underlying symbols (e.g., ["AAPL", "MSFT"]).
+        symbols: List of stock tickers (e.g., ["AAPL", "MSFT"]).
                  If None, uses watchlist and open positions.
         timeframe: Bar timeframe for signals.
         lookback_days: Historical lookback days.
@@ -285,10 +243,11 @@ def run_option_trading(
         take_profit_pct: Take-profit percentage.
         execute: Execute live trades (False for dry run).
         auto_exit: Auto-close on stop/take-profit.
-        roll_days: Days before expiry to warn about rolling positions.
+        fractional: Allow fractional shares.
+        extended_hours: Trade during extended hours (4AM-8PM ET).
         strategy: Strategy name to use for signals.
     """
-    engines = create_option_engines(
+    engines = create_stock_engines(
         symbols=symbols,
         timeframe=timeframe,
         lookback_days=lookback_days,
@@ -297,7 +256,8 @@ def run_option_trading(
         take_profit_pct=take_profit_pct,
         execute=execute,
         auto_exit=auto_exit,
-        roll_days=roll_days,
+        fractional=fractional,
+        extended_hours=extended_hours,
         strategy=strategy,
         allow_sell_to_open=allow_sell_to_open,
         order_type=order_type,
@@ -312,8 +272,8 @@ def run_option_trading(
 
     for engine in engines:
         engine.logger.info(
-            "Live options trading on %s (execute=%s, auto_exit=%s, roll_days=%d)",
-            engine.underlying_symbol, execute, auto_exit, roll_days,
+            "Live trading %s (execute=%s, auto_exit=%s, fractional=%s, extended=%s)",
+            engine.symbol, execute, auto_exit, fractional, extended_hours,
         )
 
     if len(engines) == 1:

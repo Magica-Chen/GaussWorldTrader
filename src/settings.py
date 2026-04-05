@@ -6,16 +6,14 @@ from __future__ import annotations
 
 import os
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from functools import cached_property
 from pathlib import Path
 from typing import Any, final
-from collections.abc import Mapping
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, validator
 from loguru import logger
+from pydantic import BaseModel, Field, validator
 
 # Load environment variables
 load_dotenv()
@@ -144,8 +142,16 @@ class OptimizedConfig:
         self._performance_config = PerformanceConfig(**perf_config)
         
         # Other settings
-        self._database_url = os.getenv('DATABASE_URL', 'sqlite:///trading_system.db')
-        self._log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+        database_config = config_data.get('database', {})
+        logging_config = config_data.get('logging', {})
+        self._database_url = os.getenv(
+            'DATABASE_URL',
+            database_config.get('url', 'sqlite:///trading_system.db'),
+        )
+        self._log_level = os.getenv(
+            'LOG_LEVEL',
+            logging_config.get('level', 'INFO'),
+        ).upper()
         
         self._last_reload = datetime.now().timestamp()
     
@@ -208,6 +214,11 @@ class OptimizedConfig:
     
     def reload_if_changed(self, force: bool = False) -> bool:
         """Reload configuration if file has changed"""
+        if force:
+            self._load_configuration()
+            logger.info("🔄 Configuration reloaded")
+            return True
+
         if not self._config_file_path.exists():
             return False
         
@@ -286,7 +297,10 @@ def get_config() -> OptimizedConfig:
 
 def reload_config(force: bool = False) -> bool:
     """Reload global configuration"""
-    return get_config().reload_if_changed(force)
+    reloaded = get_config().reload_if_changed(force)
+    if reloaded:
+        _create_legacy_config()
+    return reloaded
 
 # Legacy compatibility (for existing code)
 class Config:
@@ -320,6 +334,8 @@ def _create_legacy_config():
 
 # Initialize legacy config attributes
 _create_legacy_config()
+
+__all__ = ["APICredentials", "TradingLimits", "PerformanceConfig", "OptimizedConfig", "get_config", "reload_config", "Config"]
 
 # Example usage and testing
 if __name__ == '__main__':

@@ -16,9 +16,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
-from config import Config
+from src.settings import Config
 from src.data import AlpacaDataProvider
-from src.trade.backtester import Backtester
+from src.backtest import Backtester
 from src.strategy import MomentumStrategy
 
 def generate_pnl_plot(results):
