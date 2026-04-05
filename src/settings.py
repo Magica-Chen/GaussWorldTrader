@@ -13,10 +13,12 @@ from typing import Any, final
 
 from dotenv import load_dotenv
 from loguru import logger
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # Load environment variables
 load_dotenv()
+
+DEFAULT_ALPACA_BASE_URL = "https://paper-api.alpaca.markets"
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -57,8 +59,9 @@ class PerformanceConfig(BaseModel):
     connection_pool_size: int = Field(default=20, ge=5, le=100)
     request_timeout: float = Field(default=30.0, ge=1.0, le=120.0)
     
-    @validator('max_concurrent_requests')
-    def validate_concurrent_requests(cls, v):
+    @field_validator('max_concurrent_requests')
+    @classmethod
+    def validate_concurrent_requests(cls, v: int) -> int:
         """Ensure reasonable concurrency limits"""
         if v > 50:
             logger.warning(f"High concurrency ({v}) may cause rate limiting")
@@ -93,12 +96,9 @@ class OptimizedConfig:
         # Load from TOML config file if it exists
         config_data = {}
         if self._config_file_path.exists():
-            try:
-                with open(self._config_file_path, 'rb') as f:
-                    config_data = tomllib.load(f)
-                logger.info(f"📄 Loaded config from {self._config_file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to load config file: {e}")
+            with open(self._config_file_path, 'rb') as f:
+                config_data = tomllib.load(f)
+            logger.info(f"Loaded config from {self._config_file_path}")
         
         # API Credentials
         self._alpaca_credentials = APICredentials(
@@ -295,47 +295,32 @@ def get_config() -> OptimizedConfig:
         _config_instance = OptimizedConfig()
     return _config_instance
 
+
+def has_alpaca_credentials() -> bool:
+    """Return whether Alpaca credentials are configured."""
+    return get_config().validate_all_credentials()["alpaca"]
+
+
+def get_alpaca_base_url() -> str:
+    """Return the configured Alpaca base URL with a safe default."""
+    return get_config().alpaca.base_url or DEFAULT_ALPACA_BASE_URL
+
 def reload_config(force: bool = False) -> bool:
     """Reload global configuration"""
-    reloaded = get_config().reload_if_changed(force)
-    if reloaded:
-        _create_legacy_config()
-    return reloaded
-
-# Legacy compatibility (for existing code)
-class Config:
-    """Legacy config class for backward compatibility"""
-    
-    @staticmethod
-    def validate_alpaca_config() -> bool:
-        return get_config().validate_all_credentials()['alpaca']
-    
-    @staticmethod
-    def validate_finnhub_config() -> bool:
-        return get_config().validate_all_credentials()['finnhub']
-    
-    @staticmethod
-    def validate_fred_config() -> bool:
-        return get_config().validate_all_credentials()['fred']
+    return get_config().reload_if_changed(force)
 
 
-# Create backward-compatible class attributes at module load time
-def _create_legacy_config():
-    """Create Config class with dynamic attributes"""
-    config = get_config()
-    
-    Config.ALPACA_API_KEY = config.alpaca.api_key
-    Config.ALPACA_SECRET_KEY = config.alpaca.secret_key or ""
-    Config.ALPACA_BASE_URL = config.alpaca.base_url or "https://paper-api.alpaca.markets"
-    Config.FINNHUB_API_KEY = config.finnhub.api_key  
-    Config.FRED_API_KEY = config.fred.api_key
-    Config.DATABASE_URL = config.database_url
-    Config.LOG_LEVEL = config.log_level
-
-# Initialize legacy config attributes
-_create_legacy_config()
-
-__all__ = ["APICredentials", "TradingLimits", "PerformanceConfig", "OptimizedConfig", "get_config", "reload_config", "Config"]
+__all__ = [
+    "APICredentials",
+    "TradingLimits",
+    "PerformanceConfig",
+    "OptimizedConfig",
+    "DEFAULT_ALPACA_BASE_URL",
+    "get_config",
+    "has_alpaca_credentials",
+    "get_alpaca_base_url",
+    "reload_config",
+]
 
 # Example usage and testing
 if __name__ == '__main__':

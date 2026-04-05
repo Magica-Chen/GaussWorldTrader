@@ -115,9 +115,10 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                 self._initialize_stream_state()
                 self._initialize_news_stream_state()
                 st.session_state.dashboard_initialized = True
-            except Exception as e:
-                logger.error(f"Error initializing modules: {e}")
-                st.error("Error initializing trading modules. Please check API configuration.")
+            except Exception as exc:
+                logger.exception("Error initializing dashboard modules")
+                st.exception(exc)
+                raise
 
         if 'stream_state_initialized' not in st.session_state:
             self._initialize_stream_state()
@@ -151,9 +152,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         try:
             provider = AlpacaDataProvider()
             info = provider.get_account()
-            if info and 'error' not in info:
-                return info, None
-            return None, info.get('error', 'Unknown error')
+            return info, None
         except Exception as e:
             return None, str(e)
 
@@ -319,7 +318,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
                 if 'position_manager' in st.session_state:
                     positions = st.session_state.position_manager.get_all_positions()
-                    if positions and not any('error' in pos for pos in positions):
+                    if positions:
                         total_pl = sum(float(p.get('unrealized_pl', 0)) for p in positions)
                         total_pl_pct = (total_pl / portfolio_value * 100) if portfolio_value > 0 else 0
                         st.metric("Position P&L", f"${total_pl:+,.2f}", f"{total_pl_pct:+.2f}%")
@@ -869,7 +868,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         current_time = now_et()
         try:
             provider = AlpacaDataProvider()
-            account_info = provider.get_account_info()
+            account_info = provider.get_data_feed_info()
             vip = account_info.get('vip', False)
             using_iex = account_info.get('using_iex', False)
             account_tier = "VIP Account" if vip else "Free Tier"
@@ -889,28 +888,25 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                 st.success("📊 Live Data")
             else:
                 st.info("📊 Market Closed")
-        except Exception:
-            st.info("🆓 Free Tier")
-            st.info("📊 Unknown")
+        except Exception as exc:
+            logger.exception("Failed to load account tier info")
+            st.error(f"Account tier error: {exc}")
+            raise
 
     def run_dashboard(self):
         """Main dashboard execution."""
-        try:
-            st.markdown("<h1 style='text-align: center;'>🌍 Gauss World Trader</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; font-style: italic;'>Advanced Trading Platform with Comprehensive Market Analysis</p>",
-                        unsafe_allow_html=True)
-            st.divider()
-            self.create_main_navigation()
-            st.divider()
-            st.markdown(
-                f"<div style='text-align: center; color: #888; font-size: 0.8em;'>"
-                f"Dashboard updated: {now_et().strftime('%Y-%m-%d %H:%M:%S')} ET | "
-                f"Market Status: {get_market_status()}</div>",
-                unsafe_allow_html=True
-            )
-        except Exception as e:
-            st.error(f"Dashboard error: {e}")
-            logger.error(f"Dashboard error: {e}")
+        st.markdown("<h1 style='text-align: center;'>🌍 Gauss World Trader</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-style: italic;'>Advanced Trading Platform with Comprehensive Market Analysis</p>",
+                    unsafe_allow_html=True)
+        st.divider()
+        self.create_main_navigation()
+        st.divider()
+        st.markdown(
+            f"<div style='text-align: center; color: #888; font-size: 0.8em;'>"
+            f"Dashboard updated: {now_et().strftime('%Y-%m-%d %H:%M:%S')} ET | "
+            f"Market Status: {get_market_status()}</div>",
+            unsafe_allow_html=True
+        )
 
 
 def main():

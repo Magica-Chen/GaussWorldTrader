@@ -16,7 +16,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
-from src.settings import Config
+from src.settings import has_alpaca_credentials
 from src.data import AlpacaDataProvider
 from src.backtest import Backtester
 from src.strategy import MomentumStrategy
@@ -176,7 +176,7 @@ def generate_transaction_log(results, symbols):
                     portfolio_row = portfolio_values[portfolio_values['date'] == trade_date]
                     if not portfolio_row.empty:
                         portfolio_value = portfolio_row['portfolio_value'].iloc[0]
-                except:
+                except (KeyError, IndexError, TypeError):
                     portfolio_value = 0
             
             # Calculate position after trade
@@ -261,7 +261,7 @@ def generate_transaction_log(results, symbols):
 def momentum_backtest_example():
     """Gauss World Trader - Example of running a momentum strategy backtest"""
 
-    if not Config.validate_alpaca_config():
+    if not has_alpaca_credentials():
         print("Missing Alpaca credentials.")
         print("Set ALPACA_API_KEY and ALPACA_SECRET_KEY in your environment or .env.")
         return

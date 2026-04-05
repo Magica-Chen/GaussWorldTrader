@@ -16,6 +16,8 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
     """Run multiple live trading engines concurrently until interrupted."""
     engine_list = list(engines)
     threads: list[threading.Thread] = []
+    worker_errors: list[tuple[str, Exception]] = []
+    stream_errors: list[Exception] = []
 
     if not engine_list:
         return
@@ -40,6 +42,7 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
     for engine in engine_list:
         engine._stream = stream
         engine._stop_event.clear()
+        engine._background_error = None
 
     async def handle_trade(data: object) -> None:
         symbol = first._get_field(data, "symbol", "S")
@@ -64,7 +67,10 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
         try:
             stream.run()
         except Exception as exc:
-            logger.error("Stream stopped: %s", exc)
+            logger.exception("Shared stream stopped unexpectedly")
+            stream_errors.append(exc)
+            for engine in engine_list:
+                engine._stop_event.set()
 
     stream_thread = threading.Thread(target=_run_stream, name="live_stream", daemon=False)
     stream_thread.start()
@@ -72,7 +78,16 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
 
     for engine in engine_list:
         name = f"{engine.__class__.__name__}_{engine.symbol}"
-        thread = threading.Thread(target=engine.run_signal_loop, name=name, daemon=False)
+        def _run_engine(target_engine: LiveTradingEngine = engine) -> None:
+            try:
+                target_engine.run_signal_loop()
+            except Exception as exc:
+                logger.exception("Live engine failed for %s", target_engine.symbol)
+                worker_errors.append((target_engine.symbol, exc))
+                for other_engine in engine_list:
+                    other_engine._stop_event.set()
+
+        thread = threading.Thread(target=_run_engine, name=name, daemon=False)
         thread.start()
         threads.append(thread)
 
@@ -85,8 +100,15 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
         try:
             stream.stop()
         except Exception as exc:
-            logger.error("Failed to stop stream: %s", exc)
+            logger.exception("Failed to stop shared stream")
+            stream_errors.append(exc)
     finally:
         stream_thread.join(timeout=5)
         for thread in threads:
             thread.join(timeout=5)
+
+    if stream_errors:
+        raise RuntimeError(f"Shared live stream failed: {stream_errors[0]}") from stream_errors[0]
+    if worker_errors:
+        symbol, exc = worker_errors[0]
+        raise RuntimeError(f"Live engine failed for {symbol}: {exc}") from exc

@@ -225,7 +225,7 @@ class TradingViewsMixin:
         try:
             if 'order_manager' in st.session_state:
                 orders = st.session_state.order_manager.get_orders(status='all', limit=50)
-                if orders and isinstance(orders, list) and not any('error' in o for o in orders):
+                if orders and isinstance(orders, list):
                     UIComponents.render_orders_table(orders)
                 else:
                     st.info("No recent orders found.")

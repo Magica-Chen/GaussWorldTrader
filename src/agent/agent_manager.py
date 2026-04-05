@@ -11,7 +11,7 @@ from datetime import datetime
 import json
 
 from .fundamental_analyzer import FundamentalAnalyzer
-from src.llm import get_available_providers, create_provider
+from src.llm import get_available_providers
 
 class AgentManager:
     """Manages AI agents and analysis workflows"""
@@ -43,21 +43,11 @@ class AgentManager:
     
     def analyze_symbol(self, symbol: str, provider: str = 'openai') -> Dict[str, Any]:
         """Analyze a single symbol using specified provider"""
-        try:
-            analyzer = self.get_analyzer(provider)
-            result = analyzer.analyze_company(symbol)
-            
-            self.logger.info(f"Completed analysis for {symbol} using {provider}")
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Analysis failed for {symbol} with {provider}: {e}")
-            return {
-                'symbol': symbol,
-                'error': str(e),
-                'timestamp': datetime.now().isoformat(),
-                'provider': provider
-            }
+        analyzer = self.get_analyzer(provider)
+        result = analyzer.analyze_company(symbol)
+
+        self.logger.info(f"Completed analysis for {symbol} using {provider}")
+        return result
     
     def analyze_multiple_symbols(self, symbols: List[str], 
                                 provider: str = 'openai') -> Dict[str, Dict[str, Any]]:
@@ -103,17 +93,8 @@ class AgentManager:
         results = {}
         
         for provider in providers:
-            try:
-                self.logger.info(f"Analyzing {symbol} with {provider}")
-                results[provider] = self.analyze_symbol(symbol, provider)
-            except Exception as e:
-                self.logger.error(f"Failed to analyze {symbol} with {provider}: {e}")
-                results[provider] = {
-                    'error': str(e),
-                    'symbol': symbol,
-                    'provider': provider,
-                    'timestamp': datetime.now().isoformat()
-                }
+            self.logger.info(f"Analyzing {symbol} with {provider}")
+            results[provider] = self.analyze_symbol(symbol, provider)
         
         return results
     
@@ -135,11 +116,7 @@ Providers Compared: {', '.join(provider_results.keys())}
 {provider.upper()} ANALYSIS:
 {'-' * (len(provider) + 10)}
 """
-            
-            if 'error' in result:
-                report += f"❌ Error: {result['error']}\n\n"
-                continue
-            
+
             # Financial grades
             financial = result.get('financial_analysis', {})
             grades = financial.get('ratio_grades', {})
@@ -150,11 +127,11 @@ Financial Grades:
 • Profitability: {grades.get('profitability', 'N/A')}
 • Liquidity: {grades.get('liquidity', 'N/A')}
 """
-            
-            # News sentiment
-            news = result.get('news_analysis', {})
-            if news and 'error' not in news:
-                report += f"• News Sentiment: {news.get('sentiment_label', 'N/A')}\n"
+
+            insider = result.get('insider_analysis', {})
+            sentiment = insider.get('sentiment') if insider else None
+            if sentiment:
+                report += f"• Insider Sentiment: {sentiment.get('mspr_interpretation', 'N/A')}\n"
             
             # Analyst consensus
             analyst = result.get('analyst_analysis', {})
@@ -163,7 +140,7 @@ Financial Grades:
             
             # AI insights summary
             ai_insights = result.get('ai_insights')
-            if ai_insights and isinstance(ai_insights, str) and 'error' not in ai_insights:
+            if ai_insights and isinstance(ai_insights, str):
                 # Extract first few sentences for summary
                 sentences = ai_insights.split('.')[:3]
                 summary = '. '.join(sentences) + '.' if sentences else ai_insights[:200] + '...'
@@ -183,10 +160,10 @@ CONSENSUS SUMMARY:
         # Aggregate sentiment
         sentiments = []
         for result in provider_results.values():
-            if 'error' not in result:
-                news = result.get('news_analysis', {})
-                if news and 'sentiment_label' in news:
-                    sentiments.append(news['sentiment_label'])
+            insider = result.get('insider_analysis', {})
+            sentiment = insider.get('sentiment') if insider else None
+            if sentiment and 'mspr_interpretation' in sentiment:
+                sentiments.append(sentiment['mspr_interpretation'])
         
         if sentiments:
             from collections import Counter
@@ -197,12 +174,11 @@ CONSENSUS SUMMARY:
         # Aggregate grades
         all_grades = {}
         for result in provider_results.values():
-            if 'error' not in result:
-                grades = result.get('financial_analysis', {}).get('ratio_grades', {})
-                for grade_type, grade in grades.items():
-                    if grade_type not in all_grades:
-                        all_grades[grade_type] = []
-                    all_grades[grade_type].append(grade)
+            grades = result.get('financial_analysis', {}).get('ratio_grades', {})
+            for grade_type, grade in grades.items():
+                if grade_type not in all_grades:
+                    all_grades[grade_type] = []
+                all_grades[grade_type].append(grade)
         
         for grade_type, grades in all_grades.items():
             if grades:

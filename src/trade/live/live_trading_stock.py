@@ -163,12 +163,8 @@ def get_default_stock_symbols() -> List[str]:
     """Get default stock symbols from watchlist and open positions."""
     manager = WatchlistManager()
     watchlist_symbols = manager.get_watchlist(asset_type="stock")
-    position_symbols: List[str] = []
-    try:
-        engine = TradingStockEngine()
-        position_symbols = positions_for_asset_type(engine.get_current_positions(), "stock")
-    except Exception as exc:
-        logging.getLogger(__name__).warning("Failed to load stock positions: %s", exc)
+    engine = TradingStockEngine()
+    position_symbols = positions_for_asset_type(engine.get_current_positions(), "stock")
     defaults = merge_symbol_sources("stock", watchlist_symbols, position_symbols)
     return defaults or ["AAPL"]
 

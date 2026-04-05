@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional, Union
 import pandas as pd
 from datetime import datetime, timedelta
 import logging
-from src.settings import Config
+from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
 from src.utils.timezone_utils import EASTERN, now_et
 
 try:
@@ -45,61 +45,65 @@ except ImportError:
     ALPACA_PY_AVAILABLE = False
 
 
-class AlpacaProvider:
+class AlpacaDataProvider:
     """
     Modern Alpaca data provider using alpaca-py SDK with separate clients
     for stocks, options, and crypto data.
     """
     
     def __init__(self):
-        if not Config.validate_alpaca_config():
+        if not has_alpaca_credentials():
             raise ValueError("Alpaca API credentials not configured")
-        
+
         if not ALPACA_PY_AVAILABLE:
             raise ImportError(
                 "alpaca-py is required. Install with: pip install alpaca-py"
             )
-        
+
+        self.settings = get_config()
         # Initialize clients with API credentials
         self._init_clients()
-        
+
         # Check account tier and available feeds
         self.account_info = self._get_account_info()
         self.is_pro_tier = self._check_pro_tier()
-        
+
         logging.info(f"Alpaca Provider initialized - Pro tier: {self.is_pro_tier}")
     
     def _init_clients(self):
         """Initialize all Alpaca clients"""
+        api_key = self.settings.alpaca.api_key
+        secret_key = self.settings.alpaca.secret_key or ""
+
         # Stock data clients
         self.stock_historical_client = StockHistoricalDataClient(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY
+            api_key=api_key,
+            secret_key=secret_key,
         )
-        
+
         # Option data clients  
         self.option_historical_client = OptionHistoricalDataClient(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY
+            api_key=api_key,
+            secret_key=secret_key,
         )
-        
+
         # Crypto data clients
         self.crypto_historical_client = CryptoHistoricalDataClient(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY
+            api_key=api_key,
+            secret_key=secret_key,
         )
-        
+
         # Trading client for account/positions
         self.trading_client = TradingClient(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY,
-            paper=Config.ALPACA_BASE_URL != "https://api.alpaca.markets"
+            api_key=api_key,
+            secret_key=secret_key,
+            paper=get_alpaca_base_url() != "https://api.alpaca.markets",
         )
-        
+
         # News client
         self.news_client = NewsClient(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY
+            api_key=api_key,
+            secret_key=secret_key,
         )
 
     def create_stock_stream(self, raw_data: bool = False):
@@ -111,8 +115,8 @@ class AlpacaProvider:
 
         feed = DataFeed.SIP if self.is_pro_tier else DataFeed.IEX
         return StockDataStream(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY,
+            api_key=self.settings.alpaca.api_key,
+            secret_key=self.settings.alpaca.secret_key or "",
             feed=feed,
             raw_data=raw_data
         )
@@ -129,8 +133,8 @@ class AlpacaProvider:
             raise ValueError("crypto loc must be one of: us, us-1, eu-1")
 
         return CryptoDataStream(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY,
+            api_key=self.settings.alpaca.api_key,
+            secret_key=self.settings.alpaca.secret_key or "",
             raw_data=raw_data,
             feed=loc,
         )
@@ -143,8 +147,8 @@ class AlpacaProvider:
             )
 
         return OptionDataStream(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY,
+            api_key=self.settings.alpaca.api_key,
+            secret_key=self.settings.alpaca.secret_key or "",
             raw_data=raw_data,
         )
 
@@ -156,8 +160,8 @@ class AlpacaProvider:
             )
 
         return NewsDataStream(
-            api_key=Config.ALPACA_API_KEY,
-            secret_key=Config.ALPACA_SECRET_KEY,
+            api_key=self.settings.alpaca.api_key,
+            secret_key=self.settings.alpaca.secret_key or "",
             raw_data=raw_data
         )
     
@@ -176,8 +180,8 @@ class AlpacaProvider:
                 return False
             # Re-raise if it's a different error
             raise
-        except Exception:
-            return False
+        except Exception as exc:
+            raise RuntimeError("Failed to determine Alpaca data feed tier") from exc
     
     def _get_account_info(self) -> Dict[str, Any]:
         """Get basic account information"""
@@ -191,9 +195,8 @@ class AlpacaProvider:
                 'cash': float(account.cash) if account.cash else 0,
                 'portfolio_value': float(account.portfolio_value) if account.portfolio_value else 0
             }
-        except Exception as e:
-            logging.error(f"Error getting account info: {e}")
-            return {}
+        except Exception as exc:
+            raise RuntimeError("Failed to retrieve Alpaca account info") from exc
     
     def get_stock_bars(self, symbol: str, timeframe: str = '1Day',
                       start: Optional[datetime] = None,
@@ -205,58 +208,44 @@ class AlpacaProvider:
         if end is None:
             end = now_et()
         
-        try:
-            # Convert timeframe string to TimeFrame enum
-            tf = self._parse_timeframe(timeframe)
-            
-            # Choose appropriate feed based on account tier
-            feed = "sip" if self.is_pro_tier else "iex"
-            
-            request = StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=tf,
-                start=start,
-                end=end,
-                limit=limit,
-                feed=feed
-            )
-            
-            bars = self.stock_historical_client.get_stock_bars(request)
-            return self._process_stock_bars(bars, symbol)
-            
-        except Exception as e:
-            logging.error(f"Error getting stock bars for {symbol}: {e}")
-            return pd.DataFrame()
+        tf = self._parse_timeframe(timeframe)
+        feed = "sip" if self.is_pro_tier else "iex"
+
+        request = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=tf,
+            start=start,
+            end=end,
+            limit=limit,
+            feed=feed
+        )
+
+        bars = self.stock_historical_client.get_stock_bars(request)
+        return self._process_stock_bars(bars, symbol)
     
     def get_stock_latest_quote(self, symbol: str) -> Dict[str, Any]:
         """Get latest quote for a stock"""
-        try:
-            feed = "sip" if self.is_pro_tier else "iex"
-            
-            request = StockLatestQuoteRequest(
-                symbol_or_symbols=symbol,
-                feed=feed
-            )
-            
-            quotes = self.stock_historical_client.get_stock_latest_quote(request)
-            quote = quotes.get(symbol)
-            
-            if quote:
-                return {
-                    'symbol': symbol,
-                    'bid_price': float(quote.bid_price) if quote.bid_price else 0,
-                    'bid_size': int(quote.bid_size) if quote.bid_size else 0,
-                    'ask_price': float(quote.ask_price) if quote.ask_price else 0,
-                    'ask_size': int(quote.ask_size) if quote.ask_size else 0,
-                    'timestamp': quote.timestamp,
-                    'feed_type': feed
-                }
-            else:
-                return {'symbol': symbol, 'error': 'No quote data available'}
-                
-        except Exception as e:
-            logging.error(f"Error getting stock quote for {symbol}: {e}")
-            return {'symbol': symbol, 'error': str(e)}
+        feed = "sip" if self.is_pro_tier else "iex"
+
+        request = StockLatestQuoteRequest(
+            symbol_or_symbols=symbol,
+            feed=feed
+        )
+
+        quotes = self.stock_historical_client.get_stock_latest_quote(request)
+        quote = quotes.get(symbol)
+
+        if not quote:
+            raise ValueError(f"No quote data available for {symbol}")
+        return {
+            'symbol': symbol,
+            'bid_price': float(quote.bid_price) if quote.bid_price else 0,
+            'bid_size': int(quote.bid_size) if quote.bid_size else 0,
+            'ask_price': float(quote.ask_price) if quote.ask_price else 0,
+            'ask_size': int(quote.ask_size) if quote.ask_size else 0,
+            'timestamp': quote.timestamp,
+            'feed_type': feed
+        }
     
     def get_option_bars(self, symbol: str, timeframe: str = '1Day',
                        start: Optional[datetime] = None,
@@ -266,73 +255,56 @@ class AlpacaProvider:
         if start is None:
             start = now_et() - timedelta(days=30)
 
-        try:
-            tf = self._parse_timeframe(timeframe)
+        tf = self._parse_timeframe(timeframe)
+        feed = "opra" if self.is_pro_tier else "indicative"
 
-            feed = "opra" if self.is_pro_tier else "indicative"
-            
-            request = OptionBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=tf,
-                start=start,
-                end=end,
-                limit=limit,
-                feed=feed
-            )
+        request = OptionBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=tf,
+            start=start,
+            end=end,
+            limit=limit,
+            feed=feed
+        )
 
-            bars = self.option_historical_client.get_option_bars(request)
-            return self._process_option_bars(bars, symbol)
-            
-        except Exception as e:
-            logging.error(f"Error getting option bars for {symbol}: {e}")
-            return pd.DataFrame()
+        bars = self.option_historical_client.get_option_bars(request)
+        return self._process_option_bars(bars, symbol)
     
     def get_option_latest_quote(self, symbol: str) -> Dict[str, Any]:
         """Get latest quote for an option"""
-        try:
-            feed = "opra" if self.is_pro_tier else "indicative"
-            
-            request = OptionLatestQuoteRequest(
-                symbol_or_symbols=symbol,
-                feed=feed
-            )
-            
-            quotes = self.option_historical_client.get_option_latest_quote(request)
-            quote = quotes.get(symbol)
-            
-            if quote:
-                return {
-                    'symbol': symbol,
-                    'bid_price': float(quote.bid_price) if quote.bid_price else 0,
-                    'bid_size': int(quote.bid_size) if quote.bid_size else 0,
-                    'ask_price': float(quote.ask_price) if quote.ask_price else 0,
-                    'ask_size': int(quote.ask_size) if quote.ask_size else 0,
-                    'timestamp': quote.timestamp,
-                    'feed_type': feed
-                }
-            else:
-                return {'symbol': symbol, 'error': 'No quote data available'}
-                
-        except Exception as e:
-            logging.error(f"Error getting option quote for {symbol}: {e}")
-            return {'symbol': symbol, 'error': str(e)}
+        feed = "opra" if self.is_pro_tier else "indicative"
+
+        request = OptionLatestQuoteRequest(
+            symbol_or_symbols=symbol,
+            feed=feed
+        )
+
+        quotes = self.option_historical_client.get_option_latest_quote(request)
+        quote = quotes.get(symbol)
+
+        if not quote:
+            raise ValueError(f"No quote data available for {symbol}")
+        return {
+            'symbol': symbol,
+            'bid_price': float(quote.bid_price) if quote.bid_price else 0,
+            'bid_size': int(quote.bid_size) if quote.bid_size else 0,
+            'ask_price': float(quote.ask_price) if quote.ask_price else 0,
+            'ask_size': int(quote.ask_size) if quote.ask_size else 0,
+            'timestamp': quote.timestamp,
+            'feed_type': feed
+        }
     
     def get_options_chain(self, underlying_symbol: str) -> pd.DataFrame:
         """Get options chain for an underlying symbol"""
-        try:
-            feed = "opra" if self.is_pro_tier else "indicative"
-            
-            request = OptionChainRequest(
-                underlying_symbols=underlying_symbol,
-                feed=feed
-            )
-            
-            chain = self.option_historical_client.get_option_chain(request)
-            return self._process_options_chain(chain, underlying_symbol)
-            
-        except Exception as e:
-            logging.error(f"Error getting options chain for {underlying_symbol}: {e}")
-            return pd.DataFrame()
+        feed = "opra" if self.is_pro_tier else "indicative"
+
+        request = OptionChainRequest(
+            underlying_symbols=underlying_symbol,
+            feed=feed
+        )
+
+        chain = self.option_historical_client.get_option_chain(request)
+        return self._process_options_chain(chain, underlying_symbol)
     
     def get_crypto_bars(self, symbol: str, timeframe: str = '1Day',
                        start: Optional[datetime] = None,
@@ -344,46 +316,35 @@ class AlpacaProvider:
         if end is None:
             end = now_et()
         
-        try:
-            tf = self._parse_timeframe(timeframe)
-            
-            request = CryptoBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=tf,
-                start=start,
-                end=end,
-                limit=limit
-            )
-            
-            bars = self.crypto_historical_client.get_crypto_bars(request)
-            return self._process_crypto_bars(bars, symbol)
-            
-        except Exception as e:
-            logging.error(f"Error getting crypto bars for {symbol}: {e}")
-            return pd.DataFrame()
+        tf = self._parse_timeframe(timeframe)
+
+        request = CryptoBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=tf,
+            start=start,
+            end=end,
+            limit=limit
+        )
+
+        bars = self.crypto_historical_client.get_crypto_bars(request)
+        return self._process_crypto_bars(bars, symbol)
     
     def get_crypto_latest_quote(self, symbol: str) -> Dict[str, Any]:
         """Get latest quote for a crypto pair"""
-        try:
-            request = CryptoLatestQuoteRequest(symbol_or_symbols=symbol)
-            quotes = self.crypto_historical_client.get_crypto_latest_quote(request)
-            quote = quotes.get(symbol)
-            
-            if quote:
-                return {
-                    'symbol': symbol,
-                    'bid_price': float(quote.bid_price) if quote.bid_price else 0,
-                    'bid_size': float(quote.bid_size) if quote.bid_size else 0,
-                    'ask_price': float(quote.ask_price) if quote.ask_price else 0,
-                    'ask_size': float(quote.ask_size) if quote.ask_size else 0,
-                    'timestamp': quote.timestamp
-                }
-            else:
-                return {'symbol': symbol, 'error': 'No quote data available'}
-                
-        except Exception as e:
-            logging.error(f"Error getting crypto quote for {symbol}: {e}")
-            return {'symbol': symbol, 'error': str(e)}
+        request = CryptoLatestQuoteRequest(symbol_or_symbols=symbol)
+        quotes = self.crypto_historical_client.get_crypto_latest_quote(request)
+        quote = quotes.get(symbol)
+
+        if not quote:
+            raise ValueError(f"No quote data available for {symbol}")
+        return {
+            'symbol': symbol,
+            'bid_price': float(quote.bid_price) if quote.bid_price else 0,
+            'bid_size': float(quote.bid_size) if quote.bid_size else 0,
+            'ask_price': float(quote.ask_price) if quote.ask_price else 0,
+            'ask_size': float(quote.ask_size) if quote.ask_size else 0,
+            'timestamp': quote.timestamp
+        }
     
     def get_account(self) -> Dict[str, Any]:
         """Get account information"""
@@ -391,44 +352,32 @@ class AlpacaProvider:
     
     def get_positions(self) -> List[Dict[str, Any]]:
         """Get account positions"""
-        try:
-            positions = self.trading_client.get_all_positions()
-            return [{
-                'symbol': pos.symbol,
-                'qty': float(pos.qty),
-                'side': pos.side.value if hasattr(pos.side, 'value') else str(pos.side),
-                'market_value': float(pos.market_value) if pos.market_value else 0,
-                'cost_basis': float(pos.cost_basis) if pos.cost_basis else 0,
-                'unrealized_pl': float(pos.unrealized_pl) if pos.unrealized_pl else 0,
-                'unrealized_plpc': float(pos.unrealized_plpc) if pos.unrealized_plpc else 0
-            } for pos in positions]
-        except Exception as e:
-            logging.error(f"Error getting positions: {e}")
-            return []
+        positions = self.trading_client.get_all_positions()
+        return [{
+            'symbol': pos.symbol,
+            'qty': float(pos.qty),
+            'side': pos.side.value if hasattr(pos.side, 'value') else str(pos.side),
+            'market_value': float(pos.market_value) if pos.market_value else 0,
+            'cost_basis': float(pos.cost_basis) if pos.cost_basis else 0,
+            'unrealized_pl': float(pos.unrealized_pl) if pos.unrealized_pl else 0,
+            'unrealized_plpc': float(pos.unrealized_plpc) if pos.unrealized_plpc else 0
+        } for pos in positions]
 
     def get_portfolio_history(self, period: str = '1M') -> Dict[str, Any]:
         """Get portfolio history from trading client"""
-        try:
+        request = GetPortfolioHistoryRequest(period=period)
+        portfolio_history = self.trading_client.get_portfolio_history(request)
 
-            # Create request with proper parameters
-            request = GetPortfolioHistoryRequest(
-                period=period,
-            )
-            
-            portfolio_history = self.trading_client.get_portfolio_history(request)
-            
-            # Convert to dict format for easier handling
-            return {
-                'equity': portfolio_history.equity if hasattr(portfolio_history, 'equity') else [],
-                'timestamp': portfolio_history.timestamp if hasattr(portfolio_history, 'timestamp') else [],
-                'profit_loss': portfolio_history.profit_loss if hasattr(portfolio_history, 'profit_loss') else [],
-                'profit_loss_pct': portfolio_history.profit_loss_pct if hasattr(portfolio_history, 'profit_loss_pct') else [],
-                'base_value': portfolio_history.base_value if hasattr(portfolio_history, 'base_value') else 100000,
-                'timeframe': portfolio_history.timeframe if hasattr(portfolio_history, 'timeframe') else "1D"
-            }
-        except Exception as e:
-            logging.error(f"Error getting portfolio history: {e}")
-            return {'error': str(e)}
+        return {
+            'equity': getattr(portfolio_history, 'equity', []),
+            'timestamp': getattr(portfolio_history, 'timestamp', []),
+            'profit_loss': getattr(portfolio_history, 'profit_loss', []),
+            'profit_loss_pct': getattr(
+                portfolio_history, 'profit_loss_pct', []
+            ),
+            'base_value': getattr(portfolio_history, 'base_value', 100000),
+            'timeframe': getattr(portfolio_history, 'timeframe', "1D")
+        }
     
     def is_option_symbol(self, symbol: str) -> bool:
         """Check if symbol is an options contract"""
@@ -549,8 +498,8 @@ class AlpacaProvider:
         
         return pd.DataFrame(data)
     
-    def get_account_info(self) -> Dict[str, Any]:
-        """Get account information including VIP status and data feed info (legacy method)"""
+    def get_data_feed_info(self) -> Dict[str, Any]:
+        """Get account tier and data-feed information for the UI."""
         account_data = self.get_account()
         return {
             'vip': self.is_pro_tier,
@@ -563,17 +512,3 @@ class AlpacaProvider:
             'data_delay': 'Real-time',
             'feed_description': 'Securities Information Processor (SIP)' if self.is_pro_tier else 'IEX Real-time + SIP Historical'
         }
-    
-    @property
-    def vip(self) -> bool:
-        """Legacy property for VIP status"""
-        return self.is_pro_tier
-    
-    @property  
-    def using_iex(self) -> bool:
-        """Legacy property for IEX usage"""
-        return not self.is_pro_tier
-
-
-# Maintain backward compatibility
-AlpacaDataProvider = AlpacaProvider

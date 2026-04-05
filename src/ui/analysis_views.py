@@ -155,7 +155,7 @@ class AnalysisViewsMixin:
             provider = AlpacaDataProvider()
             if stream_type == "trades":
                 trades = provider.get_latest_trade(symbol)
-                if trades and 'error' not in trades:
+                if trades:
                     st.write("**Latest Trade**")
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -166,7 +166,7 @@ class AnalysisViewsMixin:
                         st.metric("Exchange", trades.get('exchange', 'N/A'))
             elif stream_type == "quotes":
                 quote = provider.get_latest_quote(symbol)
-                if quote and 'error' not in quote:
+                if quote:
                     st.write("**Latest Quote**")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:

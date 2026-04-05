@@ -15,7 +15,7 @@ from src.strategy import get_strategy_registry
 from src.backtest import Backtester
 from src.trade.engine import ExecutionEngine, TradingStockEngine
 from src.account.account_manager import AccountManager
-from src.settings import Config
+from src.settings import get_alpaca_base_url
 from src.utils.timezone_utils import now_et
 from src.watchlist import WatchlistManager
 
@@ -129,10 +129,8 @@ def run_strategy(
         print("order-type must be one of: auto, market, limit")
         raise typer.Exit(1)
 
-    account_manager = AccountManager(base_url=Config.ALPACA_BASE_URL)
-    account_config = account_manager.get_account_configurations() or {}
-    if "error" in account_config:
-        account_config = {}
+    account_manager = AccountManager(base_url=get_alpaca_base_url())
+    account_config = account_manager.get_account_configurations()
     fractional_enabled = bool(account_config.get("fractional_trading", False))
 
     engine = TradingStockEngine(allow_fractional=fractional_enabled)

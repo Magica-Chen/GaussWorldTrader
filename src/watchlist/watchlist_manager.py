@@ -18,6 +18,11 @@ from src.utils.asset_utils import (
 
 logger = logging.getLogger(__name__)
 
+
+class WatchlistValidationError(ValueError):
+    """Raised when watchlist contents are invalid."""
+
+
 class WatchlistManager:
     """Manages watchlist operations with JSON persistence"""
     
@@ -65,20 +70,20 @@ class WatchlistManager:
                 with open(self.watchlist_file, 'w') as f:
                     json.dump(default_watchlist, f, indent=2)
                 logger.info(f"Created default watchlist at {self.watchlist_file}")
-            except Exception as e:
-                logger.error(f"Error creating default watchlist: {e}")
+            except OSError:
+                logger.exception("Error creating default watchlist")
                 raise
 
-    def _normalize_entry(self, entry: Any) -> Optional[Dict[str, str]]:
+    def _normalize_entry(self, entry: Any) -> Dict[str, str]:
         if isinstance(entry, str):
             symbol = normalize_symbol(entry)
             if not symbol:
-                return None
+                raise WatchlistValidationError("Watchlist symbol cannot be empty")
             return {"symbol": symbol, "asset_type": infer_asset_type(symbol)}
         if isinstance(entry, dict):
             symbol = entry.get("symbol") or entry.get("ticker") or entry.get("name")
             if not symbol:
-                return None
+                raise WatchlistValidationError(f"Invalid watchlist entry without symbol: {entry}")
             raw_asset_type = entry.get("asset_type")
             asset_type = (
                 normalize_asset_type(raw_asset_type)
@@ -87,20 +92,21 @@ class WatchlistManager:
             )
             normalized_symbol = normalize_symbol(symbol, asset_type)
             if not normalized_symbol:
-                return None
+                raise WatchlistValidationError(f"Invalid watchlist symbol: {symbol}")
             return {"symbol": normalized_symbol, "asset_type": asset_type}
-        return None
+        raise WatchlistValidationError(f"Unsupported watchlist entry type: {type(entry).__name__}")
 
     def _normalize_watchlist_entries(self, entries: Any) -> List[Dict[str, str]]:
         normalized: List[Dict[str, str]] = []
         seen = set()
-        for entry in entries or []:
+        for index, entry in enumerate(entries or []):
             normalized_entry = self._normalize_entry(entry)
-            if not normalized_entry:
-                continue
             key = (normalized_entry["symbol"], normalized_entry["asset_type"])
             if key in seen:
-                continue
+                raise WatchlistValidationError(
+                    f"Duplicate watchlist entry at index {index}: "
+                    f"{normalized_entry['symbol']} ({normalized_entry['asset_type']})"
+                )
             seen.add(key)
             normalized.append(normalized_entry)
         return normalized
@@ -126,8 +132,8 @@ class WatchlistManager:
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing watchlist JSON: {e}")
             raise
-        except Exception as e:
-            logger.error(f"Error loading watchlist: {e}")
+        except OSError:
+            logger.exception("Error loading watchlist")
             raise
     
     def _save_watchlist(self, data: Dict):
@@ -148,8 +154,8 @@ class WatchlistManager:
             with open(self.watchlist_file, 'w') as f:
                 json.dump(data, f, indent=2)
             logger.info(f"Watchlist saved to {self.watchlist_file}")
-        except Exception as e:
-            logger.error(f"Error saving watchlist: {e}")
+        except OSError:
+            logger.exception("Error saving watchlist")
             raise
     
     def get_watchlist_entries(self, asset_type: Optional[str] = None) -> List[Dict[str, str]]:
@@ -337,9 +343,8 @@ class WatchlistManager:
             
             self._save_watchlist(data)
             logger.info(f"Watchlist restored from {backup_path}")
-            
-        except Exception as e:
-            logger.error(f"Error restoring from backup: {e}")
+        except (OSError, json.JSONDecodeError):
+            logger.exception("Error restoring from backup")
             raise
 
 # Convenience functions for global usage

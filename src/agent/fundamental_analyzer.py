@@ -5,15 +5,13 @@ Combines financial data with AI analysis to generate comprehensive reports
 """
 
 import pandas as pd
-import numpy as np
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import logging
-import json
 
 from src.data.finnhub_provider import FinnhubProvider
 from src.data.fred_provider import FREDProvider
-from src.llm import create_provider, get_available_providers
+from src.llm import create_provider
 
 class FundamentalAnalyzer:
     """Comprehensive fundamental analysis with AI insights"""
@@ -28,14 +26,8 @@ class FundamentalAnalyzer:
         self.fred = FREDProvider(fred_key)
         self.logger = logging.getLogger(__name__)
         
-        # Initialize LLM provider
-        try:
-            self.llm = create_provider(llm_provider, model=llm_model)
-            self.llm_available = True
-        except Exception as e:
-            self.logger.warning(f"Could not initialize LLM provider {llm_provider}: {e}")
-            self.llm = None
-            self.llm_available = False
+        self.llm = create_provider(llm_provider, model=llm_model)
+        self.llm_available = True
     
     def analyze_company(self, symbol: str) -> Dict[str, Any]:
         """Comprehensive company analysis"""
@@ -76,12 +68,8 @@ class FundamentalAnalyzer:
         
         # Generate AI insights if available
         if self.llm_available:
-            try:
-                ai_insights = self._generate_ai_insights(analysis_result)
-                analysis_result['ai_insights'] = ai_insights
-            except Exception as e:
-                self.logger.error(f"Error generating AI insights: {e}")
-                analysis_result['ai_insights'] = {"error": str(e)}
+            ai_insights = self._generate_ai_insights(analysis_result)
+            analysis_result['ai_insights'] = ai_insights
         
         return analysis_result
 
@@ -108,12 +96,21 @@ class FundamentalAnalyzer:
     
     def _analyze_financial_ratios(self, financials: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze key financial ratios"""
-        if not financials or 'metric' not in financials:
-            return {"error": "No financial data available"}
-        
-        metrics = financials.get('metric', {})
-        
         analysis = {
+            'available': False,
+            'valuation_ratios': {},
+            'profitability_ratios': {},
+            'liquidity_ratios': {},
+            'leverage_ratios': {},
+            'efficiency_ratios': {},
+            'ratio_grades': {}
+        }
+        if not financials or 'metric' not in financials:
+            return analysis
+
+        metrics = financials.get('metric', {})
+        analysis.update({
+            'available': True,
             'valuation_ratios': {
                 'pe_ratio': metrics.get('peBasicExclExtraTTM'),
                 'pb_ratio': metrics.get('pbQuarterly'),
@@ -143,11 +140,10 @@ class FundamentalAnalyzer:
                 'inventory_turnover': metrics.get('inventoryTurnoverTTM'),
                 'receivables_turnover': metrics.get('receivablesTurnoverTTM')
             }
-        }
-        
+        })
+
         # Calculate ratio grades
         analysis['ratio_grades'] = self._grade_financial_ratios(analysis)
-        
         return analysis
     
     def _grade_financial_ratios(self, ratios: Dict[str, Any]) -> Dict[str, str]:
@@ -195,10 +191,13 @@ class FundamentalAnalyzer:
     def _analyze_insider_data(self, insider_transactions: List[Dict[str, Any]], 
                              insider_sentiment: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze insider transactions and sentiment"""
-        analysis = {}
+        analysis = {
+            'transactions': None,
+            'sentiment': None,
+        }
         
         # Analyze insider transactions
-        if insider_transactions and not any('error' in item for item in insider_transactions if isinstance(item, dict)):
+        if insider_transactions:
             transactions_analysis = {
                 'total_transactions': len(insider_transactions),
                 'recent_count': len([t for t in insider_transactions[:10]]),
@@ -237,8 +236,6 @@ class FundamentalAnalyzer:
                 transactions_analysis['transaction_sentiment'] = 'Neutral'
             
             analysis['transactions'] = transactions_analysis
-        else:
-            analysis['transactions'] = {"error": "No insider transaction data available"}
         
         # Analyze insider sentiment
         if insider_sentiment and 'data' in insider_sentiment:
@@ -263,23 +260,21 @@ class FundamentalAnalyzer:
                     sentiment_analysis['mspr_interpretation'] = 'Neutral (Balanced activity)'
                 
                 analysis['sentiment'] = sentiment_analysis
-            else:
-                analysis['sentiment'] = {"error": "No insider sentiment data points"}
-        else:
-            analysis['sentiment'] = {"error": "No insider sentiment data available"}
         
         return analysis
     
     def _analyze_economic_context(self, economic_data: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
         """Analyze economic context"""
         if not economic_data:
-            return {"error": "No economic data available"}
+            return {}
         
         analysis = {}
         
         for indicator, data in economic_data.items():
-            if data.empty or 'error' in data.columns:
+            if data.empty:
                 continue
+            if 'value' not in data.columns:
+                raise ValueError(f"Economic indicator {indicator} is missing the value column")
             
             latest_value = data['value'].iloc[-1] if not data.empty else None
             previous_value = data['value'].iloc[-2] if len(data) > 1 else None
@@ -310,7 +305,7 @@ class FundamentalAnalyzer:
         """Analyze analyst recommendations"""
         analysis = {}
         
-        if recommendations and 'error' not in recommendations:
+        if recommendations:
             recent_rec = recommendations[0] if recommendations else {}
             analysis['recommendations'] = {
                 'strong_buy': recent_rec.get('strongBuy', 0),
@@ -341,7 +336,7 @@ class FundamentalAnalyzer:
                 else:
                     analysis['consensus'] = 'Sell'
         
-        if price_target and 'error' not in price_target:
+        if price_target:
             analysis['price_target'] = {
                 'target_high': price_target.get('targetHigh'),
                 'target_low': price_target.get('targetLow'),
@@ -386,7 +381,7 @@ COMPANY OVERVIEW:
 """
         
         company_profile = analysis_data.get('company_profile', {})
-        if company_profile and 'error' not in company_profile:
+        if company_profile:
             report += f"""
 • Name: {company_profile.get('name', 'N/A')}
 • Industry: {company_profile.get('finnhubIndustry', 'N/A')}
@@ -397,7 +392,7 @@ COMPANY OVERVIEW:
         
         # Financial Analysis Section
         financial = analysis_data.get('financial_analysis', {})
-        if financial and 'error' not in financial:
+        if financial and financial.get('available'):
             report += """
 FINANCIAL ANALYSIS:
 ------------------
@@ -428,7 +423,7 @@ INSIDER ANALYSIS:
             
             # Transactions analysis
             transactions = insider.get('transactions', {})
-            if transactions and 'error' not in transactions:
+            if transactions:
                 report += f"""
 • Recent Transactions: {transactions.get('recent_count', 0)}
 • Net Share Change: {transactions.get('net_change', 0):+,.0f}
@@ -438,7 +433,7 @@ INSIDER ANALYSIS:
             
             # Sentiment analysis
             sentiment = insider.get('sentiment', {})
-            if sentiment and 'error' not in sentiment:
+            if sentiment:
                 report += f"""
 • Latest MSPR: {sentiment.get('latest_mspr', 0):.2f}
 • MSPR Interpretation: {sentiment.get('mspr_interpretation', 'Unknown')}
@@ -447,7 +442,7 @@ INSIDER ANALYSIS:
         
         # Economic Context
         economic = analysis_data.get('economic_analysis', {})
-        if economic and 'error' not in economic:
+        if economic:
             report += f"""
 ECONOMIC ENVIRONMENT:
 --------------------
@@ -481,7 +476,7 @@ ANALYST RECOMMENDATIONS:
         
         # AI Insights
         ai_insights = analysis_data.get('ai_insights')
-        if ai_insights and isinstance(ai_insights, str) and 'error' not in ai_insights:
+        if ai_insights and isinstance(ai_insights, str):
             report += f"""
 AI-POWERED INSIGHTS:
 -------------------

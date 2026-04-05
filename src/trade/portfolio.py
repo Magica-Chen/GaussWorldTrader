@@ -680,9 +680,6 @@ class PortfolioTracker:
         """Get portfolio performance data"""
         portfolio_history = self.account_manager.get_portfolio_history(period, timeframe)
 
-        if 'error' in portfolio_history:
-            return portfolio_history
-
         # Process portfolio history data
         timestamps = portfolio_history.get('timestamp', [])
         equity = portfolio_history.get('equity', [])
@@ -690,7 +687,7 @@ class PortfolioTracker:
         profit_loss_pct = portfolio_history.get('profit_loss_pct', [])
 
         if not timestamps or not equity:
-            return {"error": "No portfolio history data available"}
+            raise ValueError("No portfolio history data available")
 
         # Convert to DataFrame for analysis
         df = pd.DataFrame({
@@ -746,15 +743,13 @@ class PortfolioTracker:
         """Analyze current asset allocation"""
         # Get account info for cash
         account = self.account_manager.get_account()
-        if 'error' in account:
-            return account
 
         # Get positions for holdings
         from src.account.position_manager import PositionManager
         position_manager = PositionManager(self.account_manager)
         positions = position_manager.get_all_positions()
 
-        if not positions or (len(positions) == 1 and 'error' in positions[0]):
+        if not positions:
             cash = float(account.get('cash', 0))
             portfolio_value = float(account.get('portfolio_value', cash))
 
@@ -781,8 +776,8 @@ class PortfolioTracker:
                 market_value = abs(float(pos.get('market_value', 0)))
                 equity_value += market_value
                 position_values[symbol] = market_value
-            except (ValueError, TypeError):
-                continue
+            except (ValueError, TypeError) as exc:
+                raise ValueError(f"Invalid position data for {pos.get('symbol', 'UNKNOWN')}: {exc}") from exc
 
         pct = lambda x: (x / portfolio_value * 100) if portfolio_value > 0 else 0
         allocation = {
@@ -814,16 +809,10 @@ class PortfolioTracker:
         # Get portfolio performance for analysis
         performance = self.get_portfolio_performance('1M', '1D')
 
-        if 'error' in performance:
-            return performance
-
         # Get positions for concentration risk
         from src.account.position_manager import PositionManager
         position_manager = PositionManager(self.account_manager)
         positions_analysis = position_manager.analyze_positions()
-
-        if 'error' in positions_analysis:
-            return {"error": "Could not analyze positions for risk calculation"}
 
         # Extract risk data
         raw_data = performance.get('raw_data', {})
@@ -881,25 +870,22 @@ class PortfolioTracker:
 =======================================
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-PORTFOLIO OVERVIEW:
-------------------
+        PORTFOLIO OVERVIEW:
+        ------------------
 """
-
-        if 'error' not in account_status:
-            pv = account_status.get('portfolio_value', 0)
-            cash = account_status.get('cash', 0)
-            bp = account_status.get('buying_power', 0)
-            eq_change = account_status.get('equity_change', 0)
-            eq_pct = account_status.get('equity_change_percentage', 0)
-            report += f"""* Portfolio Value: ${pv:,.2f}
+        pv = account_status.get('portfolio_value', 0)
+        cash = account_status.get('cash', 0)
+        bp = account_status.get('buying_power', 0)
+        eq_change = account_status.get('equity_change', 0)
+        eq_pct = account_status.get('equity_change_percentage', 0)
+        report += f"""* Portfolio Value: ${pv:,.2f}
 * Cash Available: ${cash:,.2f}
 * Buying Power: ${bp:,.2f}
 * Daily P&L: ${eq_change:,.2f} ({eq_pct:+.2f}%)
 """
 
         # Performance metrics
-        if 'error' not in performance:
-            report += f"""
+        report += f"""
 PERFORMANCE METRICS:
 -------------------
 • Period Return: {performance.get('total_return_pct', 0):+.2f}%
@@ -909,8 +895,7 @@ PERFORMANCE METRICS:
 """
 
         # Asset allocation
-        if 'error' not in allocation:
-            report += f"""
+        report += f"""
 ASSET ALLOCATION:
 ----------------
 • Cash: {allocation.get('cash_percentage', 0):.1f}%
@@ -918,19 +903,18 @@ ASSET ALLOCATION:
 • Total Positions: {allocation.get('position_count', 0)}
 """
 
-            # Top holdings
-            top_holdings = allocation.get('top_holdings', [])
-            if top_holdings:
-                report += """
+        # Top holdings
+        top_holdings = allocation.get('top_holdings', [])
+        if top_holdings:
+            report += """
 TOP HOLDINGS:
 ------------
 """
-                for i, (symbol, percentage) in enumerate(top_holdings[:5], 1):
-                    report += f"{i}. {symbol}: {percentage:.1f}%\n"
+            for i, (symbol, percentage) in enumerate(top_holdings[:5], 1):
+                report += f"{i}. {symbol}: {percentage:.1f}%\n"
 
         # Risk assessment
-        if 'error' not in risk_metrics:
-            report += f"""
+        report += f"""
 RISK ASSESSMENT:
 ---------------
 • Concentration Risk: {risk_metrics.get('concentration_risk', 'Unknown')}
@@ -956,10 +940,6 @@ Report Timestamp: {datetime.now().isoformat()}
         """Plot portfolio performance chart"""
         performance = self.get_portfolio_performance(period, '5Min')
 
-        if 'error' in performance:
-            print(f"Error plotting performance: {performance['error']}")
-            return
-
         import matplotlib.pyplot as plt
 
         raw_data = performance.get('raw_data', {})
@@ -967,8 +947,7 @@ Report Timestamp: {datetime.now().isoformat()}
         equity = raw_data.get('equity', [])
 
         if not timestamps or not equity:
-            print("No data available for plotting")
-            return
+            raise ValueError("No data available for plotting")
 
         # Convert timestamps
         dates = [datetime.fromtimestamp(ts) for ts in timestamps]

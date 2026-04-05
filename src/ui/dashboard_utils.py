@@ -2,6 +2,7 @@
 Dashboard utilities for data processing and formatting.
 """
 
+import logging
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
@@ -9,99 +10,108 @@ import streamlit as st
 from src.utils.timezone_utils import now_et
 from typing import Dict, List, Any, Optional
 
+logger = logging.getLogger(__name__)
+
 
 # Dashboard Utilities
-def generate_transaction_log(results: Dict[str, Any], symbols: List[str]) -> Optional[str]:
-    """
-    Generate enhanced transaction log for dashboard download
-    """
-    try:
-        if not results or 'trades_history' not in results:
-            return None
-        
-        trades_df = results['trades_history']
-        if trades_df.empty:
-            return None
-        
-        # Enhanced transaction processing
-        enhanced_trades = []
-        positions = {}
-        trade_counter = 1
-        
-        for idx, trade in trades_df.iterrows():
-            symbol = trade['symbol']
-            action = trade['action'].upper()
-            quantity = abs(trade['quantity'])
-            price = trade.get('price', 0)
-            trade_date = trade['date']
-            trade_value = quantity * price
-            
-            # Position tracking logic
-            position_before = positions.get(symbol, {'qty': 0, 'avg_cost': 0, 'total_cost': 0})
-            
-            if action == 'BUY':
-                new_qty = position_before['qty'] + quantity
-                new_total_cost = position_before['total_cost'] + trade_value
-                new_avg_cost = new_total_cost / new_qty if new_qty > 0 else 0
-                
+def generate_transaction_log(
+    results: Dict[str, Any], symbols: List[str]
+) -> Optional[str]:
+    """Generate enhanced transaction log for dashboard download"""
+    if not results or 'trades_history' not in results:
+        return None
+
+    trades_df = results['trades_history']
+    if trades_df.empty:
+        return None
+
+    enhanced_trades = []
+    positions = {}
+    trade_counter = 1
+
+    for idx, trade in trades_df.iterrows():
+        symbol = trade['symbol']
+        action = trade['action'].upper()
+        quantity = abs(trade['quantity'])
+        price = trade.get('price', 0)
+        trade_date = trade['date']
+        trade_value = quantity * price
+
+        position_before = positions.get(
+            symbol, {'qty': 0, 'avg_cost': 0, 'total_cost': 0}
+        )
+
+        if action == 'BUY':
+            new_qty = position_before['qty'] + quantity
+            new_total_cost = position_before['total_cost'] + trade_value
+            new_avg_cost = (
+                new_total_cost / new_qty if new_qty > 0 else 0
+            )
+
+            positions[symbol] = {
+                'qty': new_qty,
+                'avg_cost': new_avg_cost,
+                'total_cost': new_total_cost
+            }
+            realized_pnl = 0
+
+        elif action == 'SELL':
+            if position_before['qty'] >= quantity:
+                cost_basis = position_before['avg_cost'] * quantity
+                proceeds = trade_value
+                realized_pnl = proceeds - cost_basis
+
+                new_qty = position_before['qty'] - quantity
+                new_total_cost = (
+                    position_before['total_cost'] - cost_basis
+                )
+
                 positions[symbol] = {
                     'qty': new_qty,
-                    'avg_cost': new_avg_cost,
+                    'avg_cost': (
+                        position_before['avg_cost']
+                        if new_qty > 0 else 0
+                    ),
                     'total_cost': new_total_cost
                 }
+            else:
                 realized_pnl = 0
-                
-            elif action == 'SELL':
-                if position_before['qty'] >= quantity:
-                    cost_basis = position_before['avg_cost'] * quantity
-                    proceeds = trade_value
-                    realized_pnl = proceeds - cost_basis
-                    
-                    new_qty = position_before['qty'] - quantity
-                    new_total_cost = position_before['total_cost'] - cost_basis
-                    
-                    positions[symbol] = {
-                        'qty': new_qty,
-                        'avg_cost': position_before['avg_cost'] if new_qty > 0 else 0,
-                        'total_cost': new_total_cost
-                    }
-                else:
-                    realized_pnl = 0
-            
-            position_after = positions.get(symbol, {'qty': 0, 'avg_cost': 0, 'total_cost': 0})
-            
-            # Create enhanced trade record
-            enhanced_trade = {
-                'Trade_ID': trade_counter,
-                'Date': trade_date.strftime('%Y-%m-%d') if hasattr(trade_date, 'strftime') else str(trade_date),
-                'Symbol': symbol,
-                'Action': action,
-                'Quantity': quantity,
-                'Price': f"{price:.4f}",
-                'Trade_Value': f"{trade_value:.2f}",
-                'Commission': f"{trade_value * 0.01:.2f}",
-                'Net_Amount': f"{trade_value * (0.99 if action == 'BUY' else 1.01):.2f}",
-                'Position_Before': position_before['qty'],
-                'Position_After': position_after['qty'],
-                'Avg_Cost_Basis': f"{position_after['avg_cost']:.4f}",
-                'Realized_PnL': f"{realized_pnl:.2f}",
-                'Strategy': 'Modern Dashboard',
-                'Notes': 'Backtest transaction'
-            }
-            
-            enhanced_trades.append(enhanced_trade)
-            trade_counter += 1
-        
-        # Create DataFrame and save
-        transactions_df = pd.DataFrame(enhanced_trades)
-        timestamp = now_et().strftime('%Y%m%d_%H%M%S')
-        filename = f"dashboard_transactions_{timestamp}.csv"
-        
-        transactions_df.to_csv(filename, index=False)
-        return filename
-        
-    except Exception as e:
-        return None
+
+        position_after = positions.get(
+            symbol, {'qty': 0, 'avg_cost': 0, 'total_cost': 0}
+        )
+
+        enhanced_trade = {
+            'Trade_ID': trade_counter,
+            'Date': (
+                trade_date.strftime('%Y-%m-%d')
+                if hasattr(trade_date, 'strftime')
+                else str(trade_date)
+            ),
+            'Symbol': symbol,
+            'Action': action,
+            'Quantity': quantity,
+            'Price': f"{price:.4f}",
+            'Trade_Value': f"{trade_value:.2f}",
+            'Commission': f"{trade_value * 0.01:.2f}",
+            'Net_Amount': f"{trade_value * (0.99 if action == 'BUY' else 1.01):.2f}",
+            'Position_Before': position_before['qty'],
+            'Position_After': position_after['qty'],
+            'Avg_Cost_Basis': f"{position_after['avg_cost']:.4f}",
+            'Realized_PnL': f"{realized_pnl:.2f}",
+            'Strategy': 'Modern Dashboard',
+            'Notes': 'Backtest transaction'
+        }
+
+        enhanced_trades.append(enhanced_trade)
+        trade_counter += 1
+
+    transactions_df = pd.DataFrame(enhanced_trades)
+    timestamp = now_et().strftime('%Y%m%d_%H%M%S')
+    filename = f"dashboard_transactions_{timestamp}.csv"
+
+    transactions_df.to_csv(filename, index=False)
+    return filename
 
 
 def calculate_portfolio_metrics(positions: List[Dict]) -> Dict[str, Any]:
@@ -190,8 +200,8 @@ def format_crypto_data(crypto_response: Dict) -> Dict[str, Any]:
     """
     Format cryptocurrency data for dashboard display
     """
-    if not crypto_response or 'error' in crypto_response:
-        return {}
+    if not crypto_response:
+        raise ValueError("crypto_response is required")
     
     # Extract price information
     price_usd = crypto_response.get('bid_price', 0)
@@ -220,36 +230,28 @@ def get_default_symbols(asset_type: str = "stock"):
     seen = set()
     normalized_type = normalize_asset_type(asset_type)
     
-    # Add symbols from watchlist
-    try:
-        if 'watchlist_manager' in st.session_state:
-            watchlist = st.session_state.watchlist_manager.get_watchlist(asset_type=normalized_type)
-            for symbol in watchlist:
-                normalized = normalize_symbol(symbol, normalized_type)
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    symbols.append(normalized)
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error getting watchlist: {e}")
-    
-    # Add symbols from current positions
-    try:
-        if 'position_manager' in st.session_state:
-            positions = st.session_state.position_manager.get_all_positions()
-            if positions and not any('error' in pos for pos in positions):
-                for pos in positions:
-                    symbol = pos.get('symbol')
-                    if symbol and infer_asset_type(symbol) == normalized_type:
-                        normalized = normalize_symbol(symbol, normalized_type)
-                        if normalized and normalized not in seen:
-                            seen.add(normalized)
-                            symbols.append(normalized)
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error getting positions: {e}")
+    if 'watchlist_manager' in st.session_state:
+        watchlist = st.session_state.watchlist_manager.get_watchlist(
+            asset_type=normalized_type
+        )
+        for symbol in watchlist:
+            normalized = normalize_symbol(symbol, normalized_type)
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                symbols.append(normalized)
+
+    if 'position_manager' in st.session_state:
+        positions = st.session_state.position_manager.get_all_positions()
+        if positions:
+            for pos in positions:
+                symbol = pos.get('symbol')
+                if symbol and infer_asset_type(symbol) == normalized_type:
+                    normalized = normalize_symbol(
+                        symbol, normalized_type
+                    )
+                    if normalized and normalized not in seen:
+                        seen.add(normalized)
+                        symbols.append(normalized)
     
     return symbols
 
@@ -290,22 +292,19 @@ def render_economic_data():
     st.subheader("📅 Economic Calendar")
     
     try:
-        if 'fred_provider' in st.session_state and st.session_state.fred_provider.client:
-            fred = st.session_state.fred_provider
-            indicators = {'UNRATE': 'Unemployment Rate', 'CPIAUCSL': 'CPI', 'FEDFUNDS': 'Fed Funds Rate'}
-            
-            col1, col2, col3 = st.columns(3)
-            for i, (series_id, name) in enumerate(indicators.items()):
-                try:
-                    data = fred.get_series_data(series_id, start_date='2024-01-01')
-                    if not data.empty:
-                        latest_value = data.iloc[-1, 0]
-                        with [col1, col2, col3][i]:
-                            st.metric(name, f"{latest_value:.2f}{'%' if 'Rate' in name else ''}")
-                except:
-                    with [col1, col2, col3][i]:
-                        st.metric(name, "N/A")
-        else:
-            st.warning("FRED API not configured. Economic calendar is under development.")
+        if 'fred_provider' not in st.session_state:
+            raise RuntimeError("FRED provider not initialized")
+
+        fred = st.session_state.fred_provider
+        indicators = {'UNRATE': 'Unemployment Rate', 'CPIAUCSL': 'CPI', 'FEDFUNDS': 'Fed Funds Rate'}
+
+        col1, col2, col3 = st.columns(3)
+        for i, (series_id, name) in enumerate(indicators.items()):
+            data = fred.get_series_data(series_id, start_date='2024-01-01')
+            if data.empty:
+                raise ValueError(f"No data returned for {name}")
+            latest_value = data.iloc[-1, 0]
+            with [col1, col2, col3][i]:
+                st.metric(name, f"{latest_value:.2f}{'%' if 'Rate' in name else ''}")
     except Exception as e:
         st.error(f"Error loading economic calendar: {e}")

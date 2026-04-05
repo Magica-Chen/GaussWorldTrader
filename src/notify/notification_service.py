@@ -43,22 +43,20 @@ class EmailNotificationProvider(NotificationProvider):
         if not self.is_configured():
             return False
 
-        try:
-            msg = MIMEText(message)
-            msg["Subject"] = subject
-            msg["From"] = self.gmail_address
-            msg["To"] = self.gmail_address
+        msg = MIMEText(message)
+        msg["Subject"] = subject
+        msg["From"] = self.gmail_address
+        msg["To"] = self.gmail_address
 
-            with smtplib.SMTP("smtp.gmail.com", 587) as server:
-                server.starttls()
-                server.login(self.gmail_address, self.gmail_app_password)
-                server.sendmail(self.gmail_address, self.gmail_address, msg.as_string())
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(self.gmail_address, self.gmail_app_password)
+            server.sendmail(
+                self.gmail_address, self.gmail_address, msg.as_string()
+            )
 
-            self.logger.info(f"Email notification sent: {subject}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to send email notification: {e}")
-            return False
+        self.logger.info(f"Email notification sent: {subject}")
+        return True
 
 
 class SlackNotificationProvider(NotificationProvider):
@@ -76,16 +74,14 @@ class SlackNotificationProvider(NotificationProvider):
         if not self.is_configured():
             return False
 
-        try:
-            payload = {"text": f"*{subject}*\n```{message}```"}
-            response = requests.post(self.webhook_url, json=payload, timeout=10)
-            response.raise_for_status()
+        payload = {"text": f"*{subject}*\n```{message}```"}
+        response = requests.post(
+            self.webhook_url, json=payload, timeout=10
+        )
+        response.raise_for_status()
 
-            self.logger.info(f"Slack notification sent: {subject}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to send Slack notification: {e}")
-            return False
+        self.logger.info(f"Slack notification sent: {subject}")
+        return True
 
 
 class NotificationService:
@@ -197,66 +193,66 @@ class TradeStreamHandler:
             self.logger.warning("Trade stream already running")
             return
 
-        try:
-            from alpaca.trading.stream import TradingStream
-            from src.settings import Config
+        from alpaca.trading.stream import TradingStream
+        from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
 
-            if not Config.validate_alpaca_config():
-                self.logger.error("Alpaca credentials not configured")
-                return
+        if not has_alpaca_credentials():
+            raise RuntimeError("Alpaca credentials not configured")
 
-            paper = Config.ALPACA_BASE_URL != "https://api.alpaca.markets"
-            self._stream = TradingStream(
-                api_key=Config.ALPACA_API_KEY,
-                secret_key=Config.ALPACA_SECRET_KEY,
-                paper=paper
-            )
-            self._stream.subscribe_trade_updates(self._handle_trade_update)
-            self._running = True
-            self._thread = threading.Thread(target=self._run_stream, daemon=True)
-            self._thread.start()
-            self.logger.info("Trade stream started")
-        except Exception as e:
-            self.logger.error(f"Failed to start trade stream: {e}")
+        settings = get_config()
+        paper = get_alpaca_base_url() != "https://api.alpaca.markets"
+        self._stream = TradingStream(
+            api_key=settings.alpaca.api_key,
+            secret_key=settings.alpaca.secret_key or "",
+            paper=paper
+        )
+        self._stream.subscribe_trade_updates(self._handle_trade_update)
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._run_stream, daemon=True
+        )
+        self._thread.start()
+        self.logger.info("Trade stream started")
 
     def _run_stream(self) -> None:
         """Run the stream in background thread."""
         try:
             self._stream.run()
-        except Exception as e:
-            self.logger.error(f"Trade stream error: {e}")
+        finally:
             self._running = False
 
     async def _handle_trade_update(self, data) -> None:
         """Handle incoming trade update events."""
-        try:
-            event = data.event
-            order = data.order
+        event = data.event
+        order = data.order
 
-            if event in ("fill", "partial_fill"):
-                order_dict = {
-                    "id": order.id,
-                    "symbol": order.symbol,
-                    "qty": float(order.qty) if order.qty else 0,
-                    "side": order.side,
-                    "type": order.type,
-                    "status": order.status,
-                    "submitted_at": order.submitted_at,
-                    "filled_at": order.filled_at,
-                    "filled_qty": float(order.filled_qty) if order.filled_qty else 0,
-                    "filled_avg_price": float(order.filled_avg_price) if order.filled_avg_price else None,
-                }
-                self.notification_service.notify_order_filled(order_dict)
-                self.logger.info(f"Order filled notification sent: {order.symbol}")
-        except Exception as e:
-            self.logger.error(f"Error handling trade update: {e}")
+        if event in ("fill", "partial_fill"):
+            order_dict = {
+                "id": order.id,
+                "symbol": order.symbol,
+                "qty": float(order.qty) if order.qty else 0,
+                "side": order.side,
+                "type": order.type,
+                "status": order.status,
+                "submitted_at": order.submitted_at,
+                "filled_at": order.filled_at,
+                "filled_qty": float(order.filled_qty) if order.filled_qty else 0,
+                "filled_avg_price": (
+                    float(order.filled_avg_price)
+                    if order.filled_avg_price else None
+                ),
+            }
+            self.notification_service.notify_order_filled(order_dict)
+            self.logger.info(
+                f"Order filled notification sent: {order.symbol}"
+            )
 
     def stop(self) -> None:
         """Stop the trade stream."""
         if self._stream and self._running:
             try:
                 self._stream.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.warning("Error stopping trade stream: %s", e)
             self._running = False
             self.logger.info("Trade stream stopped")

@@ -483,31 +483,24 @@ class BaseOptionStrategy(StrategyBase, ABC):
         Returns:
             Option yield as a percentage
         """
-        try:
-            bid_price = option.get("bid", 0)
-            strike_price = option.get("strike_price", 0)
+        bid_price = option.get("bid", 0)
+        strike_price = option.get("strike_price", 0)
 
-            if strike_price == 0:
-                return 0.0
-
-            # For puts: yield = bid / strike
-            # For calls: yield = bid / (current_stock_price - strike) for ITM calls
-            option_type = option.get("type", "put").lower()
-
-            if option_type == "put":
-                yield_pct = (bid_price / strike_price) * 100
-            else:  # call
-                current_price = option.get("underlying_price", strike_price)
-                if current_price > strike_price:  # ITM call
-                    yield_pct = (bid_price / (current_price - strike_price)) * 100
-                else:  # OTM call
-                    yield_pct = (bid_price / current_price) * 100
-
-            return round(yield_pct, 2)
-
-        except Exception as exc:
-            self.logger.error("Error calculating option yield: %s", exc)
+        if strike_price == 0:
             return 0.0
+
+        option_type = option.get("type", "put").lower()
+
+        if option_type == "put":
+            yield_pct = (bid_price / strike_price) * 100
+        else:
+            current_price = option.get("underlying_price", strike_price)
+            if current_price > strike_price:
+                yield_pct = (bid_price / (current_price - strike_price)) * 100
+            else:
+                yield_pct = (bid_price / current_price) * 100
+
+        return round(yield_pct, 2)
 
     def calculate_option_score(self, option: Dict[str, Any]) -> float:
         """
@@ -522,28 +515,20 @@ class BaseOptionStrategy(StrategyBase, ABC):
         Returns:
             Option score
         """
-        try:
-            delta = abs(option.get("delta", 0))
-            dte = option.get("days_to_expiration", 1)
-            bid_price = option.get("bid", 0)
-            strike_price = option.get("strike_price", 1)
+        delta = abs(option.get("delta", 0))
+        dte = option.get("days_to_expiration", 1)
+        bid_price = option.get("bid", 0)
+        strike_price = option.get("strike_price", 1)
 
-            # Avoid division by zero
-            if strike_price == 0 or dte < 0:
-                return 0.0
-
-            # Wheel strategy scoring formula
-            delta_component = 1 - delta
-            time_component = 250 / (dte + 5)
-            yield_component = bid_price / strike_price
-
-            score = delta_component * time_component * yield_component
-
-            return round(score, 4)
-
-        except Exception as exc:
-            self.logger.error("Error calculating option score: %s", exc)
+        if strike_price == 0 or dte < 0:
             return 0.0
+
+        delta_component = 1 - delta
+        time_component = 250 / (dte + 5)
+        yield_component = bid_price / strike_price
+
+        score = delta_component * time_component * yield_component
+        return round(score, 4)
 
     def check_option_assignment_risk(self, option: Dict[str, Any], underlying_price: float) -> Dict[str, Any]:
         """
@@ -556,46 +541,36 @@ class BaseOptionStrategy(StrategyBase, ABC):
         Returns:
             Assignment risk analysis
         """
-        try:
-            option_type = option.get("type", "put").lower()
-            strike_price = option.get("strike_price", 0)
-            expiration_date = option.get("expiration_date")
+        option_type = option.get("type", "put").lower()
+        strike_price = option.get("strike_price", 0)
+        expiration_date = option.get("expiration_date")
 
-            # Calculate days to expiration
-            if isinstance(expiration_date, str):
-                exp_date = datetime.strptime(expiration_date, "%Y-%m-%d")
-            else:
-                exp_date = expiration_date
+        if isinstance(expiration_date, str):
+            exp_date = datetime.strptime(expiration_date, "%Y-%m-%d")
+        else:
+            exp_date = expiration_date
 
-            days_to_exp = (exp_date - datetime.now()).days
+        days_to_exp = (exp_date - datetime.now()).days
 
-            # Assignment probability estimation
-            if option_type == "put":
-                # Put is ITM if underlying < strike
-                is_itm = underlying_price < strike_price
-                distance_from_strike = abs(underlying_price - strike_price) / strike_price
-            else:  # call
-                # Call is ITM if underlying > strike
-                is_itm = underlying_price > strike_price
-                distance_from_strike = abs(underlying_price - strike_price) / strike_price
+        if option_type == "put":
+            is_itm = underlying_price < strike_price
+        else:
+            is_itm = underlying_price > strike_price
 
-            # Simple assignment risk estimation
-            if is_itm:
-                assignment_prob = min(0.9, 0.5 + (0.4 / max(1, days_to_exp)))
-            else:
-                assignment_prob = max(0.1, distance_from_strike * 0.3)
+        distance_from_strike = (
+            abs(underlying_price - strike_price) / strike_price
+        )
 
-            return {
-                "assignment_probability": round(assignment_prob, 2),
-                "days_to_expiration": days_to_exp,
-                "is_itm": is_itm,
-                "distance_from_strike": round(distance_from_strike, 4),
-            }
-        except Exception as exc:
-            self.logger.error("Error checking assignment risk: %s", exc)
-            return {
-                "assignment_probability": 0.0,
-                "days_to_expiration": 0,
-                "is_itm": False,
-                "distance_from_strike": 0.0,
-            }
+        if is_itm:
+            assignment_prob = min(
+                0.9, 0.5 + (0.4 / max(1, days_to_exp))
+            )
+        else:
+            assignment_prob = max(0.1, distance_from_strike * 0.3)
+
+        return {
+            "assignment_probability": round(assignment_prob, 2),
+            "days_to_expiration": days_to_exp,
+            "is_itm": is_itm,
+            "distance_from_strike": round(distance_from_strike, 4),
+        }

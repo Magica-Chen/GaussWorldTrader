@@ -19,9 +19,9 @@ import pandas as pd
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT_DIR)
 
-from src.settings import Config
+from src.settings import has_alpaca_credentials
 from src.data import AlpacaDataProvider
-from src.strategy import CryptoMomentumStrategy
+from src.strategy import get_strategy_registry
 from src.trade import Portfolio
 from src.utils.timezone_utils import now_et
 
@@ -59,7 +59,7 @@ def _format_price(value: float | None) -> str:
 
 
 def main() -> int:
-    if not Config.validate_alpaca_config():
+    if not has_alpaca_credentials():
         print("Missing Alpaca credentials.")
         print("Set ALPACA_API_KEY and ALPACA_SECRET_KEY in your environment or .env.")
         return 1
@@ -69,7 +69,7 @@ def main() -> int:
     lookback_days = 7
 
     provider = AlpacaDataProvider()
-    strategy = CryptoMomentumStrategy()
+    strategy = get_strategy_registry().create("crypto_momentum")
     portfolio = Portfolio()
 
     current_prices, current_data, historical_data = build_market_snapshot(

@@ -88,16 +88,12 @@ def get_default_crypto_symbols() -> List[str]:
     """Get default crypto symbols from watchlist and open positions."""
     manager = WatchlistManager()
     watchlist_symbols = manager.get_watchlist(asset_type="crypto")
-    position_symbols: List[str] = []
-    try:
-        engine = TradingCryptoEngine()
-        position_symbols = [
-            pos.get("symbol")
-            for pos in engine.get_crypto_positions()
-            if pos.get("symbol")
-        ]
-    except Exception as exc:
-        logging.getLogger(__name__).warning("Failed to load crypto positions: %s", exc)
+    engine = TradingCryptoEngine()
+    position_symbols = [
+        pos.get("symbol")
+        for pos in engine.get_crypto_positions()
+        if pos.get("symbol")
+    ]
     defaults = merge_symbol_sources("crypto", watchlist_symbols, position_symbols)
     return defaults or ["BTC/USD"]
 

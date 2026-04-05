@@ -95,6 +95,7 @@ class LiveTradingEngine(ABC):
         self._stream = None
         self._stream_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._background_error: Optional[RuntimeError] = None
         self.logger = logging.getLogger(f"{self.__class__.__name__}.{self.symbol}")
 
     @abstractmethod
@@ -163,11 +164,13 @@ class LiveTradingEngine(ABC):
 
     def start(self) -> None:
         """Main entry point - starts streaming and signal loop."""
+        self._background_error = None
         self._start_stream()
         try:
             self.run_signal_loop()
         finally:
             self._stop_stream()
+        self._raise_if_background_failed()
 
     def run_signal_loop(self) -> None:
         """Run the signal loop without starting a stream."""
@@ -175,6 +178,7 @@ class LiveTradingEngine(ABC):
         self._refresh_position_state()
 
         while not self._stop_event.is_set():
+            self._raise_if_background_failed()
             self._run_signal_cycle()
             sleep_seconds = self._get_signal_interval_seconds()
             next_run = datetime.now(timezone.utc) + timedelta(seconds=sleep_seconds)
@@ -184,11 +188,24 @@ class LiveTradingEngine(ABC):
                 sleep_seconds,
             )
             self._stop_event.wait(timeout=sleep_seconds)
+        self._raise_if_background_failed()
 
     def stop(self) -> None:
         """Stop the live trading engine."""
         self._stop_event.set()
         self._stop_stream()
+        self._raise_if_background_failed()
+
+    def _set_background_error(self, message: str, exc: Exception) -> None:
+        """Record a background failure and stop the engine."""
+        if self._background_error is None:
+            self._background_error = RuntimeError(f"{message}: {exc}")
+        self._stop_event.set()
+
+    def _raise_if_background_failed(self) -> None:
+        """Raise the first background error captured by worker threads."""
+        if self._background_error is not None:
+            raise self._background_error
 
     def _start_stream(self) -> None:
         """Start the data streaming thread."""
@@ -199,7 +216,8 @@ class LiveTradingEngine(ABC):
             try:
                 self._stream.run()
             except Exception as exc:
-                self.logger.error("Stream stopped: %s", exc)
+                self.logger.exception("Stream stopped unexpectedly")
+                self._set_background_error("Stream stopped unexpectedly", exc)
 
         self._stream_thread = threading.Thread(
             target=_run_stream, name=f"{self.__class__.__name__}_stream", daemon=True
@@ -213,7 +231,8 @@ class LiveTradingEngine(ABC):
             try:
                 self._stream.stop()
             except Exception as exc:
-                self.logger.error("Failed to stop stream: %s", exc)
+                self.logger.exception("Failed to stop stream")
+                self._set_background_error("Failed to stop stream", exc)
         if self._stream_thread and self._stream_thread.is_alive():
             self._stream_thread.join(timeout=5)
 
@@ -341,7 +360,8 @@ class LiveTradingEngine(ABC):
                 self.engine.close_position(self._get_display_symbol())
                 self.logger.info("Closed position: %s", reason)
             except Exception as exc:
-                self.logger.error("Failed to close position: %s", exc)
+                self.logger.exception("Failed to close position")
+                self._set_background_error("Failed to close position", exc)
             finally:
                 with self._exit_lock:
                     self._exit_in_progress = False

@@ -11,7 +11,7 @@ import pandas as pd
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT_DIR)
 
-from src.settings import Config
+from src.settings import has_alpaca_credentials
 from src.data import AlpacaDataProvider
 from src.strategy.crypto import BTCVolatilityBreakoutStrategy
 from src.trade import Portfolio
@@ -51,7 +51,7 @@ def _format_price(value: float | None) -> str:
 
 
 def main() -> int:
-    if not Config.validate_alpaca_config():
+    if not has_alpaca_credentials():
         print("Missing Alpaca credentials.")
         print("Set ALPACA_API_KEY and ALPACA_SECRET_KEY in your environment or .env.")
         return 1

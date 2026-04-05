@@ -3,7 +3,6 @@ Strategy registry and factory.
 """
 from __future__ import annotations
 
-from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from .base import StrategyBase, StrategyMeta

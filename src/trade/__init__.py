@@ -14,6 +14,7 @@ from .portfolio import (
     PortfolioTracker,
 )
 from .live import LiveTradingEngine, PositionState
+from src.backtest import Backtester
 
 __all__ = [
     "TradingEngine",
@@ -30,25 +31,4 @@ __all__ = [
     "Backtester",
     "LiveTradingEngine",
     "PositionState",
-    "LiveTradingCrypto",
-    "LiveTradingStock",
-    "LiveTradingOption",
 ]
-
-
-def __getattr__(name: str):
-    if name == "Backtester":
-        from src.backtest import Backtester
-        return Backtester
-    if name == "LiveTradingCrypto":
-        from .live.live_trading_crypto import LiveTradingCrypto
-        return LiveTradingCrypto
-    if name == "LiveTradingStock":
-        from .live.live_trading_stock import LiveTradingStock
-        return LiveTradingStock
-    if name == "LiveTradingOption":
-        from .live.live_trading_option import LiveTradingOption
-        return LiveTradingOption
-    raise AttributeError(
-        f"module 'src.trade' has no attribute {name!r}"
-    )

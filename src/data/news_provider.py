@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
-from src.settings import Config
+from src.settings import get_config, has_alpaca_credentials
 from .finnhub_provider import FinnhubProvider
 
 try:
@@ -20,12 +20,13 @@ class NewsDataProvider:
         self.alpaca_client = self._init_alpaca_client()
 
     def _init_alpaca_client(self):
-        if not ALPACA_PY_AVAILABLE or not Config.validate_alpaca_config():
+        if not ALPACA_PY_AVAILABLE or not has_alpaca_credentials():
             return None
         try:
+            settings = get_config()
             return NewsClient(
-                api_key=Config.ALPACA_API_KEY,
-                secret_key=Config.ALPACA_SECRET_KEY
+                api_key=settings.alpaca.api_key,
+                secret_key=settings.alpaca.secret_key or ""
             )
         except Exception as exc:
             self.logger.warning(f"Alpaca news client unavailable: {exc}")
@@ -33,6 +34,12 @@ class NewsDataProvider:
 
     def _has_error(self, result: Any) -> bool:
         return isinstance(result, list) and len(result) > 0 and "error" in result[0]
+
+    def _raise_if_error(self, result: Any, action: str) -> None:
+        if self._has_error(result):
+            raise RuntimeError(f"{action} failed: {result[0]['error']}")
+        if isinstance(result, dict) and "error" in result:
+            raise RuntimeError(f"{action} failed: {result['error']}")
 
     def _normalize_finnhub_article(self, article: Dict[str, Any]) -> Dict[str, Any]:
         timestamp = article.get("datetime")
@@ -107,8 +114,7 @@ class NewsDataProvider:
         try:
             result = self.alpaca_client.get_news(request)
         except Exception as exc:
-            self.logger.error(f"Error fetching Alpaca news: {exc}")
-            return []
+            raise RuntimeError("Failed to fetch Alpaca news") from exc
 
         items: List[Any] = []
         if hasattr(result, "data"):
@@ -147,9 +153,7 @@ class NewsDataProvider:
         to_str = to_date.strftime('%Y-%m-%d')
         
         result = self.finnhub.get_company_news(symbol, from_str, to_str)
-        if self._has_error(result):
-            self.logger.error(f"Error fetching company news: {result[0]['error']}")
-            result = []
+        self._raise_if_error(result, f"Fetch company news for {symbol}")
 
         finnhub_news = [
             self._normalize_finnhub_article(article)
@@ -166,9 +170,7 @@ class NewsDataProvider:
     
     def get_market_news(self, category: str = "general") -> List[Dict[str, Any]]:
         result = self.finnhub.get_market_news(category)
-        if self._has_error(result):
-            self.logger.error(f"Error fetching market news: {result[0]['error']}")
-            result = []
+        self._raise_if_error(result, f"Fetch market news for {category}")
 
         finnhub_news = [
             self._normalize_finnhub_article(article)
@@ -182,9 +184,7 @@ class NewsDataProvider:
     def get_insider_transactions(self, symbol: str) -> List[Dict[str, Any]]:
         """Get insider transactions"""
         result = self.finnhub.get_insider_transactions(symbol)
-        if self._has_error(result):
-            self.logger.error(f"Error fetching insider transactions: {result[0]['error']}")
-            return []
+        self._raise_if_error(result, f"Fetch insider transactions for {symbol}")
         return result if isinstance(result, list) else []
     
     def get_insider_sentiment(self, symbol: str, 
@@ -200,11 +200,7 @@ class NewsDataProvider:
         to_str = to_date.strftime('%Y-%m-%d')
         
         result = self.finnhub.get_insider_sentiment(symbol, from_str, to_str)
-        
-        if "error" in result:
-            self.logger.error(f"Error fetching insider sentiment: {result['error']}")
-            return {}
-        
+        self._raise_if_error(result, f"Fetch insider sentiment for {symbol}")
         return result
     
     def search_news(self, query: str, from_date: Optional[datetime] = None,
@@ -214,19 +210,17 @@ class NewsDataProvider:
         if to_date is None:
             to_date = datetime.now()
         
-        try:
-            news_data = self.get_market_news("general")
-            
-            filtered_news = []
-            for article in news_data:
-                if (query.lower() in article.get('headline', '').lower() or 
-                    query.lower() in article.get('summary', '').lower()):
-                    
-                    article_date = datetime.fromtimestamp(article.get('datetime', 0))
-                    if from_date <= article_date <= to_date:
-                        filtered_news.append(article)
-            
-            return filtered_news
-        except Exception as e:
-            print(f"Error searching news: {e}")
-            return []
+        news_data = self.get_market_news("general")
+
+        filtered_news = []
+        for article in news_data:
+            if (query.lower() in article.get('headline', '').lower() or
+                query.lower() in article.get('summary', '').lower()):
+
+                article_date = datetime.fromtimestamp(
+                    article.get('datetime', 0)
+                )
+                if from_date <= article_date <= to_date:
+                    filtered_news.append(article)
+
+        return filtered_news

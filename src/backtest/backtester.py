@@ -151,39 +151,39 @@ class Backtester:
         
         return self.results
     
-    def _execute_signal(self, signal: Dict[str, Any], current_prices: Dict[str, float], 
+    def _execute_signal(self, signal: Dict[str, Any],
+                       current_prices: Dict[str, float],
                        current_date: datetime) -> bool:
-        try:
-            symbol = signal['symbol']
-            action = signal['action'].upper()
-            quantity = signal['quantity']
-            
-            if symbol not in current_prices:
-                return False
-            
-            price = current_prices[symbol]
-            commission_cost = abs(quantity) * price * self.commission
-            
-            if action == 'BUY':
-                total_cost = quantity * price + commission_cost
-                if total_cost <= self.portfolio.cash:
-                    self.portfolio.add_position(symbol, quantity, price, current_date)
+        symbol = signal['symbol']
+        action = signal['action'].upper()
+        quantity = signal['quantity']
+
+        if symbol not in current_prices:
+            return False
+
+        price = current_prices[symbol]
+        commission_cost = abs(quantity) * price * self.commission
+
+        if action == 'BUY':
+            total_cost = quantity * price + commission_cost
+            if total_cost <= self.portfolio.cash:
+                self.portfolio.add_position(
+                    symbol, quantity, price, current_date
+                )
+                self.portfolio.cash -= commission_cost
+                return True
+
+        elif action == 'SELL':
+            if symbol in self.portfolio.positions:
+                available_qty = self.portfolio.positions[symbol]['quantity']
+                if quantity <= available_qty:
+                    self.portfolio.remove_position(
+                        symbol, quantity, price, current_date
+                    )
                     self.portfolio.cash -= commission_cost
                     return True
-            
-            elif action == 'SELL':
-                if symbol in self.portfolio.positions:
-                    available_qty = self.portfolio.positions[symbol]['quantity']
-                    if quantity <= available_qty:
-                        self.portfolio.remove_position(symbol, quantity, price, current_date)
-                        self.portfolio.cash -= commission_cost
-                        return True
-            
-            return False
-            
-        except Exception as e:
-            self.logger.error(f"Error executing signal: {e}")
-            return False
+
+        return False
     
     def _calculate_performance_metrics(self, portfolio_values: List[Dict], 
                                      daily_returns: List[float], 

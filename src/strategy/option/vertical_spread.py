@@ -279,25 +279,21 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         return max(0, qty)
 
     def _get_risk_free_rate(self) -> float:
-        fallback = float(self.params.get("risk_free_rate_fallback", 0.02))
         maturity = str(self.params.get("risk_free_rate_maturity", "3M")).upper()
 
         today = now_et().date()
         if self._risk_free_cache and self._risk_free_cache[0] == today:
             return self._risk_free_cache[1]
 
-        rate = None
-        try:
-            data = self.fred.get_treasury_yield(maturity)
-            if isinstance(data, pd.DataFrame) and "value" in data.columns:
-                if "error" not in data.columns and not data["value"].empty:
-                    value = float(data["value"].iloc[-1])
-                    rate = value / 100.0
-        except Exception:
-            rate = None
+        data = self.fred.get_treasury_yield(maturity)
+        if not isinstance(data, pd.DataFrame) or "value" not in data.columns:
+            raise RuntimeError(f"FRED treasury yield data is invalid for maturity {maturity}")
+        if data["value"].empty:
+            raise RuntimeError(f"FRED treasury yield data is empty for maturity {maturity}")
 
-        if rate is None or rate <= 0:
-            rate = fallback
+        rate = float(data["value"].iloc[-1]) / 100.0
+        if rate <= 0:
+            raise RuntimeError(f"FRED treasury yield is non-positive for maturity {maturity}: {rate}")
 
         self._risk_free_cache = (today, rate)
         return rate

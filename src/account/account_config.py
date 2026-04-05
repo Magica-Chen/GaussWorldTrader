@@ -5,10 +5,9 @@ Handles Alpaca account configurations and settings
 Reference: https://docs.alpaca.markets/reference/patchaccountconfig-1
 """
 
-import requests
-import logging
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+import logging
+from typing import Any, Dict
 
 class AccountConfigurator:
     """Manages Alpaca account configurations"""
@@ -19,22 +18,9 @@ class AccountConfigurator:
     
     def get_account_configurations(self) -> Dict[str, Any]:
         """Get current account configurations"""
-        try:
-            response = requests.get(
-                f"{self.account_manager.base_url}/v2/account/configurations",
-                headers=self.account_manager.headers,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            configs = response.json()
-            self.logger.info("Account configurations retrieved successfully")
-            
-            return configs
-            
-        except Exception as e:
-            self.logger.error(f"Error retrieving account configurations: {e}")
-            return {"error": str(e)}
+        configs = self.account_manager.get_account_configurations()
+        self.logger.info("Account configurations retrieved successfully")
+        return configs
     
     def update_account_configurations(self, configurations: Dict[str, Any]) -> Dict[str, Any]:
         """Update account configurations
@@ -51,29 +37,12 @@ class AccountConfigurator:
         """
         
         # Validate configuration values
-        valid_configs = self._validate_configurations(configurations)
-        if 'error' in valid_configs:
-            return valid_configs
-        
-        try:
-            response = requests.patch(
-                f"{self.account_manager.base_url}/v2/account/configurations",
-                headers=self.account_manager.headers,
-                json=configurations,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            updated_configs = response.json()
-            self.logger.info("Account configurations updated successfully")
-            
-            return updated_configs
-            
-        except Exception as e:
-            self.logger.error(f"Error updating account configurations: {e}")
-            return {"error": str(e)}
+        self._validate_configurations(configurations)
+        updated_configs = self.account_manager.update_account_configurations(configurations)
+        self.logger.info("Account configurations updated successfully")
+        return updated_configs
     
-    def _validate_configurations(self, configurations: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_configurations(self, configurations: Dict[str, Any]) -> None:
         """Validate configuration parameters"""
         valid_options = {
             'day_trade_margin_call': ['EQUITY', 'CASH'],
@@ -103,9 +72,7 @@ class AccountConfigurator:
                 errors.append(f"Unknown configuration parameter: {key}")
         
         if errors:
-            return {"error": f"Validation errors: {'; '.join(errors)}"}
-        
-        return {"valid": True}
+            raise ValueError(f"Validation errors: {'; '.join(errors)}")
     
     def enable_extended_hours_trading(self) -> Dict[str, Any]:
         """Enable extended hours trading"""
@@ -189,10 +156,6 @@ class AccountConfigurator:
     def get_configuration_summary(self) -> str:
         """Get formatted configuration summary"""
         configs = self.get_account_configurations()
-        
-        if 'error' in configs:
-            return f"Error retrieving configurations: {configs['error']}"
-        
         summary = f"""
 🌍 GAUSS WORLD TRADER - ACCOUNT CONFIGURATIONS
 =============================================
@@ -233,10 +196,7 @@ Using: {"Paper Trading" if "paper" in self.account_manager.base_url else "Live T
         }
         
         result = self.update_account_configurations(conservative_config)
-        
-        if 'error' not in result:
-            self.logger.info("Conservative trading settings applied")
-        
+        self.logger.info("Conservative trading settings applied")
         return result
     
     def apply_aggressive_settings(self) -> Dict[str, Any]:
@@ -251,8 +211,5 @@ Using: {"Paper Trading" if "paper" in self.account_manager.base_url else "Live T
         }
         
         result = self.update_account_configurations(aggressive_config)
-        
-        if 'error' not in result:
-            self.logger.info("Aggressive trading settings applied")
-        
+        self.logger.info("Aggressive trading settings applied")
         return result

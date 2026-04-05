@@ -59,22 +59,17 @@ class OpenAIProvider(BaseLLMProvider):
             "temperature": 0.7
         }
         
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['choices'][0]['message']['content']
-            
-        except Exception as e:
-            self.logger.error(f"OpenAI API error: {e}")
-            return f"Error generating response: {str(e)}"
-    
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        return result['choices'][0]['message']['content']
+
     def analyze_financial_data(self, data: Dict[str, Any]) -> str:
         """Analyze financial data using OpenAI"""
         prompt = f"""
@@ -124,22 +119,17 @@ class DeepSeekProvider(BaseLLMProvider):
             "temperature": 0.7
         }
         
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['choices'][0]['message']['content']
-            
-        except Exception as e:
-            self.logger.error(f"DeepSeek API error: {e}")
-            return f"Error generating response: {str(e)}"
-    
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        return result['choices'][0]['message']['content']
+
     def analyze_financial_data(self, data: Dict[str, Any]) -> str:
         """Analyze financial data using DeepSeek"""
         prompt = f"""
@@ -187,22 +177,17 @@ class ClaudeProvider(BaseLLMProvider):
             "messages": [{"role": "user", "content": full_prompt}]
         }
         
-        try:
-            response = requests.post(
-                f"{self.base_url}/messages",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['content'][0]['text']
-            
-        except Exception as e:
-            self.logger.error(f"Claude API error: {e}")
-            return f"Error generating response: {str(e)}"
-    
+        response = requests.post(
+            f"{self.base_url}/messages",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        return result['content'][0]['text']
+
     def analyze_financial_data(self, data: Dict[str, Any]) -> str:
         """Analyze financial data using Claude"""
         prompt = f"""
@@ -252,21 +237,16 @@ class MoonshotProvider(BaseLLMProvider):
             "temperature": 0.7
         }
         
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['choices'][0]['message']['content']
-            
-        except Exception as e:
-            self.logger.error(f"Moonshot API error: {e}")
-            return f"Error generating response: {str(e)}"
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        return result['choices'][0]['message']['content']
     
     def analyze_financial_data(self, data: Dict[str, Any]) -> str:
         """Analyze financial data using Moonshot"""

@@ -4,11 +4,9 @@ Order Management for Alpaca Trading
 Handles order placement, tracking, and management
 """
 
-import requests
-import logging
-from typing import Dict, List, Any, Optional
-import pandas as pd
 from datetime import datetime, timedelta
+import logging
+from typing import Any, Dict, List
 
 class OrderManager:
     """Manages trading orders"""
@@ -32,43 +30,25 @@ class OrderManager:
             params['after'] = start_date
         if end_date:
             params['until'] = end_date
-        
-        try:
-            response = requests.get(
-                f"{self.account_manager.base_url}/v2/orders",
-                headers=self.account_manager.headers,
-                params=params,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            orders = response.json()
-            self.logger.info(f"Retrieved {len(orders)} orders")
-            
-            return orders
-            
-        except Exception as e:
-            self.logger.error(f"Error retrieving orders: {e}")
-            return [{"error": str(e)}]
+
+        orders = self.account_manager._request_json(
+            "GET",
+            "/v2/orders",
+            action="Retrieve orders",
+            params=params,
+        )
+        self.logger.info("Retrieved %s orders", len(orders))
+        return orders
     
     def get_order(self, order_id: str) -> Dict[str, Any]:
         """Get specific order by ID"""
-        try:
-            response = requests.get(
-                f"{self.account_manager.base_url}/v2/orders/{order_id}",
-                headers=self.account_manager.headers,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            order = response.json()
-            self.logger.info(f"Retrieved order {order_id}")
-            
-            return order
-            
-        except Exception as e:
-            self.logger.error(f"Error retrieving order {order_id}: {e}")
-            return {"error": str(e)}
+        order = self.account_manager._request_json(
+            "GET",
+            f"/v2/orders/{order_id}",
+            action=f"Retrieve order {order_id}",
+        )
+        self.logger.info("Retrieved order %s", order_id)
+        return order
     
     def place_order(self, symbol: str, qty: int, side: str, order_type: str = 'market',
                    time_in_force: str = 'day', limit_price: float = None,
@@ -98,59 +78,35 @@ class OrderManager:
         if trail_percent:
             order_data['trail_percent'] = str(trail_percent)
         
-        try:
-            response = requests.post(
-                f"{self.account_manager.base_url}/v2/orders",
-                headers=self.account_manager.headers,
-                json=order_data,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            order = response.json()
-            self.logger.info(f"Order placed: {order.get('id')} for {symbol}")
-            
-            return order
-            
-        except Exception as e:
-            self.logger.error(f"Error placing order for {symbol}: {e}")
-            return {"error": str(e)}
+        order = self.account_manager._request_json(
+            "POST",
+            "/v2/orders",
+            action=f"Place order for {symbol}",
+            json=order_data,
+        )
+        self.logger.info("Order placed: %s for %s", order.get("id"), symbol)
+        return order
     
     def cancel_order(self, order_id: str) -> Dict[str, Any]:
         """Cancel a specific order"""
-        try:
-            response = requests.delete(
-                f"{self.account_manager.base_url}/v2/orders/{order_id}",
-                headers=self.account_manager.headers,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            self.logger.info(f"Order {order_id} cancelled")
-            return {"success": True, "order_id": order_id}
-            
-        except Exception as e:
-            self.logger.error(f"Error cancelling order {order_id}: {e}")
-            return {"error": str(e)}
+        self.account_manager._request_json(
+            "DELETE",
+            f"/v2/orders/{order_id}",
+            action=f"Cancel order {order_id}",
+            allow_empty=True,
+        )
+        self.logger.info("Order %s cancelled", order_id)
+        return {"success": True, "order_id": order_id}
     
     def cancel_all_orders(self) -> Dict[str, Any]:
         """Cancel all open orders"""
-        try:
-            response = requests.delete(
-                f"{self.account_manager.base_url}/v2/orders",
-                headers=self.account_manager.headers,
-                timeout=10
-            )
-            response.raise_for_status()
-            
-            results = response.json()
-            self.logger.info("All orders cancelled")
-            
-            return {"success": True, "cancelled_orders": results}
-            
-        except Exception as e:
-            self.logger.error(f"Error cancelling all orders: {e}")
-            return {"error": str(e)}
+        results = self.account_manager._request_json(
+            "DELETE",
+            "/v2/orders",
+            action="Cancel all orders",
+        )
+        self.logger.info("All orders cancelled")
+        return {"success": True, "cancelled_orders": results}
     
     def replace_order(self, order_id: str, qty: int = None, time_in_force: str = None,
                      limit_price: float = None, stop_price: float = None,
@@ -172,23 +128,14 @@ class OrderManager:
         if trail_percent is not None:
             replace_data['trail_percent'] = str(trail_percent)
 
-        try:
-            response = requests.patch(
-                f"{self.account_manager.base_url}/v2/orders/{order_id}",
-                headers=self.account_manager.headers,
-                json=replace_data,
-                timeout=10
-            )
-            response.raise_for_status()
-
-            order = response.json()
-            self.logger.info(f"Order {order_id} replaced")
-
-            return order
-
-        except Exception as e:
-            self.logger.error(f"Error replacing order {order_id}: {e}")
-            return {"error": str(e)}
+        order = self.account_manager._request_json(
+            "PATCH",
+            f"/v2/orders/{order_id}",
+            action=f"Replace order {order_id}",
+            json=replace_data,
+        )
+        self.logger.info("Order %s replaced", order_id)
+        return order
 
     def place_bracket_order(
         self,
@@ -213,7 +160,7 @@ class OrderManager:
             time_in_force: Time in force for the order (default 'gtc')
 
         Returns:
-            Order response dict or error dict
+            Order response dict
         """
         order_data = {
             "symbol": symbol,
@@ -226,26 +173,20 @@ class OrderManager:
             "take_profit": {"limit_price": str(take_profit)},
         }
 
-        try:
-            response = requests.post(
-                f"{self.account_manager.base_url}/v2/orders",
-                headers=self.account_manager.headers,
-                json=order_data,
-                timeout=10,
-            )
-            response.raise_for_status()
-
-            order = response.json()
-            self.logger.info(
-                f"Bracket order placed: {order.get('id')} for {symbol} "
-                f"(SL: {stop_loss}, TP: {take_profit})"
-            )
-
-            return order
-
-        except Exception as e:
-            self.logger.error(f"Error placing bracket order for {symbol}: {e}")
-            return {"error": str(e)}
+        order = self.account_manager._request_json(
+            "POST",
+            "/v2/orders",
+            action=f"Place bracket order for {symbol}",
+            json=order_data,
+        )
+        self.logger.info(
+            "Bracket order placed: %s for %s (SL: %s, TP: %s)",
+            order.get("id"),
+            symbol,
+            stop_loss,
+            take_profit,
+        )
+        return order
     
     def analyze_orders(self, days: int = 30) -> Dict[str, Any]:
         """Analyze order history"""
@@ -258,10 +199,7 @@ class OrderManager:
             end_date=end_date.isoformat(),
             limit=500
         )
-        
-        if not orders or (len(orders) == 1 and 'error' in orders[0]):
-            return {"error": "No orders found or error retrieving orders"}
-        
+
         analysis = {
             'total_orders': len(orders),
             'filled_orders': 0,
@@ -329,9 +267,9 @@ class OrderManager:
                         analysis['largest_order'] = qty
                     valid_orders.append(qty)
                 
-            except (ValueError, TypeError) as e:
-                self.logger.warning(f"Error processing order {order.get('id', 'unknown')}: {e}")
-                continue
+            except (ValueError, TypeError) as exc:
+                order_id = order.get("id", "unknown")
+                raise ValueError(f"Invalid order data for {order_id}: {exc}") from exc
         
         # Calculate averages
         if valid_orders:
@@ -352,9 +290,8 @@ class OrderManager:
     def get_recent_orders_summary(self, limit: int = 10) -> str:
         """Get summary of recent orders"""
         orders = self.get_orders(status='all', limit=limit)
-        
-        if not orders or (len(orders) == 1 and 'error' in orders[0]):
-            return "No recent orders found or error retrieving orders"
+        if not orders:
+            return "No recent orders found"
         
         summary = f"""
 🌍 GAUSS WORLD TRADER - RECENT ORDERS
@@ -365,39 +302,33 @@ Showing {min(len(orders), limit)} most recent orders
 """
         
         for i, order in enumerate(orders[:limit], 1):
-            try:
-                order_id = order.get('id', 'N/A')[:8] + '...'  # Truncate ID
-                symbol = order.get('symbol', 'N/A')
-                side = order.get('side', 'N/A').upper()
-                qty = float(order.get('qty', 0))
-                order_type = order.get('type', 'N/A').upper()
-                status = order.get('status', 'N/A').upper()
-                submitted_at = order.get('submitted_at', '')
-                
-                # Format timestamp
-                if submitted_at:
-                    try:
-                        dt = datetime.fromisoformat(submitted_at.replace('Z', '+00:00'))
-                        time_str = dt.strftime('%m/%d %H:%M')
-                    except:
-                        time_str = submitted_at[:16]
-                else:
-                    time_str = 'N/A'
-                
-                summary += f"{i:2d}. {order_id} | {symbol:>6} | {side:>4} {qty:>8.0f} | {order_type:>7} | {status:>10} | {time_str}\n"
-                
-            except (ValueError, TypeError) as e:
-                summary += f"{i:2d}. Error processing order: {e}\n"
+            order_id = order.get('id', 'N/A')[:8] + '...'  # Truncate ID
+            symbol = order.get('symbol', 'N/A')
+            side = order.get('side', 'N/A').upper()
+            qty = float(order.get('qty', 0))
+            order_type = order.get('type', 'N/A').upper()
+            status = order.get('status', 'N/A').upper()
+            submitted_at = order.get('submitted_at', '')
+
+            # Keep the raw timestamp if formatting fails, but do not suppress missing order data.
+            if submitted_at:
+                try:
+                    dt = datetime.fromisoformat(submitted_at.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%m/%d %H:%M')
+                except (ValueError, TypeError):
+                    time_str = str(submitted_at)[:16]
+            else:
+                time_str = 'N/A'
+
+            summary += f"{i:2d}. {order_id} | {symbol:>6} | {side:>4} {qty:>8.0f} | {order_type:>7} | {status:>10} | {time_str}\n"
         
         return summary
     
     def get_orders_analysis_summary(self, days: int = 30) -> str:
         """Get formatted order analysis summary"""
         analysis = self.analyze_orders(days)
-        
-        if 'error' in analysis:
-            return f"Error: {analysis['error']}"
-        
+        total_orders = analysis["total_orders"]
+        pct = lambda count: (count / total_orders * 100) if total_orders else 0
         summary = f"""
 🌍 GAUSS WORLD TRADER - ORDER ANALYSIS
 =====================================
@@ -407,17 +338,17 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 ORDER OVERVIEW:
 --------------
 • Total Orders: {analysis['total_orders']}
-• Filled Orders: {analysis['filled_orders']} ({analysis['filled_orders']/analysis['total_orders']*100:.1f}%)
-• Cancelled Orders: {analysis['cancelled_orders']} ({analysis['cancelled_orders']/analysis['total_orders']*100:.1f}%)
+• Filled Orders: {analysis['filled_orders']} ({pct(analysis['filled_orders']):.1f}%)
+• Cancelled Orders: {analysis['cancelled_orders']} ({pct(analysis['cancelled_orders']):.1f}%)
 • Pending Orders: {analysis['pending_orders']}
 • Rejected Orders: {analysis['rejected_orders']}
 
 ORDER BREAKDOWN:
 ---------------
-• Buy Orders: {analysis['buy_orders']} ({analysis['buy_orders']/analysis['total_orders']*100:.1f}%)
-• Sell Orders: {analysis['sell_orders']} ({analysis['sell_orders']/analysis['total_orders']*100:.1f}%)
-• Market Orders: {analysis['market_orders']} ({analysis['market_orders']/analysis['total_orders']*100:.1f}%)
-• Limit Orders: {analysis['limit_orders']} ({analysis['limit_orders']/analysis['total_orders']*100:.1f}%)
+• Buy Orders: {analysis['buy_orders']} ({pct(analysis['buy_orders']):.1f}%)
+• Sell Orders: {analysis['sell_orders']} ({pct(analysis['sell_orders']):.1f}%)
+• Market Orders: {analysis['market_orders']} ({pct(analysis['market_orders']):.1f}%)
+• Limit Orders: {analysis['limit_orders']} ({pct(analysis['limit_orders']):.1f}%)
 
 TRADING ACTIVITY:
 ----------------

@@ -28,7 +28,7 @@ from src.trade.live.live_trading_stock import (
 from src.strategy.registry import get_strategy_registry
 from src.trade.live import run_live_engines
 from src.watchlist import WatchlistManager
-from src.settings import Config
+from src.settings import get_alpaca_base_url
 from src.trade.engine import (
     ExecutionContext,
     ExecutionEngine,
@@ -50,10 +50,7 @@ BANNER = """
 """
 
 
-# Strategies available per asset type
-STOCK_STRATEGIES = ["momentum", "value", "trend_following", "scalping", "statistical_arbitrage"]
-CRYPTO_STRATEGIES = ["crypto_momentum"]
-OPTION_STRATEGIES = ["wheel", "vertical_spread"]
+DEFAULT_STRATEGIES = {"stock": "momentum", "crypto": "crypto_momentum", "option": "wheel"}
 
 
 @dataclass
@@ -111,22 +108,18 @@ def show_watchlist_summary() -> None:
 
 def load_account_context() -> Optional[ExecutionContext]:
     """Load account and configuration capabilities for validation."""
-    try:
-        logging.getLogger("TradingStockEngine").setLevel(logging.WARNING)
-        logging.getLogger("src.account.account_manager").setLevel(logging.WARNING)
-        engine = TradingStockEngine()
-        executor = ExecutionEngine(engine, asset_type="stock", execute=False)
-        return executor.load_context()
-    except Exception as exc:
-        console.print(f"[red]Failed to load account info: {exc}[/red]")
-        return None
+    logging.getLogger("TradingStockEngine").setLevel(logging.WARNING)
+    logging.getLogger("src.account.account_manager").setLevel(logging.WARNING)
+    engine = TradingStockEngine()
+    executor = ExecutionEngine(engine, asset_type="stock", execute=False)
+    return executor.load_context()
 
 
 def show_account_summary(context: ExecutionContext) -> None:
     """Display account capability summary."""
     console.print(Panel("[bold]Account Summary[/bold]", style="blue"))
 
-    mode = "Paper Trading" if "paper" in Config.ALPACA_BASE_URL else "Live Trading"
+    mode = "Paper Trading" if "paper" in get_alpaca_base_url() else "Live Trading"
     info = context.account_info or {}
     overview = Table(title="Account Info", show_header=True, header_style="bold")
     overview.add_column("Field", style="cyan")
@@ -230,19 +223,16 @@ def configure_symbols(asset_types: List[str]) -> Dict[str, List[str]]:
 
 def get_strategies_for_type(asset_type: str) -> List[str]:
     """Get available strategies for a specific asset type."""
-    if asset_type == "stock":
-        return STOCK_STRATEGIES
-    elif asset_type == "crypto":
-        return CRYPTO_STRATEGIES
-    elif asset_type == "option":
-        return OPTION_STRATEGIES
-    return []
+    registry = get_strategy_registry()
+    return [
+        name for name in registry.list_strategies()
+        if registry.get_meta(name).asset_type == asset_type
+    ]
 
 
 def get_default_strategy(asset_type: str) -> str:
     """Get default strategy for an asset type."""
-    defaults = {"stock": "momentum", "crypto": "crypto_momentum", "option": "wheel"}
-    return defaults.get(asset_type, "momentum")
+    return DEFAULT_STRATEGIES.get(asset_type, "momentum")
 
 
 def configure_strategies(asset_types: List[str]) -> Dict[str, str]:
@@ -269,7 +259,7 @@ def configure_strategies(asset_types: List[str]) -> Dict[str, str]:
             choice = Prompt.ask(
                 f"Select {asset_type} strategy",
                 choices=[str(i) for i in range(1, len(available) + 1)],
-                default="1",
+                default=str(available.index(default) + 1) if default in available else "1",
             )
             strategies[asset_type] = available[int(choice) - 1]
 
