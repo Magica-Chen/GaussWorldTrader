@@ -214,7 +214,11 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                     current_date, current_prices, current_data, historical_data, portfolio
                 )
 
-            results = backtester.run_backtest(strategy_func, symbols=symbols)
+            results = backtester.run_backtest(
+                strategy_func,
+                symbols=symbols,
+                strategy=strategy,
+            )
             if results:
                 return {
                     'total_return_percentage': results.get('total_return_percentage', 0),

@@ -43,9 +43,12 @@ class FREDProvider:
             raise FREDProviderError("FRED client is not initialized")
         return self.client
     
-    def get_series_data(self, series_id: str, 
-                       start_date: str = None, 
-                       end_date: str = None) -> pd.DataFrame:
+    def get_series_data(
+        self,
+        series_id: str,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
         """Get economic data series from FRED"""
         client = self._require_client()
         try:
@@ -61,24 +64,44 @@ class FREDProvider:
         df.index.name = 'date'
         return df
     
-    def get_gdp_data(self, start_date: str = None) -> pd.DataFrame:
+    def get_gdp_data(
+        self,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
         """Get GDP data"""
-        return self.get_series_data('GDP', start_date)
+        return self.get_series_data('GDP', start_date, end_date)
     
-    def get_unemployment_rate(self, start_date: str = None) -> pd.DataFrame:
+    def get_unemployment_rate(
+        self,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
         """Get unemployment rate"""
-        return self.get_series_data('UNRATE', start_date)
+        return self.get_series_data('UNRATE', start_date, end_date)
     
-    def get_inflation_rate(self, start_date: str = None) -> pd.DataFrame:
+    def get_inflation_rate(
+        self,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
         """Get CPI inflation rate"""
-        return self.get_series_data('CPIAUCSL', start_date)
+        return self.get_series_data('CPIAUCSL', start_date, end_date)
     
-    def get_federal_funds_rate(self, start_date: str = None) -> pd.DataFrame:
+    def get_federal_funds_rate(
+        self,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
         """Get Federal Funds Rate"""
-        return self.get_series_data('FEDFUNDS', start_date)
+        return self.get_series_data('FEDFUNDS', start_date, end_date)
     
-    def get_treasury_yield(self, maturity: str = '10Y', 
-                          start_date: str = None) -> pd.DataFrame:
+    def get_treasury_yield(
+        self,
+        maturity: str = '10Y',
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
         """Get Treasury yield rates"""
         series_mapping = {
             '3M': 'TB3MS',
@@ -91,16 +114,20 @@ class FREDProvider:
         }
         
         series_id = series_mapping.get(maturity, 'GS10')
-        return self.get_series_data(series_id, start_date)
+        return self.get_series_data(series_id, start_date, end_date)
     
-    def get_economic_indicators(self, start_date: str = None) -> Dict[str, pd.DataFrame]:
+    def get_economic_indicators(
+        self,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> Dict[str, pd.DataFrame]:
         """Get key economic indicators"""
         indicators = {
-            'GDP': self.get_gdp_data(start_date),
-            'Unemployment': self.get_unemployment_rate(start_date),
-            'Inflation': self.get_inflation_rate(start_date),
-            'Federal_Funds_Rate': self.get_federal_funds_rate(start_date),
-            'Treasury_10Y': self.get_treasury_yield('10Y', start_date)
+            'GDP': self.get_gdp_data(start_date, end_date),
+            'Unemployment': self.get_unemployment_rate(start_date, end_date),
+            'Inflation': self.get_inflation_rate(start_date, end_date),
+            'Federal_Funds_Rate': self.get_federal_funds_rate(start_date, end_date),
+            'Treasury_10Y': self.get_treasury_yield('10Y', start_date, end_date)
         }
         
         return indicators

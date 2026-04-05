@@ -3,15 +3,16 @@ Trading Views Mixin - Trading interface and backtesting views.
 """
 
 from datetime import timedelta
-import pandas as pd
-import streamlit as st
-import plotly.graph_objects as go
 
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
+from src.backtest import Backtester
 from src.data import AlpacaDataProvider
 from src.strategy.registry import get_strategy_registry
-from src.backtest import Backtester
-from src.utils.timezone_utils import now_et
 from src.ui.ui_components import UIComponents
+from src.utils.timezone_utils import now_et
 
 
 class TradingViewsMixin:
@@ -68,7 +69,11 @@ class TradingViewsMixin:
                 def strategy_func(date, prices, current, hist, portfolio):
                     return strategy.generate_signals(date, prices, current, hist, portfolio)
 
-                results = backtester.run_backtest(strategy_func, symbols=[symbol])
+                results = backtester.run_backtest(
+                    strategy_func,
+                    symbols=[symbol],
+                    strategy=strategy,
+                )
 
                 if results:
                     st.success("Backtest completed!")
@@ -99,7 +104,7 @@ class TradingViewsMixin:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=portfolio_history.index, y=portfolio_history['portfolio_value'],
-                mode='lines', name='Portfolio Value', line=dict(color='blue', width=2)
+                mode='lines', name='Portfolio Value', line={"color": "blue", "width": 2}
             ))
             fig.update_layout(
                 title=f"Backtest Results - {symbol}",
@@ -164,10 +169,27 @@ class TradingViewsMixin:
                         backtester = Backtester(initial_cash=100000, commission=0.01)
                         backtester.add_data(symbol, historical_data)
 
-                        def strategy_func(date, prices, current, hist, portfolio):
-                            return strategy.generate_signals(date, prices, current, hist, portfolio)
+                        def strategy_func(
+                            date,
+                            prices,
+                            current,
+                            hist,
+                            portfolio,
+                            _strategy=strategy,
+                        ):
+                            return _strategy.generate_signals(
+                                date,
+                                prices,
+                                current,
+                                hist,
+                                portfolio,
+                            )
 
-                        results = backtester.run_backtest(strategy_func, symbols=[symbol])
+                        results = backtester.run_backtest(
+                            strategy_func,
+                            symbols=[symbol],
+                            strategy=strategy,
+                        )
 
                         if results:
                             comparison_results.append({

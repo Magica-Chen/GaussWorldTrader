@@ -4,25 +4,33 @@ Simple CLI entry point for Gauss World Trader.
 """
 from __future__ import annotations
 
+import os
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import typer
 
-from src.data import AlpacaDataProvider
-from src.strategy import get_strategy_registry
-from src.backtest import Backtester
-from src.trade.engine import ExecutionEngine, TradingStockEngine
 from src.account.account_manager import AccountManager
+from src.backtest import Backtester
+from src.data import AlpacaDataProvider
 from src.settings import get_alpaca_base_url
+from src.strategy import get_strategy_registry
+from src.trade.engine import ExecutionEngine, TradingStockEngine
 from src.utils.timezone_utils import now_et
 from src.watchlist import WatchlistManager
 
 app = typer.Typer(add_completion=False)
 
 
-def _load_symbols(symbols: Optional[List[str]]) -> List[str]:
+def _configure_numba_cache() -> None:
+    if os.getenv("NUMBA_CACHE_DIR"):
+        return
+    cache_dir = Path("/tmp/gaussworldtrader-numba-cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["NUMBA_CACHE_DIR"] = str(cache_dir)
+
+
+def _load_symbols(symbols: list[str] | None) -> list[str]:
     if symbols:
         return [s.upper() for s in symbols]
     watchlist_path = Path("watchlist.json")
@@ -32,8 +40,8 @@ def _load_symbols(symbols: Optional[List[str]]) -> List[str]:
     return ["AAPL", "MSFT", "GOOGL"]
 
 
-def _parse_quantity_overrides(entries: List[str]) -> Dict[str, float]:
-    overrides: Dict[str, float] = {}
+def _parse_quantity_overrides(entries: list[str]) -> dict[str, float]:
+    overrides: dict[str, float] = {}
     for entry in entries:
         if not entry or "=" not in entry:
             continue
@@ -44,6 +52,60 @@ def _parse_quantity_overrides(entries: List[str]) -> Dict[str, float]:
         except ValueError:
             continue
     return overrides
+
+
+def _coerce_param_value(value: str):
+    text = value.strip()
+    lowered = text.lower()
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    if lowered in {"none", "null"}:
+        return None
+    try:
+        if "." not in text and "e" not in lowered:
+            return int(text)
+        return float(text)
+    except ValueError:
+        return text
+
+
+def _parse_strategy_params(entries: list[str]) -> dict[str, object]:
+    params: dict[str, object] = {}
+    for entry in entries:
+        if not entry or "=" not in entry:
+            continue
+        key, raw_value = entry.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        params[key] = _coerce_param_value(raw_value)
+    return params
+
+
+def _print_backtest_results(results: dict[str, object]) -> None:
+    summary = results.get("summary", results)
+    print("Backtest Summary:")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+    benchmark = results.get("benchmark")
+    if isinstance(benchmark, dict):
+        print("\nBenchmark:")
+        for key, value in benchmark.items():
+            print(f"{key}: {value}")
+
+    splits = results.get("split_summaries")
+    if isinstance(splits, list):
+        print("\nWalk-Forward Splits:")
+        for split in splits:
+            split_id = split.get("split", "?")
+            total_return = split.get("total_return_percentage")
+            sharpe = split.get("sharpe_ratio")
+            drawdown = split.get("max_drawdown_percentage")
+            print(
+                f"split {split_id}: return={total_return}, "
+                f"sharpe={sharpe}, max_drawdown={drawdown}"
+            )
 
 
 @app.command("list-strategies")
@@ -71,7 +133,7 @@ def account_info() -> None:
 @app.command("run-strategy")
 def run_strategy(
     strategy: str = typer.Option("momentum", help="Strategy name"),
-    symbols: Optional[List[str]] = typer.Argument(None, help="Symbols to run"),
+    symbols: list[str] | None = typer.Argument(None, help="Symbols to run"),
     days: int = typer.Option(60, help="Lookback window in days"),
     execute: bool = typer.Option(False, help="Place orders for signals"),
     order_type: str = typer.Option(
@@ -82,19 +144,27 @@ def run_strategy(
         False,
         help="Allow sell-to-open (shorting) when account supports it",
     ),
-    quantity: Optional[List[str]] = typer.Option(
+    quantity: list[str] | None = typer.Option(
         None,
         "--quantity",
         "-q",
         help="Per-symbol quantity override, e.g. AAPL=10",
     ),
+    strategy_param: list[str] | None = typer.Option(
+        None,
+        "--strategy-param",
+        "-p",
+        help="Strategy param override, e.g. risk_pct=0.03",
+    ),
 ) -> None:
     """Run a strategy on recent data and print signals."""
     registry = get_strategy_registry()
     symbols_list = _load_symbols(symbols)
+    strategy_params = _parse_strategy_params(strategy_param or [])
+    evaluation_time = now_et()
 
     provider = AlpacaDataProvider()
-    start_date = now_et() - timedelta(days=days)
+    start_date = evaluation_time - timedelta(days=days)
 
     historical_data = {}
     current_prices = {}
@@ -119,10 +189,10 @@ def run_strategy(
         raise typer.Exit(1)
 
     try:
-        strategy_instance = registry.create(strategy)
+        strategy_instance = registry.create(strategy, strategy_params or None)
     except KeyError as exc:
         print(exc)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
     qty_overrides = _parse_quantity_overrides(quantity or [])
     order_type = order_type.lower().strip()
     if order_type not in {"auto", "market", "limit"}:
@@ -155,7 +225,7 @@ def run_strategy(
             continue
         snapshot = strategy_instance.get_signal(
             symbol=symbol,
-            current_date=now_et(),
+            current_date=evaluation_time,
             current_price=price,
             current_data=current_data.get(symbol, {}),
             historical_data=data,
@@ -163,7 +233,7 @@ def run_strategy(
         )
         if snapshot is None:
             continue
-        plan = strategy_instance.get_action_plan(snapshot, price, now_et())
+        plan = strategy_instance.get_action_plan(snapshot, price, evaluation_time)
         if not plan or plan.action == "HOLD":
             continue
         decision = executor.build_decision(
@@ -194,19 +264,38 @@ def run_strategy(
 @app.command("backtest")
 def backtest(
     strategy: str = typer.Option("momentum", help="Strategy name"),
-    symbols: Optional[List[str]] = typer.Argument(None, help="Symbols to backtest"),
+    symbols: list[str] | None = typer.Argument(None, help="Symbols to backtest"),
     days: int = typer.Option(365, help="Backtest window"),
     initial_cash: float = typer.Option(100000, help="Initial cash"),
+    walk_forward: bool = typer.Option(False, help="Run walk-forward evaluation"),
+    splits: int = typer.Option(5, help="Walk-forward splits"),
+    benchmark: str | None = typer.Option(
+        None,
+        help="Optional benchmark symbol for buy-and-hold comparison",
+    ),
+    strategy_param: list[str] | None = typer.Option(
+        None,
+        "--strategy-param",
+        "-p",
+        help="Strategy param override, e.g. mode=fast",
+    ),
 ) -> None:
     """Run a simple backtest."""
     registry = get_strategy_registry()
     symbols_list = _load_symbols(symbols)
+    strategy_params = _parse_strategy_params(strategy_param or [])
+    if strategy == "multi_agent" and "mode" not in strategy_params:
+        strategy_params["mode"] = "fast"
+    benchmark_symbol = benchmark.upper() if benchmark else None
 
     provider = AlpacaDataProvider()
     start_date = now_et() - timedelta(days=days)
 
     backtester = Backtester(initial_cash=initial_cash, commission=0.01)
-    for symbol in symbols_list:
+    fetch_symbols = list(symbols_list)
+    if benchmark_symbol and benchmark_symbol not in fetch_symbols:
+        fetch_symbols.append(benchmark_symbol)
+    for symbol in fetch_symbols:
         data = provider.get_bars(symbol, "1Day", start_date)
         if data.empty:
             print(f"No data for {symbol}")
@@ -214,30 +303,41 @@ def backtest(
         backtester.add_data(symbol, data)
 
     try:
-        strategy_instance = registry.create(strategy)
+        strategy_instance = registry.create(strategy, strategy_params or None)
     except KeyError as exc:
         print(exc)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     def strategy_func(current_date, current_prices, current_data, historical_data, portfolio):
         return strategy_instance.generate_signals(
             current_date, current_prices, current_data, historical_data, portfolio
         )
 
-    results = backtester.run_backtest(strategy_func, symbols=symbols_list)
+    if walk_forward:
+        results = backtester.run_walk_forward(
+            strategy_func,
+            splits=splits,
+            symbols=symbols_list,
+            benchmark_symbol=benchmark_symbol,
+            strategy=strategy_instance,
+        )
+    else:
+        results = backtester.run_backtest(
+            strategy_func,
+            symbols=symbols_list,
+            benchmark_symbol=benchmark_symbol,
+            strategy=strategy_instance,
+        )
     if not results:
         print("Backtest produced no results.")
         return
 
-    summary = results.get("summary", {})
-    print("Backtest Summary:")
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    _print_backtest_results(results)
 
 
 @app.command("stream-market")
 def stream_market(
-    symbols: Optional[List[str]] = typer.Option(
+    symbols: list[str] | None = typer.Option(
         None,
         "--symbols",
         "-s",
@@ -279,7 +379,7 @@ def stream_market(
             stream = provider.create_crypto_stream(raw_data=raw, loc=crypto_loc)
         except ValueError as exc:
             print(exc)
-            raise typer.Exit(1)
+            raise typer.Exit(1) from exc
     elif asset_type == "option":
         stream = provider.create_option_stream(raw_data=raw)
     else:
@@ -358,6 +458,7 @@ def stream_market(
 
 
 def main() -> None:
+    _configure_numba_cache()
     app()
 
 

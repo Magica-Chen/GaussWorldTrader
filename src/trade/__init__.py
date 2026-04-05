@@ -14,7 +14,6 @@ from .portfolio import (
     PortfolioTracker,
 )
 from .live import LiveTradingEngine, PositionState
-from src.backtest import Backtester
 
 __all__ = [
     "TradingEngine",
@@ -28,7 +27,6 @@ __all__ = [
     "FinancialMetrics",
     "PerformanceAnalyzer",
     "PortfolioTracker",
-    "Backtester",
     "LiveTradingEngine",
     "PositionState",
 ]

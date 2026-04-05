@@ -73,24 +73,43 @@ class FundamentalAnalyzer:
         
         return analysis_result
 
-    def _get_comprehensive_market_data(self, symbol: str) -> Dict[str, Any]:
+    def _get_comprehensive_market_data(
+        self,
+        symbol: str,
+        current_date: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
         """Get comprehensive market data from multiple sources."""
         data: Dict[str, Any] = {}
+        anchor_date = current_date or datetime.now()
+        news_start_date = (anchor_date - timedelta(days=30)).strftime('%Y-%m-%d')
+        sentiment_start_date = (anchor_date - timedelta(days=90)).strftime('%Y-%m-%d')
+        economic_start_date = (anchor_date - timedelta(days=365)).strftime('%Y-%m-%d')
+        anchor_date_str = anchor_date.strftime('%Y-%m-%d')
 
         # Finnhub data
         data['company_profile'] = self.finnhub.get_company_profile(symbol)
         data['basic_financials'] = self.finnhub.get_basic_financials(symbol)
-        data['company_news'] = self.finnhub.get_company_news(symbol)
+        data['company_news'] = self.finnhub.get_company_news(
+            symbol,
+            from_date=news_start_date,
+            to_date=anchor_date_str,
+        )
         data['recommendations'] = self.finnhub.get_recommendation_trends(symbol)
         data['price_target'] = self.finnhub.get_price_target(symbol)
         data['quote'] = self.finnhub.get_quote(symbol)
         data['earnings_surprises'] = self.finnhub.get_earnings_surprises(symbol)
         data['insider_transactions'] = self.finnhub.get_insider_transactions(symbol)
-        data['insider_sentiment'] = self.finnhub.get_insider_sentiment(symbol)
+        data['insider_sentiment'] = self.finnhub.get_insider_sentiment(
+            symbol,
+            from_date=sentiment_start_date,
+            to_date=anchor_date_str,
+        )
 
         # FRED economic data
-        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-        data['economic_indicators'] = self.fred.get_economic_indicators(start_date)
+        data['economic_indicators'] = self.fred.get_economic_indicators(
+            economic_start_date,
+            anchor_date_str,
+        )
 
         return data
     

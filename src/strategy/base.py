@@ -126,6 +126,7 @@ class MarketDataContext:
     that don't need to fetch their own data. Supports stocks, crypto, and options.
     """
 
+    current_date: datetime
     current_prices: Dict[str, float]
     historical_bars: Dict[str, pd.DataFrame]
     portfolio_value: float = 100000.0
