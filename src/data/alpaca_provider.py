@@ -1,46 +1,37 @@
-from datetime import datetime, timedelta
 import logging
 import re
-from typing import List, Dict, Any, Optional, Union
+from datetime import datetime, timedelta
+from typing import Any
 
 import pandas as pd
+
 from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
-from src.utils.timezone_utils import EASTERN, now_et
+from src.utils.timezone_utils import now_et
 
 try:
-    from alpaca.data.historical import (
-        StockHistoricalDataClient, 
-        CryptoHistoricalDataClient, 
-        OptionHistoricalDataClient,
-        NewsClient
-    )
-    from alpaca.data.live import (
-        StockDataStream, 
-        CryptoDataStream, 
-        OptionDataStream,
-        NewsDataStream
-    )
-    from alpaca.data.requests import (
-        StockBarsRequest, 
-        StockLatestQuoteRequest,
-        StockLatestTradeRequest,
-        CryptoBarsRequest,
-        CryptoLatestQuoteRequest, 
-        CryptoLatestTradeRequest,
-        OptionBarsRequest,
-        OptionLatestQuoteRequest,
-        OptionLatestTradeRequest,
-        OptionSnapshotRequest,
-        OptionChainRequest
-    )
+    from alpaca.common.exceptions import APIError
     from alpaca.data.enums import DataFeed
+    from alpaca.data.historical import (
+        CryptoHistoricalDataClient,
+        NewsClient,
+        OptionHistoricalDataClient,
+        StockHistoricalDataClient,
+    )
+    from alpaca.data.live import CryptoDataStream, NewsDataStream, OptionDataStream, StockDataStream
+    from alpaca.data.requests import (
+        CryptoBarsRequest,
+        CryptoLatestQuoteRequest,
+        OptionBarsRequest,
+        OptionChainRequest,
+        OptionLatestQuoteRequest,
+        StockBarsRequest,
+        StockLatestQuoteRequest,
+    )
     from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
     from alpaca.trading.client import TradingClient
     from alpaca.trading.requests import (
-        GetAssetsRequest,
         GetPortfolioHistoryRequest,
     )
-    from alpaca.common.exceptions import APIError
     ALPACA_PY_AVAILABLE = True
 except ImportError:
     logging.warning("alpaca-py not installed, using fallback mode")
@@ -52,7 +43,7 @@ class AlpacaDataProvider:
     Modern Alpaca data provider using alpaca-py SDK with separate clients
     for stocks, options, and crypto data.
     """
-    
+
     def __init__(self):
         if not has_alpaca_credentials():
             raise ValueError("Alpaca API credentials not configured")
@@ -71,7 +62,7 @@ class AlpacaDataProvider:
         self.is_pro_tier = self._check_pro_tier()
 
         logging.info(f"Alpaca Provider initialized - Pro tier: {self.is_pro_tier}")
-    
+
     def _init_clients(self):
         """Initialize all Alpaca clients"""
         api_key = self.settings.alpaca.api_key
@@ -83,7 +74,7 @@ class AlpacaDataProvider:
             secret_key=secret_key,
         )
 
-        # Option data clients  
+        # Option data clients
         self.option_historical_client = OptionHistoricalDataClient(
             api_key=api_key,
             secret_key=secret_key,
@@ -166,7 +157,7 @@ class AlpacaDataProvider:
             secret_key=self.settings.alpaca.secret_key or "",
             raw_data=raw_data
         )
-    
+
     def _check_pro_tier(self) -> bool:
         """Check if account has pro-tier data access"""
         try:
@@ -184,8 +175,8 @@ class AlpacaDataProvider:
             raise
         except Exception as exc:
             raise RuntimeError("Failed to determine Alpaca data feed tier") from exc
-    
-    def _get_account_info(self) -> Dict[str, Any]:
+
+    def _get_account_info(self) -> dict[str, Any]:
         """Get basic account information"""
         try:
             account = self.trading_client.get_account()
@@ -199,17 +190,17 @@ class AlpacaDataProvider:
             }
         except Exception as exc:
             raise RuntimeError("Failed to retrieve Alpaca account info") from exc
-    
+
     def get_stock_bars(self, symbol: str, timeframe: str = '1Day',
-                      start: Optional[datetime] = None,
-                      end: Optional[datetime] = None,
+                      start: datetime | None = None,
+                      end: datetime | None = None,
                       limit: int = 1000) -> pd.DataFrame:
         """Get historical stock bars using StockHistoricalDataClient"""
         if start is None:
             start = now_et() - timedelta(days=365)
         if end is None:
             end = now_et()
-        
+
         tf = self._parse_timeframe(timeframe)
         feed = "sip" if self.is_pro_tier else "iex"
 
@@ -224,8 +215,8 @@ class AlpacaDataProvider:
 
         bars = self.stock_historical_client.get_stock_bars(request)
         return self._process_stock_bars(bars, symbol)
-    
-    def get_stock_latest_quote(self, symbol: str) -> Dict[str, Any]:
+
+    def get_stock_latest_quote(self, symbol: str) -> dict[str, Any]:
         """Get latest quote for a stock"""
         feed = "sip" if self.is_pro_tier else "iex"
 
@@ -248,10 +239,10 @@ class AlpacaDataProvider:
             'timestamp': quote.timestamp,
             'feed_type': feed
         }
-    
+
     def get_option_bars(self, symbol: str, timeframe: str = '1Day',
-                       start: Optional[datetime] = None,
-                       end: Optional[datetime] = None,
+                       start: datetime | None = None,
+                       end: datetime | None = None,
                        limit: int = 1000) -> pd.DataFrame:
         """Get historical option bars using OptionHistoricalDataClient"""
         if start is None:
@@ -271,8 +262,8 @@ class AlpacaDataProvider:
 
         bars = self.option_historical_client.get_option_bars(request)
         return self._process_option_bars(bars, symbol)
-    
-    def get_option_latest_quote(self, symbol: str) -> Dict[str, Any]:
+
+    def get_option_latest_quote(self, symbol: str) -> dict[str, Any]:
         """Get latest quote for an option"""
         feed = "opra" if self.is_pro_tier else "indicative"
 
@@ -295,7 +286,7 @@ class AlpacaDataProvider:
             'timestamp': quote.timestamp,
             'feed_type': feed
         }
-    
+
     def get_options_chain(self, underlying_symbol: str) -> pd.DataFrame:
         """Get options chain for an underlying symbol"""
         feed = "opra" if self.is_pro_tier else "indicative"
@@ -307,17 +298,17 @@ class AlpacaDataProvider:
 
         chain = self.option_historical_client.get_option_chain(request)
         return self._process_options_chain(chain, underlying_symbol)
-    
+
     def get_crypto_bars(self, symbol: str, timeframe: str = '1Day',
-                       start: Optional[datetime] = None,
-                       end: Optional[datetime] = None,
+                       start: datetime | None = None,
+                       end: datetime | None = None,
                        limit: int = 1000) -> pd.DataFrame:
         """Get historical crypto bars using CryptoHistoricalDataClient"""
         if start is None:
             start = now_et() - timedelta(days=365)
         if end is None:
             end = now_et()
-        
+
         tf = self._parse_timeframe(timeframe)
 
         request = CryptoBarsRequest(
@@ -330,8 +321,8 @@ class AlpacaDataProvider:
 
         bars = self.crypto_historical_client.get_crypto_bars(request)
         return self._process_crypto_bars(bars, symbol)
-    
-    def get_crypto_latest_quote(self, symbol: str) -> Dict[str, Any]:
+
+    def get_crypto_latest_quote(self, symbol: str) -> dict[str, Any]:
         """Get latest quote for a crypto pair"""
         request = CryptoLatestQuoteRequest(symbol_or_symbols=symbol)
         quotes = self.crypto_historical_client.get_crypto_latest_quote(request)
@@ -347,12 +338,12 @@ class AlpacaDataProvider:
             'ask_size': float(quote.ask_size) if quote.ask_size else 0,
             'timestamp': quote.timestamp
         }
-    
-    def get_account(self) -> Dict[str, Any]:
+
+    def get_account(self) -> dict[str, Any]:
         """Get account information"""
         return self.account_info.copy()
-    
-    def get_positions(self) -> List[Dict[str, Any]]:
+
+    def get_positions(self) -> list[dict[str, Any]]:
         """Get account positions"""
         positions = self.trading_client.get_all_positions()
         return [{
@@ -365,7 +356,7 @@ class AlpacaDataProvider:
             'unrealized_plpc': float(pos.unrealized_plpc) if pos.unrealized_plpc else 0
         } for pos in positions]
 
-    def get_portfolio_history(self, period: str = '1M') -> Dict[str, Any]:
+    def get_portfolio_history(self, period: str = '1M') -> dict[str, Any]:
         """Get portfolio history from trading client"""
         request = GetPortfolioHistoryRequest(period=period)
         portfolio_history = self.trading_client.get_portfolio_history(request)
@@ -380,22 +371,22 @@ class AlpacaDataProvider:
             'base_value': getattr(portfolio_history, 'base_value', 100000),
             'timeframe': getattr(portfolio_history, 'timeframe', "1D")
         }
-    
+
     def is_option_symbol(self, symbol: str) -> bool:
         """Check if symbol is an options contract"""
         return (
-            len(symbol) > 10 and 
-            ('C' in symbol[-9:] or 'P' in symbol[-9:]) and 
+            len(symbol) > 10 and
+            ('C' in symbol[-9:] or 'P' in symbol[-9:]) and
             any(char.isdigit() for char in symbol[-8:])
         ) or 'C00' in symbol or 'P00' in symbol
-    
+
     def is_crypto_symbol(self, symbol: str) -> bool:
         """Check if symbol is a crypto pair"""
         return '/' in symbol or symbol.endswith('USD') and len(symbol) > 3
-    
+
     def get_bars(self, symbol: str, timeframe: str = '1Day',
-                start: Optional[datetime] = None,
-                end: Optional[datetime] = None,
+                start: datetime | None = None,
+                end: datetime | None = None,
                 limit: int = 1000) -> pd.DataFrame:
         """Universal method to get bars for any asset type"""
         if self.is_option_symbol(symbol):
@@ -404,8 +395,8 @@ class AlpacaDataProvider:
             return self.get_crypto_bars(symbol, timeframe, start, end, limit)
         else:
             return self.get_stock_bars(symbol, timeframe, start, end, limit)
-    
-    def get_latest_quote(self, symbol: str) -> Dict[str, Any]:
+
+    def get_latest_quote(self, symbol: str) -> dict[str, Any]:
         """Universal method to get latest quote for any asset type"""
         if self.is_option_symbol(symbol):
             return self.get_option_latest_quote(symbol)
@@ -413,7 +404,7 @@ class AlpacaDataProvider:
             return self.get_crypto_latest_quote(symbol)
         else:
             return self.get_stock_latest_quote(symbol)
-    
+
     def _parse_timeframe(self, timeframe: str) -> TimeFrame:
         """Convert timeframe string to alpaca-py TimeFrame enum"""
         timeframe_map = {
@@ -427,29 +418,29 @@ class AlpacaDataProvider:
             '1Month': TimeFrame.Month
         }
         return timeframe_map.get(timeframe, TimeFrame.Day)
-    
+
     def _process_bars(self, bars_response, symbol: str, asset_type: str = 'stock') -> pd.DataFrame:
         """
         Unified bar processing logic for all asset types (stock, option, crypto)
-        
+
         Args:
             bars_response: API response containing bar data
             symbol: The asset symbol
             asset_type: Type of asset ('stock', 'option', 'crypto') for volume type handling
-        
+
         Returns:
             DataFrame with processed bar data
         """
         if not bars_response or not hasattr(bars_response, 'data') or symbol not in bars_response.data:
             return pd.DataFrame()
-        
+
         bars = bars_response.data[symbol]
         data = []
-        
+
         for bar in bars:
             # Handle volume type based on asset type (crypto uses float, others use int)
             volume_value = float(bar.volume) if asset_type == 'crypto' else int(bar.volume)
-            
+
             data.append({
                 'timestamp': bar.timestamp,
                 'open': float(bar.open),
@@ -460,29 +451,29 @@ class AlpacaDataProvider:
                 'trade_count': int(bar.trade_count) if bar.trade_count else 0,
                 'vwap': float(bar.vwap) if bar.vwap else 0
             })
-        
+
         df = pd.DataFrame(data)
         if not df.empty:
             df.set_index('timestamp', inplace=True)
             df.index = pd.to_datetime(df.index)
             df = df.dropna()
-        
+
         return df
-    
+
     def _process_stock_bars(self, bars_response, symbol: str) -> pd.DataFrame:
         """Process stock bars response into DataFrame"""
         return self._process_bars(bars_response, symbol, 'stock')
-    
+
     def _process_option_bars(self, bars_response, symbol: str) -> pd.DataFrame:
         """Process option bars response into DataFrame"""
         return self._process_bars(bars_response, symbol, 'option')
-    
+
     def _process_crypto_bars(self, bars_response, symbol: str) -> pd.DataFrame:
         """Process crypto bars response into DataFrame"""
         return self._process_bars(bars_response, symbol, 'crypto')
 
     @staticmethod
-    def _parse_option_symbol(symbol: str) -> Optional[Dict[str, Any]]:
+    def _parse_option_symbol(symbol: str) -> dict[str, Any] | None:
         """Parse OCC option symbol into underlying, expiry, type, and strike."""
         match = re.fullmatch(r"([A-Z]{1,6})(\d{6})([CP])(\d{8})", symbol.strip().upper())
         if not match:
@@ -500,7 +491,7 @@ class AlpacaDataProvider:
             "option_type": option_type,
             "strike_price": int(strike_str) / 1000,
         }
-    
+
     def _process_options_chain(self, chain_response, underlying_symbol: str) -> pd.DataFrame:
         """Process options chain response into DataFrame"""
         data = []
@@ -534,8 +525,8 @@ class AlpacaDataProvider:
             })
 
         return pd.DataFrame(data)
-    
-    def get_data_feed_info(self) -> Dict[str, Any]:
+
+    def get_data_feed_info(self) -> dict[str, Any]:
         """Get account tier and data-feed information for the UI."""
         account_data = self.get_account()
         return {

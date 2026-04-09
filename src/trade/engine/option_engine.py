@@ -2,21 +2,21 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, date
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any
 
-from alpaca.trading.requests import (
-    MarketOrderRequest,
-    LimitOrderRequest,
-    GetOptionContractsRequest,
-    OptionLegRequest,
-)
 from alpaca.trading.enums import (
-    OrderSide,
-    TimeInForce,
-    OrderClass,
-    OrderType,
     ContractType,
+    OrderClass,
+    OrderSide,
+    OrderType,
+    TimeInForce,
+)
+from alpaca.trading.requests import (
+    GetOptionContractsRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+    OptionLegRequest,
 )
 
 from .trading_engine import TradingEngine
@@ -38,7 +38,7 @@ class TradingOptionEngine(TradingEngine):
     """
 
     def __init__(self, paper_trading: bool = True,
-                 notification_service: "NotificationService" = None) -> None:
+                 notification_service: NotificationService = None) -> None:
         super().__init__(paper_trading, notification_service)
 
     @staticmethod
@@ -67,7 +67,7 @@ class TradingOptionEngine(TradingEngine):
             return ContractType.CALL
         raise ValueError("contract_type must be 'call' or 'put'")
 
-    def _serialize_legs(self, legs: List[Any] | None) -> List[Dict[str, Any]] | None:
+    def _serialize_legs(self, legs: list[Any] | None) -> list[dict[str, Any]] | None:
         if not legs:
             return None
         serialized = []
@@ -94,7 +94,7 @@ class TradingOptionEngine(TradingEngine):
             if days_to_exp == 0:
                 raise ValueError(f"Option {symbol} expires today - exercise caution")
 
-    def parse_option_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def parse_option_symbol(self, symbol: str) -> dict[str, Any] | None:
         """Parse OCC option symbol format.
 
         Format: UNDERLYING(1-6) + DATE(6) + TYPE(1) + STRIKE(8)
@@ -176,11 +176,11 @@ class TradingOptionEngine(TradingEngine):
 
     def submit_mleg_limit_order(
         self,
-        legs: List[OptionLegRequest],
+        legs: list[OptionLegRequest],
         qty: int = 1,
         limit_price: float | None = None,
         time_in_force: str | TimeInForce = "day",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Submit a multi-leg (MLEG) limit order."""
         if not legs:
             raise ValueError("Multi-leg order requires at least one leg")
@@ -211,7 +211,7 @@ class TradingOptionEngine(TradingEngine):
         self._notify_order(order_dict)
         return order_dict
 
-    def check_expiration(self, symbol: str) -> Optional[int]:
+    def check_expiration(self, symbol: str) -> int | None:
         """Check days until expiration for an option symbol.
 
         Returns:
@@ -226,7 +226,7 @@ class TradingOptionEngine(TradingEngine):
         return (exp_date - today).days
 
     def place_market_order(self, symbol: str, qty: float, side: str = 'buy',
-                          time_in_force: str = 'day') -> Dict[str, Any]:
+                          time_in_force: str = 'day') -> dict[str, Any]:
         """Place a market order for options.
 
         Args:
@@ -252,7 +252,7 @@ class TradingOptionEngine(TradingEngine):
         return order_dict
 
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
-                         side: str = 'buy', time_in_force: str = 'day') -> Dict[str, Any]:
+                         side: str = 'buy', time_in_force: str = 'day') -> dict[str, Any]:
         """Place a limit order for options.
 
         Args:
@@ -282,14 +282,14 @@ class TradingOptionEngine(TradingEngine):
         return order_dict
 
     def buy_to_open(self, symbol: str, qty: int,
-                    limit_price: float = None) -> Dict[str, Any]:
+                    limit_price: float = None) -> dict[str, Any]:
         """Buy to open a new option position."""
         if limit_price:
             return self.place_limit_order(symbol, qty, limit_price, side='buy')
         return self.place_market_order(symbol, qty, side='buy')
 
     def sell_to_close(self, symbol: str, qty: int = None,
-                      limit_price: float = None) -> Dict[str, Any]:
+                      limit_price: float = None) -> dict[str, Any]:
         """Sell to close an existing long option position."""
         if qty is None:
             positions = self.get_current_positions()
@@ -303,14 +303,14 @@ class TradingOptionEngine(TradingEngine):
         return self.place_market_order(symbol, qty, side='sell')
 
     def sell_to_open(self, symbol: str, qty: int,
-                     limit_price: float = None) -> Dict[str, Any]:
+                     limit_price: float = None) -> dict[str, Any]:
         """Sell to open a new short option position (writing options)."""
         if limit_price:
             return self.place_limit_order(symbol, qty, limit_price, side='sell')
         return self.place_market_order(symbol, qty, side='sell')
 
     def buy_to_close(self, symbol: str, qty: int = None,
-                     limit_price: float = None) -> Dict[str, Any]:
+                     limit_price: float = None) -> dict[str, Any]:
         """Buy to close an existing short option position."""
         if qty is None:
             positions = self.get_current_positions()
@@ -323,7 +323,7 @@ class TradingOptionEngine(TradingEngine):
             return self.place_limit_order(symbol, qty, limit_price, side='buy')
         return self.place_market_order(symbol, qty, side='buy')
 
-    def get_option_positions(self) -> List[Dict[str, Any]]:
+    def get_option_positions(self) -> list[dict[str, Any]]:
         """Get only option positions with parsed symbol data."""
         positions = self.get_current_positions()
         option_positions = []
@@ -337,13 +337,13 @@ class TradingOptionEngine(TradingEngine):
 
         return option_positions
 
-    def get_expiring_positions(self, days: int = 7) -> List[Dict[str, Any]]:
+    def get_expiring_positions(self, days: int = 7) -> list[dict[str, Any]]:
         """Get option positions expiring within specified days."""
         positions = self.get_option_positions()
         return [p for p in positions if p.get('days_to_expiration', 999) <= days]
 
     def roll_position(self, current_symbol: str, new_symbol: str,
-                      qty: int = None, limit_price: float = None) -> Dict[str, Any]:
+                      qty: int = None, limit_price: float = None) -> dict[str, Any]:
         """Roll an option position to a new expiration/strike.
 
         This closes the current position and opens a new one.

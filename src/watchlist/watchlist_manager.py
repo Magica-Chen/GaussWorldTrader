@@ -5,10 +5,10 @@ Handles watchlist operations including reading, writing, adding, and removing sy
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any
-import logging
+from typing import Any
 
 from src.utils.asset_utils import (
     infer_asset_type,
@@ -25,10 +25,10 @@ class WatchlistValidationError(ValueError):
 
 class WatchlistManager:
     """Manages watchlist operations with JSON persistence"""
-    
-    def __init__(self, watchlist_file: Optional[str] = None):
+
+    def __init__(self, watchlist_file: str | None = None):
         """Initialize watchlist manager
-        
+
         Args:
             watchlist_file: Path to watchlist JSON file. If None, uses default location.
         """
@@ -38,10 +38,10 @@ class WatchlistManager:
             self.watchlist_file = project_root / "watchlist.json"
         else:
             self.watchlist_file = Path(watchlist_file)
-        
+
         # Ensure the file exists
         self._ensure_watchlist_exists()
-    
+
     def _ensure_watchlist_exists(self):
         """Ensure watchlist file exists with default content"""
         if not self.watchlist_file.exists():
@@ -65,7 +65,7 @@ class WatchlistManager:
                     "version": "2.0"
                 }
             }
-            
+
             try:
                 with open(self.watchlist_file, 'w') as f:
                     json.dump(default_watchlist, f, indent=2)
@@ -74,7 +74,7 @@ class WatchlistManager:
                 logger.exception("Error creating default watchlist")
                 raise
 
-    def _normalize_entry(self, entry: Any) -> Dict[str, str]:
+    def _normalize_entry(self, entry: Any) -> dict[str, str]:
         if isinstance(entry, str):
             symbol = normalize_symbol(entry)
             if not symbol:
@@ -96,8 +96,8 @@ class WatchlistManager:
             return {"symbol": normalized_symbol, "asset_type": asset_type}
         raise WatchlistValidationError(f"Unsupported watchlist entry type: {type(entry).__name__}")
 
-    def _normalize_watchlist_entries(self, entries: Any) -> List[Dict[str, str]]:
-        normalized: List[Dict[str, str]] = []
+    def _normalize_watchlist_entries(self, entries: Any) -> list[dict[str, str]]:
+        normalized: list[dict[str, str]] = []
         seen = set()
         for index, entry in enumerate(entries or []):
             normalized_entry = self._normalize_entry(entry)
@@ -110,11 +110,11 @@ class WatchlistManager:
             seen.add(key)
             normalized.append(normalized_entry)
         return normalized
-    
-    def _load_watchlist(self) -> Dict:
+
+    def _load_watchlist(self) -> dict:
         """Load watchlist from JSON file"""
         try:
-            with open(self.watchlist_file, 'r') as f:
+            with open(self.watchlist_file) as f:
                 data = json.load(f)
                 data["watchlist"] = self._normalize_watchlist_entries(data.get("watchlist", []))
                 if "metadata" not in data:
@@ -135,8 +135,8 @@ class WatchlistManager:
         except OSError:
             logger.exception("Error loading watchlist")
             raise
-    
-    def _save_watchlist(self, data: Dict):
+
+    def _save_watchlist(self, data: dict):
         """Save watchlist to JSON file"""
         try:
             data["watchlist"] = self._normalize_watchlist_entries(data.get("watchlist", []))
@@ -150,15 +150,15 @@ class WatchlistManager:
                 }
             else:
                 data["metadata"]["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
+
             with open(self.watchlist_file, 'w') as f:
                 json.dump(data, f, indent=2)
             logger.info(f"Watchlist saved to {self.watchlist_file}")
         except OSError:
             logger.exception("Error saving watchlist")
             raise
-    
-    def get_watchlist_entries(self, asset_type: Optional[str] = None) -> List[Dict[str, str]]:
+
+    def get_watchlist_entries(self, asset_type: str | None = None) -> list[dict[str, str]]:
         """Get current watchlist entries.
 
         Args:
@@ -174,62 +174,62 @@ class WatchlistManager:
             entries = [entry for entry in entries if entry.get("asset_type") == normalized_type]
         return entries
 
-    def get_watchlist(self, asset_type: Optional[str] = None) -> List[str]:
+    def get_watchlist(self, asset_type: str | None = None) -> list[str]:
         """Get current watchlist symbols
-        
+
         Returns:
             List of watchlist symbols
         """
         entries = self.get_watchlist_entries(asset_type)
         return [entry["symbol"] for entry in entries]
-    
+
     def add_symbol(self, symbol: str, asset_type: str = "stock") -> bool:
         """Add symbol to watchlist
-        
+
         Args:
             symbol: Stock symbol to add
             asset_type: Asset type (stock, crypto, option)
-            
+
         Returns:
             True if added, False if already exists
         """
         normalized_type = normalize_asset_type(asset_type)
         symbol = normalize_symbol(symbol, normalized_type)
-        
+
         if not symbol:
             raise ValueError("Symbol cannot be empty")
-        
+
         data = self._load_watchlist()
         watchlist = data.get("watchlist", [])
         entry = {"symbol": symbol, "asset_type": normalized_type}
-        
+
         if any(item["symbol"] == symbol and item["asset_type"] == normalized_type for item in watchlist):
             logger.info(f"Symbol {symbol} ({normalized_type}) already in watchlist")
             return False
-        
+
         watchlist.append(entry)
         data["watchlist"] = watchlist
         self._save_watchlist(data)
-        
+
         logger.info(f"Added {symbol} ({normalized_type}) to watchlist")
         return True
-    
-    def remove_symbol(self, symbol: str, asset_type: Optional[str] = None) -> bool:
+
+    def remove_symbol(self, symbol: str, asset_type: str | None = None) -> bool:
         """Remove symbol from watchlist
-        
+
         Args:
             symbol: Stock symbol to remove
             asset_type: Optional asset type filter
-            
+
         Returns:
             True if removed, False if not found
         """
         normalized_type = normalize_asset_type(asset_type) if asset_type else None
         symbol = normalize_symbol(symbol, normalized_type)
-        
+
         data = self._load_watchlist()
         watchlist = data.get("watchlist", [])
-        
+
         if normalized_type:
             remaining = [
                 item for item in watchlist
@@ -241,106 +241,106 @@ class WatchlistManager:
         if len(remaining) == len(watchlist):
             logger.info(f"Symbol {symbol} not found in watchlist")
             return False
-        
+
         data["watchlist"] = remaining
         self._save_watchlist(data)
-        
+
         logger.info(f"Removed {symbol} from watchlist")
         return True
-    
+
     def clear_watchlist(self):
         """Clear all symbols from watchlist"""
         data = self._load_watchlist()
         data["watchlist"] = []
         self._save_watchlist(data)
         logger.info("Cleared watchlist")
-    
-    def set_watchlist(self, symbols: List[str]):
+
+    def set_watchlist(self, symbols: list[str]):
         """Set entire watchlist
-        
+
         Args:
             symbols: List of symbols to set as watchlist
         """
         entries = self._normalize_watchlist_entries(symbols)
-        
+
         data = self._load_watchlist()
         data["watchlist"] = entries
         self._save_watchlist(data)
-        
+
         logger.info(f"Set watchlist to {len(entries)} symbols")
-    
-    def get_watchlist_info(self) -> Dict:
+
+    def get_watchlist_info(self) -> dict:
         """Get full watchlist information including metadata
-        
+
         Returns:
             Complete watchlist data including metadata
         """
         return self._load_watchlist()
-    
-    def is_symbol_in_watchlist(self, symbol: str, asset_type: Optional[str] = None) -> bool:
+
+    def is_symbol_in_watchlist(self, symbol: str, asset_type: str | None = None) -> bool:
         """Check if symbol is in watchlist
-        
+
         Args:
             symbol: Stock symbol to check
             asset_type: Optional asset type filter
-            
+
         Returns:
             True if symbol is in watchlist
         """
         symbol = normalize_symbol(symbol, asset_type)
         entries = self.get_watchlist_entries(asset_type)
         return any(entry["symbol"] == symbol for entry in entries)
-    
-    def get_watchlist_size(self, asset_type: Optional[str] = None) -> int:
+
+    def get_watchlist_size(self, asset_type: str | None = None) -> int:
         """Get number of symbols in watchlist
-        
+
         Returns:
             Number of symbols in watchlist
         """
         return len(self.get_watchlist_entries(asset_type))
-    
-    def backup_watchlist(self, backup_file: Optional[str] = None) -> str:
+
+    def backup_watchlist(self, backup_file: str | None = None) -> str:
         """Create backup of current watchlist
-        
+
         Args:
             backup_file: Path for backup file. If None, creates timestamped backup.
-            
+
         Returns:
             Path to backup file
         """
         if backup_file is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_file = f"watchlist_backup_{timestamp}.json"
-        
+
         backup_path = Path(backup_file)
-        
+
         # Copy current watchlist to backup
         data = self._load_watchlist()
         with open(backup_path, 'w') as f:
             json.dump(data, f, indent=2)
-        
+
         logger.info(f"Watchlist backed up to {backup_path}")
         return str(backup_path)
-    
+
     def restore_from_backup(self, backup_file: str):
         """Restore watchlist from backup
-        
+
         Args:
             backup_file: Path to backup file
         """
         backup_path = Path(backup_file)
-        
+
         if not backup_path.exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
-        
+
         try:
-            with open(backup_path, 'r') as f:
+            with open(backup_path) as f:
                 data = json.load(f)
-            
+
             # Validate backup data
             if "watchlist" not in data:
                 raise ValueError("Invalid backup file: missing watchlist")
-            
+
             self._save_watchlist(data)
             logger.info(f"Watchlist restored from {backup_path}")
         except (OSError, json.JSONDecodeError):
@@ -357,9 +357,9 @@ def get_watchlist_manager() -> WatchlistManager:
         _global_manager = WatchlistManager()
     return _global_manager
 
-def get_default_watchlist(asset_type: Optional[str] = None) -> List[str]:
+def get_default_watchlist(asset_type: str | None = None) -> list[str]:
     """Get default watchlist symbols
-    
+
     Returns:
         List of default watchlist symbols
     """
@@ -368,24 +368,24 @@ def get_default_watchlist(asset_type: Optional[str] = None) -> List[str]:
 
 def add_to_watchlist(symbol: str, asset_type: str = "stock") -> bool:
     """Add symbol to default watchlist
-    
+
     Args:
         symbol: Stock symbol to add
         asset_type: Asset type (stock, crypto, option)
-        
+
     Returns:
         True if added, False if already exists
     """
     manager = get_watchlist_manager()
     return manager.add_symbol(symbol, asset_type=asset_type)
 
-def remove_from_watchlist(symbol: str, asset_type: Optional[str] = None) -> bool:
+def remove_from_watchlist(symbol: str, asset_type: str | None = None) -> bool:
     """Remove symbol from default watchlist
-    
+
     Args:
         symbol: Stock symbol to remove
         asset_type: Optional asset type filter
-        
+
     Returns:
         True if removed, False if not found
     """

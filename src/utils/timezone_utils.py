@@ -2,8 +2,9 @@
 Timezone utilities for trading operations
 Centralizes timezone handling for the entire application
 """
-import pytz
 from datetime import datetime, time
+
+import pytz
 
 # Global timezone for all trading operations
 EASTERN = pytz.timezone('US/Eastern')
@@ -28,14 +29,14 @@ def get_market_status(current_time: datetime = None) -> str:
         current_time = EASTERN.localize(current_time)
     else:
         current_time = current_time.astimezone(EASTERN)
-    
+
     # Check if it's a weekend
     if current_time.weekday() >= 5:  # Saturday = 5, Sunday = 6
         return 'closed'
-    
+
     current_time_only = current_time.time()
     market_hours = get_market_hours()
-    
+
     if current_time_only < market_hours['premarket_start']:
         return 'closed'
     elif current_time_only < market_hours['market_open']:

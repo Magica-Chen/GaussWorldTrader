@@ -1,21 +1,21 @@
 from .base import (
+    BaseOptionStrategy,
+    MarketDataContext,
     StrategyBase,
     StrategyMeta,
     StrategySignal,
-    MarketDataContext,
-    BaseOptionStrategy,
 )
-from .registry import get_strategy_registry, StrategyRegistry
-from .option import WheelStrategy, VerticalSpreadStrategy
 from .crypto import BTCVolatilityBreakoutStrategy
+from .option import VerticalSpreadStrategy, WheelStrategy
+from .registry import StrategyRegistry, get_strategy_registry
 from .stock import (
     MacroFactorStrategy,
     MeanReversionStrategy,
     MomentumStrategy,
-    ValueStrategy,
-    TrendFollowingStrategy,
     ScalpingStrategy,
     StatisticalArbitrageStrategy,
+    TrendFollowingStrategy,
+    ValueStrategy,
 )
 
 __all__ = [

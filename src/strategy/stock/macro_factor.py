@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -16,7 +16,6 @@ from src.strategy.base import (
     StrategySignal,
 )
 from src.strategy.utils import latest_price, safe_series
-
 
 ta = TechnicalAnalysis()
 
@@ -47,7 +46,7 @@ class MacroFactorStrategy(StrategyBase):
         "regime, then confirms with a price trend filter."
     )
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, params: dict[str, Any] | None = None) -> None:
         super().__init__(params)
         self.fred = FREDProvider()
         self._macro_cache: dict[str, dict[str, float | None]] = {}
@@ -55,12 +54,12 @@ class MacroFactorStrategy(StrategyBase):
     def generate_signals(
         self,
         current_date: datetime,
-        current_prices: Dict[str, float],
-        current_data: Dict[str, Any],
-        historical_data: Dict[str, pd.DataFrame],
+        current_prices: dict[str, float],
+        current_data: dict[str, Any],
+        historical_data: dict[str, pd.DataFrame],
         portfolio: Any = None,
-    ) -> List[Dict[str, Any]]:
-        signals: List[StrategySignal] = []
+    ) -> list[dict[str, Any]]:
+        signals: list[StrategySignal] = []
         risk_pct = float(self.params["risk_pct"])
 
         for symbol, data in historical_data.items():
@@ -96,10 +95,10 @@ class MacroFactorStrategy(StrategyBase):
         symbol: str,
         current_date: datetime,
         current_price: float,
-        current_data: Dict[str, Any],
+        current_data: dict[str, Any],
         historical_data: pd.DataFrame,
         portfolio: Any = None,
-    ) -> Optional[SignalSnapshot]:
+    ) -> SignalSnapshot | None:
         sma_period = int(self.params["sma_period"])
         if len(historical_data) < sma_period + 1:
             return None
@@ -161,7 +160,7 @@ class MacroFactorStrategy(StrategyBase):
         signal: SignalSnapshot,
         current_price: float,
         current_date: datetime,
-    ) -> Optional[ActionPlan]:
+    ) -> ActionPlan | None:
         if signal.signal == "HOLD":
             return None
 

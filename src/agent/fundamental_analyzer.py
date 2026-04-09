@@ -4,57 +4,59 @@ Fundamental Analysis Engine with AI Integration
 Combines financial data with AI analysis to generate comprehensive reports
 """
 
-from collections.abc import Callable
-import pandas as pd
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
 import logging
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from typing import Any
+
+import pandas as pd
 
 from src.data.finnhub_provider import FinnhubProvider
 from src.data.fred_provider import FREDProvider
 from src.llm import create_provider
 
+
 class FundamentalAnalyzer:
     """Comprehensive fundamental analysis with AI insights"""
-    
-    def __init__(self, 
-                 finnhub_key: str = None, 
+
+    def __init__(self,
+                 finnhub_key: str = None,
                  fred_key: str = None,
                  llm_provider: str = 'openai',
                  llm_model: str = None):
-        
+
         self.finnhub = FinnhubProvider(finnhub_key)
         self.fred = FREDProvider(fred_key)
         self.logger = logging.getLogger(__name__)
-        
+
         self.llm = create_provider(llm_provider, model=llm_model)
         self.llm_available = True
-    
-    def analyze_company(self, symbol: str) -> Dict[str, Any]:
+
+    def analyze_company(self, symbol: str) -> dict[str, Any]:
         """Comprehensive company analysis"""
         self.logger.info(f"Starting fundamental analysis for {symbol}")
-        
+
         # Gather all data
         market_data = self._get_comprehensive_market_data(symbol)
-        
+
         # Perform financial ratio analysis
         financial_analysis = self._analyze_financial_ratios(market_data.get('basic_financials', {}))
-        
+
         # Analyze insider information
         insider_analysis = self._analyze_insider_data(
             market_data.get('insider_transactions', []),
             market_data.get('insider_sentiment', {})
         )
-        
+
         # Economic context analysis
         economic_analysis = self._analyze_economic_context(market_data.get('economic_indicators', {}))
-        
+
         # Analyst recommendations analysis
         analyst_analysis = self._analyze_analyst_recommendations(
             market_data.get('recommendations', {}),
             market_data.get('price_target', {})
         )
-        
+
         # Compile comprehensive report
         analysis_result = {
             'symbol': symbol,
@@ -66,12 +68,12 @@ class FundamentalAnalyzer:
             'analyst_analysis': analyst_analysis,
             'raw_data': market_data
         }
-        
+
         # Generate AI insights if available
         if self.llm_available:
             ai_insights = self._generate_ai_insights(analysis_result)
             analysis_result['ai_insights'] = ai_insights
-        
+
         return analysis_result
 
     def _load_optional_data(
@@ -90,10 +92,10 @@ class FundamentalAnalyzer:
     def _get_comprehensive_market_data(
         self,
         symbol: str,
-        current_date: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        current_date: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get comprehensive market data from multiple sources."""
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         anchor_date = current_date or datetime.now()
         news_start_date = (anchor_date - timedelta(days=30)).strftime('%Y-%m-%d')
         sentiment_start_date = (anchor_date - timedelta(days=90)).strftime('%Y-%m-%d')
@@ -166,8 +168,8 @@ class FundamentalAnalyzer:
         )
 
         return data
-    
-    def _analyze_financial_ratios(self, financials: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _analyze_financial_ratios(self, financials: dict[str, Any]) -> dict[str, Any]:
         """Analyze key financial ratios"""
         analysis = {
             'available': False,
@@ -218,11 +220,11 @@ class FundamentalAnalyzer:
         # Calculate ratio grades
         analysis['ratio_grades'] = self._grade_financial_ratios(analysis)
         return analysis
-    
-    def _grade_financial_ratios(self, ratios: Dict[str, Any]) -> Dict[str, str]:
+
+    def _grade_financial_ratios(self, ratios: dict[str, Any]) -> dict[str, str]:
         """Grade financial ratios"""
         grades = {}
-        
+
         # Valuation grades
         pe_ratio = ratios['valuation_ratios'].get('pe_ratio')
         if pe_ratio:
@@ -234,7 +236,7 @@ class FundamentalAnalyzer:
                 grades['valuation'] = 'C'
             else:
                 grades['valuation'] = 'D'
-        
+
         # Profitability grades
         roe = ratios['profitability_ratios'].get('roe')
         if roe:
@@ -246,7 +248,7 @@ class FundamentalAnalyzer:
                 grades['profitability'] = 'C'
             else:
                 grades['profitability'] = 'D'
-        
+
         # Liquidity grades
         current_ratio = ratios['liquidity_ratios'].get('current_ratio')
         if current_ratio:
@@ -258,11 +260,11 @@ class FundamentalAnalyzer:
                 grades['liquidity'] = 'C'
             else:
                 grades['liquidity'] = 'D'
-        
+
         return grades
-    
-    def _analyze_insider_data(self, insider_transactions: List[Dict[str, Any]], 
-                             insider_sentiment: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _analyze_insider_data(self, insider_transactions: list[dict[str, Any]],
+                             insider_sentiment: dict[str, Any]) -> dict[str, Any]:
         """Analyze insider transactions and sentiment"""
         analysis = {
             'transactions': None,
@@ -278,7 +280,7 @@ class FundamentalAnalyzer:
             if isinstance(insider_sentiment, dict)
             else {}
         )
-        
+
         # Analyze insider transactions
         if transactions:
             transactions_analysis = {
@@ -289,26 +291,26 @@ class FundamentalAnalyzer:
                 'sell_transactions': 0,
                 'insider_activity_level': 'Low'
             }
-            
+
             # Calculate aggregated metrics
             for transaction in transactions[:20]:  # Recent 20 transactions
                 change = transaction.get('change', 0)
                 if isinstance(change, (int, float)):
                     transactions_analysis['net_change'] += change
-                    
+
                     # Count buy/sell based on change sign
                     if change > 0:
                         transactions_analysis['buy_transactions'] += 1
                     elif change < 0:
                         transactions_analysis['sell_transactions'] += 1
-            
+
             # Determine activity level
             total_recent = transactions_analysis['recent_count']
             if total_recent > 15:
                 transactions_analysis['insider_activity_level'] = 'High'
             elif total_recent > 5:
                 transactions_analysis['insider_activity_level'] = 'Moderate'
-            
+
             # Determine sentiment from net change
             net_change = transactions_analysis['net_change']
             if net_change > 50000:
@@ -317,22 +319,22 @@ class FundamentalAnalyzer:
                 transactions_analysis['transaction_sentiment'] = 'Bearish'
             else:
                 transactions_analysis['transaction_sentiment'] = 'Neutral'
-            
+
             analysis['transactions'] = transactions_analysis
-        
+
         # Analyze insider sentiment
         if sentiment_payload and 'data' in sentiment_payload:
             sentiment_data = sentiment_payload['data']
             if sentiment_data:
                 latest_data = sentiment_data[-1] if sentiment_data else {}
-                
+
                 sentiment_analysis = {
                     'latest_mspr': latest_data.get('mspr', 0),
                     'latest_change': latest_data.get('change', 0),
                     'latest_period': f"{latest_data.get('year', 'N/A')}-{latest_data.get('month', 'N/A'):02d}",
                     'data_points': len(sentiment_data)
                 }
-                
+
                 # Interpret MSPR (Monthly Share Purchase Ratio)
                 mspr = sentiment_analysis['latest_mspr']
                 if mspr > 0.5:
@@ -341,38 +343,38 @@ class FundamentalAnalyzer:
                     sentiment_analysis['mspr_interpretation'] = 'Bearish (High insider selling)'
                 else:
                     sentiment_analysis['mspr_interpretation'] = 'Neutral (Balanced activity)'
-                
+
                 analysis['sentiment'] = sentiment_analysis
-        
+
         return analysis
-    
-    def _analyze_economic_context(self, economic_data: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
+
+    def _analyze_economic_context(self, economic_data: dict[str, pd.DataFrame]) -> dict[str, Any]:
         """Analyze economic context"""
         if not economic_data:
             return {}
-        
+
         analysis = {}
-        
+
         for indicator, data in economic_data.items():
             if data.empty:
                 continue
             if 'value' not in data.columns:
                 raise ValueError(f"Economic indicator {indicator} is missing the value column")
-            
+
             latest_value = data['value'].iloc[-1] if not data.empty else None
             previous_value = data['value'].iloc[-2] if len(data) > 1 else None
-            
+
             analysis[indicator] = {
                 'latest_value': latest_value,
                 'previous_value': previous_value,
                 'change': latest_value - previous_value if latest_value and previous_value else None,
                 'trend': 'Rising' if latest_value and previous_value and latest_value > previous_value else 'Falling'
             }
-        
+
         # Economic environment assessment
         fed_rate = analysis.get('Federal_Funds_Rate', {}).get('latest_value', 0)
         unemployment = analysis.get('Unemployment', {}).get('latest_value', 0)
-        
+
         if fed_rate and unemployment:
             if fed_rate < 2 and unemployment < 5:
                 analysis['economic_environment'] = 'Accommodative'
@@ -380,14 +382,14 @@ class FundamentalAnalyzer:
                 analysis['economic_environment'] = 'Challenging'
             else:
                 analysis['economic_environment'] = 'Neutral'
-        
+
         return analysis
-    
-    def _analyze_analyst_recommendations(self, recommendations: Dict[str, Any], 
-                                       price_target: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _analyze_analyst_recommendations(self, recommendations: dict[str, Any],
+                                       price_target: dict[str, Any]) -> dict[str, Any]:
         """Analyze analyst recommendations"""
         analysis = {}
-        
+
         if recommendations:
             recent_rec = recommendations[0] if recommendations else {}
             analysis['recommendations'] = {
@@ -398,7 +400,7 @@ class FundamentalAnalyzer:
                 'strong_sell': recent_rec.get('strongSell', 0),
                 'period': recent_rec.get('period', 'N/A')
             }
-            
+
             # Calculate consensus
             total = sum([
                 recent_rec.get('strongBuy', 0),
@@ -407,7 +409,7 @@ class FundamentalAnalyzer:
                 recent_rec.get('sell', 0),
                 recent_rec.get('strongSell', 0)
             ])
-            
+
             if total > 0:
                 buy_ratio = (recent_rec.get('strongBuy', 0) + recent_rec.get('buy', 0)) / total
                 if buy_ratio > 0.6:
@@ -418,7 +420,7 @@ class FundamentalAnalyzer:
                     analysis['consensus'] = 'Hold'
                 else:
                     analysis['consensus'] = 'Sell'
-        
+
         if price_target:
             analysis['price_target'] = {
                 'target_high': price_target.get('targetHigh'),
@@ -427,14 +429,14 @@ class FundamentalAnalyzer:
                 'target_median': price_target.get('targetMedian'),
                 'last_updated': price_target.get('lastUpdated')
             }
-        
+
         return analysis
-    
-    def _generate_ai_insights(self, analysis_data: Dict[str, Any]) -> str:
+
+    def _generate_ai_insights(self, analysis_data: dict[str, Any]) -> str:
         """Generate AI-powered insights"""
         if not self.llm:
             return "AI insights not available"
-        
+
         # Prepare data for AI analysis
         summary_data = {
             'symbol': analysis_data['symbol'],
@@ -445,14 +447,14 @@ class FundamentalAnalyzer:
             'valuation_ratios': analysis_data['financial_analysis'].get('valuation_ratios', {}),
             'profitability_ratios': analysis_data['financial_analysis'].get('profitability_ratios', {})
         }
-        
+
         return self.llm.analyze_financial_data(summary_data)
-    
-    def generate_report(self, analysis_data: Dict[str, Any]) -> str:
+
+    def generate_report(self, analysis_data: dict[str, Any]) -> str:
         """Generate comprehensive fundamental analysis report"""
         symbol = analysis_data['symbol']
         timestamp = analysis_data['timestamp']
-        
+
         report = f"""
 🌍 GAUSS WORLD TRADER - FUNDAMENTAL ANALYSIS REPORT
 ==================================================
@@ -462,7 +464,7 @@ Generated: {timestamp}
 COMPANY OVERVIEW:
 ----------------
 """
-        
+
         company_profile = analysis_data.get('company_profile', {})
         if company_profile:
             report += f"""
@@ -472,7 +474,7 @@ COMPANY OVERVIEW:
 • Country: {company_profile.get('country', 'N/A')}
 • Website: {company_profile.get('weburl', 'N/A')}
 """
-        
+
         # Financial Analysis Section
         financial = analysis_data.get('financial_analysis', {})
         if financial and financial.get('available'):
@@ -487,7 +489,7 @@ FINANCIAL ANALYSIS:
 • Profitability Grade: {grades.get('profitability', 'N/A')}
 • Liquidity Grade: {grades.get('liquidity', 'N/A')}
 """
-            
+
             valuation = financial.get('valuation_ratios', {})
             if valuation:
                 report += f"""
@@ -496,14 +498,14 @@ Valuation Ratios:
 • P/B Ratio: {valuation.get('pb_ratio', 'N/A')}
 • EV/EBITDA: {valuation.get('ev_ebitda', 'N/A')}
 """
-        
+
         # Insider Analysis
         insider = analysis_data.get('insider_analysis', {})
         if insider:
-            report += f"""
+            report += """
 INSIDER ANALYSIS:
 -----------------"""
-            
+
             # Transactions analysis
             transactions = insider.get('transactions', {})
             if transactions:
@@ -513,7 +515,7 @@ INSIDER ANALYSIS:
 • Activity Level: {transactions.get('insider_activity_level', 'Unknown')}
 • Transaction Sentiment: {transactions.get('transaction_sentiment', 'Neutral')}
 """
-            
+
             # Sentiment analysis
             sentiment = insider.get('sentiment', {})
             if sentiment:
@@ -522,7 +524,7 @@ INSIDER ANALYSIS:
 • MSPR Interpretation: {sentiment.get('mspr_interpretation', 'Unknown')}
 • Data Period: {sentiment.get('latest_period', 'N/A')}
 """
-        
+
         # Economic Context
         economic = analysis_data.get('economic_analysis', {})
         if economic:
@@ -531,15 +533,15 @@ ECONOMIC ENVIRONMENT:
 --------------------
 • Assessment: {economic.get('economic_environment', 'Unknown')}
 """
-            
+
             if 'Federal_Funds_Rate' in economic:
                 fed_data = economic['Federal_Funds_Rate']
                 report += f"• Federal Funds Rate: {fed_data.get('latest_value', 'N/A')}%\n"
-            
+
             if 'Unemployment' in economic:
                 unemployment_data = economic['Unemployment']
                 report += f"• Unemployment Rate: {unemployment_data.get('latest_value', 'N/A')}%\n"
-        
+
         # Analyst Recommendations
         analyst = analysis_data.get('analyst_analysis', {})
         if analyst:
@@ -548,7 +550,7 @@ ANALYST RECOMMENDATIONS:
 -----------------------
 • Consensus: {analyst.get('consensus', 'N/A')}
 """
-            
+
             price_target = analyst.get('price_target', {})
             if price_target:
                 report += f"""
@@ -556,7 +558,7 @@ ANALYST RECOMMENDATIONS:
 • Target High: ${price_target.get('target_high', 'N/A')}
 • Target Low: ${price_target.get('target_low', 'N/A')}
 """
-        
+
         # AI Insights
         ai_insights = analysis_data.get('ai_insights')
         if ai_insights and isinstance(ai_insights, str):
@@ -565,7 +567,7 @@ AI-POWERED INSIGHTS:
 -------------------
 {ai_insights}
 """
-        
+
         report += f"""
 DISCLAIMER:
 ----------
@@ -576,5 +578,5 @@ qualified financial advisor before making investment decisions.
 Generated by Gauss World Trader - Named after Carl Friedrich Gauss
 Report Timestamp: {timestamp}
 """
-        
+
         return report

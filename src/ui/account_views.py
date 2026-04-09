@@ -3,10 +3,9 @@ Account Views Mixin - Account info, positions, portfolio analytics views.
 """
 
 from datetime import datetime
-from typing import Dict, Any
-import pandas as pd
-import streamlit as st
+
 import plotly.graph_objects as go
+import streamlit as st
 
 from src.data import AlpacaDataProvider
 from src.ui.ui_components import UIComponents
@@ -101,7 +100,7 @@ class AccountViewsMixin:
         col1, col2 = st.columns(2)
         with col1:
             st.write("**Asset Allocation**")
-            allocation_data: Dict[str, float] = {'Cash': cash}
+            allocation_data: dict[str, float] = {'Cash': cash}
             for pos in positions:
                 symbol = pos.get('symbol', 'Unknown')
                 market_value = abs(float(pos.get('market_value', 0)))
@@ -124,7 +123,6 @@ class AccountViewsMixin:
             )
             total_pl_pct = (total_pl / portfolio_value * 100) if portfolio_value > 0 else 0
             winners = [pos for pos in positions if float(pos.get('unrealized_pl', 0)) > 0]
-            losers = [pos for pos in positions if float(pos.get('unrealized_pl', 0)) < 0]
             win_rate = (len(winners) / len(positions) * 100) if positions else 0
             st.metric("Total P&L", f"${total_pl:+,.2f}", f"{total_pl_pct:+.2f}%")
             st.metric("Win Rate", f"{win_rate:.1f}%")
@@ -176,7 +174,7 @@ class AccountViewsMixin:
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=dates, y=filtered_equity, mode='lines',
-            name='Portfolio Value', line=dict(color='blue', width=2)
+            name='Portfolio Value', line={'color': 'blue', 'width': 2}
         ))
         fig.update_layout(
             title="Portfolio Performance (30 Days)",

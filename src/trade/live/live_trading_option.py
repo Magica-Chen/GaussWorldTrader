@@ -1,22 +1,21 @@
 """Live options trading with expiration awareness."""
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
 import logging
-from typing import Any, List, Optional
+from datetime import datetime, time, timedelta
+from typing import Any
 
 import pytz
 
-from src.watchlist import WatchlistManager
 from src.strategy.base import StrategyBase
 from src.strategy.registry import get_strategy_registry
+from src.trade.engine import TradingOptionEngine
 from src.utils.asset_utils import merge_symbol_sources
 from src.utils.timezone_utils import format_duration
+from src.watchlist import WatchlistManager
 
-from .live_trading_base import LiveTradingEngine, PositionState
 from .live_runner import run_live_engines
-from src.trade.engine import TradingOptionEngine
-
+from .live_trading_base import LiveTradingEngine, PositionState
 
 EASTERN = pytz.timezone("US/Eastern")
 
@@ -182,7 +181,6 @@ class LiveTradingOption(LiveTradingEngine):
                 self.position = PositionState()
                 return
 
-            total_value = sum(float(p.get('market_value', 0)) for p in positions)
             total_qty = sum(float(p.get('qty', 0)) for p in positions)
 
             if total_qty == 0:
@@ -201,11 +199,11 @@ class LiveTradingOption(LiveTradingEngine):
             )
 
 
-def get_default_option_symbols() -> List[str]:
+def get_default_option_symbols() -> list[str]:
     """Get default option underlying symbols from watchlist and open positions."""
     manager = WatchlistManager()
     watchlist_symbols = manager.get_watchlist(asset_type="option")
-    position_symbols: List[str] = []
+    position_symbols: list[str] = []
     engine = TradingOptionEngine()
     for pos in engine.get_option_positions():
         underlying = pos.get("underlying")
@@ -216,7 +214,7 @@ def get_default_option_symbols() -> List[str]:
 
 
 def create_option_engines(
-    symbols: Optional[List[str]] = None,
+    symbols: list[str] | None = None,
     timeframe: str = "1Day",
     lookback_days: int = 30,
     risk_pct: float = 0.08,
@@ -228,7 +226,7 @@ def create_option_engines(
     strategy: str = "wheel",
     allow_sell_to_open: bool = False,
     order_type: str = "auto",
-) -> List[LiveTradingOption]:
+) -> list[LiveTradingOption]:
     """Create option trading engines without starting them.
 
     Returns:
@@ -257,7 +255,7 @@ def create_option_engines(
 
 
 def run_option_trading(
-    symbols: Optional[List[str]] = None,
+    symbols: list[str] | None = None,
     timeframe: str = "1Day",
     lookback_days: int = 30,
     risk_pct: float = 0.08,

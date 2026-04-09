@@ -22,8 +22,7 @@ from src.strategy.stock import MomentumStrategy, TrendFollowingStrategy, ValueSt
 
 if TYPE_CHECKING:
     from src.llm import BaseLLMProvider
-    from src.strategy.base import SignalSnapshot
-    from src.strategy.base import MarketDataContext
+    from src.strategy.base import MarketDataContext, SignalSnapshot
 
 
 class MultiAgentOrchestrator:

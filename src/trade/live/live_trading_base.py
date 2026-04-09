@@ -6,15 +6,15 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
-from src.data import AlpacaDataProvider
-from src.utils.timezone_utils import now_et
-from src.account.position_manager import convert_crypto_symbol_for_display
 from src.account.account_manager import AccountManager
-from src.strategy.base import ActionPlan, SignalSnapshot
+from src.account.position_manager import convert_crypto_symbol_for_display
+from src.data import AlpacaDataProvider
+from src.strategy.base import ActionPlan
 from src.trade.engine import ExecutionEngine
+from src.utils.timezone_utils import now_et
 
 if TYPE_CHECKING:
     from src.strategy.base import StrategyBase
@@ -26,9 +26,9 @@ class PositionState:
     """Track position state for live trading."""
     qty: float = 0.0
     side: str = "flat"
-    entry_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 class LiveTradingEngine(ABC):
@@ -55,7 +55,7 @@ class LiveTradingEngine(ABC):
         asset_type: str = "stock",
         allow_sell_to_open: bool = False,
         order_type: str = "auto",
-        account_manager: Optional[AccountManager] = None,
+        account_manager: AccountManager | None = None,
     ) -> None:
         self.raw_symbol = symbol
         self.symbol = self._normalize_symbol(symbol)
@@ -88,14 +88,14 @@ class LiveTradingEngine(ABC):
         self._exit_lock = threading.Lock()
         self._exit_in_progress = False
         self._last_monitor_log = 0.0
-        self._latest_price: Optional[float] = None
-        self._latest_timestamp: Optional[datetime] = None
+        self._latest_price: float | None = None
+        self._latest_timestamp: datetime | None = None
         self.position = PositionState()
 
         self._stream = None
-        self._stream_thread: Optional[threading.Thread] = None
+        self._stream_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._background_error: Optional[RuntimeError] = None
+        self._background_error: RuntimeError | None = None
         self.logger = logging.getLogger(f"{self.__class__.__name__}.{self.symbol}")
 
     @abstractmethod
@@ -104,12 +104,12 @@ class LiveTradingEngine(ABC):
         pass
 
     @abstractmethod
-    def _get_trading_engine(self) -> "TradingEngine":
+    def _get_trading_engine(self) -> TradingEngine:
         """Return the appropriate trading engine instance."""
         pass
 
     @abstractmethod
-    def _get_strategy(self) -> "StrategyBase":
+    def _get_strategy(self) -> StrategyBase:
         """Return the appropriate strategy instance."""
         pass
 
@@ -148,7 +148,7 @@ class LiveTradingEngine(ABC):
     def _seconds_until_next_interval(self) -> float:
         """Calculate seconds until next timeframe boundary."""
         interval = self._timeframe_to_seconds()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         epoch = now.timestamp()
         next_boundary = ((int(epoch) // interval) + 1) * interval
         return max(1.0, next_boundary - epoch)
@@ -181,7 +181,7 @@ class LiveTradingEngine(ABC):
             self._raise_if_background_failed()
             self._run_signal_cycle()
             sleep_seconds = self._get_signal_interval_seconds()
-            next_run = datetime.now(timezone.utc) + timedelta(seconds=sleep_seconds)
+            next_run = datetime.now(UTC) + timedelta(seconds=sleep_seconds)
             self.logger.info(
                 "Next signal check at %s (sleep %.0fs)",
                 next_run.isoformat(timespec="seconds"),
@@ -300,7 +300,7 @@ class LiveTradingEngine(ABC):
                 self.position.take_profit = decision.take_profit
             self._refresh_position_state()
 
-    def _get_latest_action_plan(self) -> Optional[ActionPlan]:
+    def _get_latest_action_plan(self) -> ActionPlan | None:
         """Generate the latest action plan from the strategy."""
         start_date = now_et() - timedelta(days=self.lookback_days)
         bars = self.provider.get_bars(self.symbol, self.timeframe, start_date)
@@ -326,7 +326,7 @@ class LiveTradingEngine(ABC):
             def __init__(self, value: float) -> None:
                 self.value = value
 
-            def get_portfolio_value(self, _prices: Dict[str, float]) -> float:
+            def get_portfolio_value(self, _prices: dict[str, float]) -> float:
                 return self.value
 
         snapshot = self.strategy.get_signal(

@@ -3,8 +3,9 @@ Analysis Views Mixin - Live analysis, streams, and news views.
 """
 
 from datetime import timedelta
-import streamlit as st
+
 import plotly.graph_objects as go
+import streamlit as st
 
 from src.data import AlpacaDataProvider
 from src.utils.timezone_utils import now_et
@@ -76,11 +77,11 @@ class AnalysisViewsMixin:
                 sma_50 = data['close'].rolling(window=50).mean()
                 fig.add_trace(go.Scatter(
                     x=data.index, y=sma_20, mode='lines', name='SMA 20',
-                    line=dict(color='orange', width=1)
+                    line={'color': 'orange', 'width': 1}
                 ))
                 fig.add_trace(go.Scatter(
                     x=data.index, y=sma_50, mode='lines', name='SMA 50',
-                    line=dict(color='purple', width=1)
+                    line={'color': 'purple', 'width': 1}
                 ))
                 fig.update_layout(title=f"{symbol} Price Chart", height=500, showlegend=True)
                 st.plotly_chart(fig, use_container_width=True)
@@ -99,13 +100,10 @@ class AnalysisViewsMixin:
 
         if current_price > sma_20 > sma_50:
             trend = "Bullish"
-            trend_color = "green"
         elif current_price < sma_20 < sma_50:
             trend = "Bearish"
-            trend_color = "red"
         else:
             trend = "Neutral"
-            trend_color = "yellow"
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -270,7 +268,6 @@ class AnalysisViewsMixin:
                     if not data.empty:
                         current_price = float(data['close'].iloc[-1])
                         sma_20 = float(data['close'].rolling(window=20).mean().iloc[-1])
-                        sma_50 = float(data['close'].rolling(window=min(50, len(data))).mean().iloc[-1])
                         volatility = data['close'].pct_change().std() * 100
 
                         st.write(f"**{report_type} for {symbol}**")

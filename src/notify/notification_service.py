@@ -8,7 +8,7 @@ import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -89,7 +89,7 @@ class NotificationService:
 
     def __init__(self) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.providers: List[NotificationProvider] = []
+        self.providers: list[NotificationProvider] = []
         self._auto_configure_providers()
 
     def _auto_configure_providers(self) -> None:
@@ -107,7 +107,7 @@ class NotificationService:
         if not self.providers:
             self.logger.info("No notification providers configured")
 
-    def notify_order_submitted(self, order_dict: Dict[str, Any]) -> None:
+    def notify_order_submitted(self, order_dict: dict[str, Any]) -> None:
         """Send notification when order is submitted."""
         if not self.providers:
             return
@@ -116,7 +116,7 @@ class NotificationService:
         for provider in self.providers:
             provider.send(subject, message)
 
-    def notify_order_filled(self, order_dict: Dict[str, Any]) -> None:
+    def notify_order_filled(self, order_dict: dict[str, Any]) -> None:
         """Send notification when order is filled."""
         if not self.providers:
             return
@@ -125,11 +125,11 @@ class NotificationService:
         for provider in self.providers:
             provider.send(subject, message)
 
-    def notify_order_executed(self, order_dict: Dict[str, Any]) -> None:
+    def notify_order_executed(self, order_dict: dict[str, Any]) -> None:
         """Send notification for an executed order. Deprecated: use submitted/filled."""
         self.notify_order_submitted(order_dict)
 
-    def _format_subject(self, order: Dict[str, Any], event: str = "ORDER") -> str:
+    def _format_subject(self, order: dict[str, Any], event: str = "ORDER") -> str:
         """Format notification subject line."""
         symbol = order.get("symbol", "UNKNOWN")
         side = str(order.get("side", "UNKNOWN")).upper()
@@ -137,7 +137,7 @@ class NotificationService:
             side = order["side"].value.upper()
         return f"[GaussWorldTrader] {event}: {side} {symbol}"
 
-    def _format_order_message(self, order: Dict[str, Any]) -> str:
+    def _format_order_message(self, order: dict[str, Any]) -> str:
         """Format order details into readable message."""
         symbol = order.get("symbol", "UNKNOWN")
         side = order.get("side", "UNKNOWN")
@@ -184,7 +184,7 @@ class TradeStreamHandler:
         self.notification_service = notification_service
         self.logger = logging.getLogger(self.__class__.__name__)
         self._stream = None
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._running = False
 
     def start(self) -> None:
@@ -194,6 +194,7 @@ class TradeStreamHandler:
             return
 
         from alpaca.trading.stream import TradingStream
+
         from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
 
         if not has_alpaca_credentials():

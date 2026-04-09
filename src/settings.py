@@ -27,12 +27,12 @@ class APICredentials:
     api_key: str
     secret_key: str | None = None
     base_url: str | None = None
-    
+
     def is_valid(self) -> bool:
         """Check if credentials are valid"""
         return bool(self.api_key and len(self.api_key.strip()) > 10)
 
-@final  
+@final
 @dataclass(frozen=True, slots=True)
 class TradingLimits:
     """Trading risk limits with validation"""
@@ -41,7 +41,7 @@ class TradingLimits:
     max_open_positions: int = 10
     stop_loss_pct: float = 0.05  # 5%
     take_profit_pct: float = 0.15  # 15%
-    
+
     def __post_init__(self) -> None:
         """Validate limits after initialization"""
         if not (0 < self.max_position_size <= 1):
@@ -58,7 +58,7 @@ class PerformanceConfig(BaseModel):
     batch_size: int = Field(default=50, ge=1, le=1000)
     connection_pool_size: int = Field(default=20, ge=5, le=100)
     request_timeout: float = Field(default=30.0, ge=1.0, le=120.0)
-    
+
     @field_validator('max_concurrent_requests')
     @classmethod
     def validate_concurrent_requests(cls, v: int) -> int:
@@ -73,50 +73,50 @@ class OptimizedConfig:
     High-performance configuration system for Python 3.12
     Uses caching, slots, and modern Python features
     """
-    
+
     __slots__ = (
         '_alpaca_credentials', '_finnhub_credentials', '_fred_credentials',
         '_trading_limits', '_performance_config', '_database_url',
         '_log_level', '_config_file_path', '_last_reload'
     )
-    
+
     def __init__(self, config_file: Path | None = None) -> None:
         self._config_file_path = config_file or Path("config.toml")
         self._last_reload: float = 0.0
-        
+
         # Initialize from environment and config file
         self._load_configuration()
-        
+
         version = f"{os.sys.version_info.major}.{os.sys.version_info.minor}"
         logger.info(f"✅ Configuration loaded (Python {version})")
-    
+
     def _load_configuration(self) -> None:
         """Load configuration from environment and files"""
-        
+
         # Load from TOML config file if it exists
         config_data = {}
         if self._config_file_path.exists():
             with open(self._config_file_path, 'rb') as f:
                 config_data = tomllib.load(f)
             logger.info(f"Loaded config from {self._config_file_path}")
-        
+
         # API Credentials
         self._alpaca_credentials = APICredentials(
             api_key=os.getenv('ALPACA_API_KEY', ''),
             secret_key=os.getenv('ALPACA_SECRET_KEY', ''),
             base_url=os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
         )
-        
+
         self._finnhub_credentials = APICredentials(
             api_key=os.getenv('FINNHUB_API_KEY', ''),
             base_url='https://finnhub.io/api/v1'
         )
-        
+
         self._fred_credentials = APICredentials(
             api_key=os.getenv('FRED_API_KEY', ''),
             base_url='https://api.stlouisfed.org/fred'
         )
-        
+
         # Trading limits from config or environment
         limits_config = config_data.get('trading_limits', {})
         self._trading_limits = TradingLimits(
@@ -136,11 +136,11 @@ class OptimizedConfig:
                 os.getenv('TAKE_PROFIT_PCT', limits_config.get('take_profit_pct', 0.15))
             )
         )
-        
+
         # Performance configuration
         perf_config = config_data.get('performance', {})
         self._performance_config = PerformanceConfig(**perf_config)
-        
+
         # Other settings
         database_config = config_data.get('database', {})
         logging_config = config_data.get('logging', {})
@@ -152,44 +152,44 @@ class OptimizedConfig:
             'LOG_LEVEL',
             logging_config.get('level', 'INFO'),
         ).upper()
-        
+
         self._last_reload = datetime.now().timestamp()
-    
+
     @property
     def alpaca(self) -> APICredentials:
         """Alpaca trading API credentials"""
         return self._alpaca_credentials
-    
+
     @property
     def finnhub(self) -> APICredentials:
         """Finnhub news API credentials"""
         return self._finnhub_credentials
-    
+
     @property
     def fred(self) -> APICredentials:
         """FRED economic data API credentials"""
         return self._fred_credentials
-    
+
     @property
     def trading_limits(self) -> TradingLimits:
         """Trading risk limits"""
         return self._trading_limits
-    
+
     @property
     def performance(self) -> PerformanceConfig:
         """Performance configuration"""
         return self._performance_config
-    
+
     @property
     def database_url(self) -> str:
         """Database connection URL"""
         return self._database_url
-    
+
     @property
     def log_level(self) -> str:
         """Logging level"""
         return self._log_level
-    
+
     def validate_all_credentials(self) -> dict[str, bool]:
         """Validate all API credentials"""
         return {
@@ -197,21 +197,21 @@ class OptimizedConfig:
             'finnhub': self.finnhub.is_valid(),
             'fred': self.fred.is_valid()
         }
-    
+
     def get_validation_summary(self) -> str:
         """Get human-readable validation summary"""
         validations = self.validate_all_credentials()
-        
+
         status_emojis = {True: "✅", False: "❌"}
         lines = ["🔧 Configuration Status:"]
-        
+
         for service, is_valid in validations.items():
             emoji = status_emojis[is_valid]
             status = 'Valid' if is_valid else 'Invalid/Missing'
             lines.append(f"  {emoji} {service.capitalize()}: {status}")
-        
+
         return "\n".join(lines)
-    
+
     def reload_if_changed(self, force: bool = False) -> bool:
         """Reload configuration if file has changed"""
         if force:
@@ -221,21 +221,21 @@ class OptimizedConfig:
 
         if not self._config_file_path.exists():
             return False
-        
+
         file_mtime = self._config_file_path.stat().st_mtime
-        
+
         if force or file_mtime > self._last_reload:
             # Reload configuration (properties will automatically use new values)
             self._load_configuration()
             logger.info("🔄 Configuration reloaded")
             return True
-        
+
         return False
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Export configuration to dictionary (for debugging)"""
         validations = self.validate_all_credentials()
-        
+
         return {
             'credentials_status': validations,
             'trading_limits': {
@@ -251,7 +251,7 @@ class OptimizedConfig:
             'config_file': str(self._config_file_path),
             'last_reload': datetime.fromtimestamp(self._last_reload).isoformat()
         }
-    
+
     def export_template(self, output_path: Path) -> None:
         """Export a configuration template file"""
         template_content = '''# Trading System Configuration (Python 3.12+)
@@ -266,7 +266,7 @@ take_profit_pct = 0.15      # Take profit percentage (15%)
 
 [performance]
 max_concurrent_requests = 10     # Maximum concurrent API requests
-cache_ttl_seconds = 30          # Cache time-to-live in seconds  
+cache_ttl_seconds = 30          # Cache time-to-live in seconds
 batch_size = 50                 # Batch size for bulk operations
 connection_pool_size = 20       # HTTP connection pool size
 request_timeout = 30.0          # Request timeout in seconds
@@ -281,7 +281,7 @@ url = "sqlite:///trading_system.db"  # Database connection URL
 # Environment variables still take precedence for sensitive data:
 # ALPACA_API_KEY, ALPACA_SECRET_KEY, FINNHUB_API_KEY, FRED_API_KEY
 '''
-        
+
         output_path.write_text(template_content)
         logger.info(f"📄 Configuration template exported to {output_path}")
 
@@ -326,11 +326,11 @@ __all__ = [
 if __name__ == '__main__':
     # Example of using the optimized config
     config = get_config()
-    
+
     print(config.get_validation_summary())
     print(f"\nTrading limits: {config.trading_limits}")
     print(f"Performance config: {config.performance.dict()}")
-    
+
     # Export template
     template_path = Path("config_template.toml")
     config.export_template(template_path)

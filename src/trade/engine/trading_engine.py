@@ -1,16 +1,16 @@
 """Abstract base trading engine with common functionality for all asset types."""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, TYPE_CHECKING
 import logging
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.notify import NotificationService
 
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import StopOrderRequest
 
 from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
 from src.trade.portfolio import Portfolio
@@ -20,7 +20,7 @@ class TradingEngine(ABC):
     """Abstract base trading engine for Alpaca API integration."""
 
     def __init__(self, paper_trading: bool = True,
-                 notification_service: "NotificationService" = None) -> None:
+                 notification_service: NotificationService = None) -> None:
         if not has_alpaca_credentials():
             raise ValueError("Alpaca API credentials not configured")
         settings = get_config()
@@ -45,7 +45,7 @@ class TradingEngine(ABC):
         """Normalize symbol format. Override in subclasses for asset-specific handling."""
         return symbol.strip().upper()
 
-    def _notify_order(self, order_dict: Dict[str, Any]) -> None:
+    def _notify_order(self, order_dict: dict[str, Any]) -> None:
         """Send notification for order submission if notification service is configured."""
         if self._notification_service:
             self._notification_service.notify_order_submitted(order_dict)
@@ -57,18 +57,18 @@ class TradingEngine(ABC):
 
     @abstractmethod
     def place_market_order(self, symbol: str, qty: float, side: str = 'buy',
-                          time_in_force: str = 'gtc') -> Dict[str, Any]:
+                          time_in_force: str = 'gtc') -> dict[str, Any]:
         """Place a market order. Implementation varies by asset type."""
         pass
 
     @abstractmethod
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
-                         side: str = 'buy', time_in_force: str = 'gtc') -> Dict[str, Any]:
+                         side: str = 'buy', time_in_force: str = 'gtc') -> dict[str, Any]:
         """Place a limit order. Implementation varies by asset type."""
         pass
 
     def place_stop_loss_order(self, symbol: str, qty: float, stop_price: float,
-                             side: str = 'sell', time_in_force: str = 'gtc') -> Dict[str, Any]:
+                             side: str = 'sell', time_in_force: str = 'gtc') -> dict[str, Any]:
         """Place a stop loss order."""
         symbol = self.normalize_symbol(symbol)
         self.validate_order(symbol, qty, side)
@@ -103,7 +103,7 @@ class TradingEngine(ABC):
         self.logger.info(f"Order {order_id} cancelled successfully")
         return True
 
-    def get_order_status(self, order_id: str) -> Dict[str, Any]:
+    def get_order_status(self, order_id: str) -> dict[str, Any]:
         """Get the status of an order."""
         order = self.api.get_order_by_id(order_id)
         return {
@@ -119,7 +119,7 @@ class TradingEngine(ABC):
             'filled_avg_price': float(order.filled_avg_price) if order.filled_avg_price else None
         }
 
-    def get_open_orders(self, symbol: str = None) -> List[Dict[str, Any]]:
+    def get_open_orders(self, symbol: str = None) -> list[dict[str, Any]]:
         """Get all open orders, optionally filtered by symbol."""
         orders = self.api.get_orders(status='open')
         result = []
@@ -139,7 +139,7 @@ class TradingEngine(ABC):
             })
         return result
 
-    def get_account_info(self) -> Dict[str, Any]:
+    def get_account_info(self) -> dict[str, Any]:
         """Get account information."""
         account = self.api.get_account()
         return {
@@ -164,7 +164,7 @@ class TradingEngine(ABC):
             'status': getattr(account, 'status', 'UNKNOWN')
         }
 
-    def get_current_positions(self) -> List[Dict[str, Any]]:
+    def get_current_positions(self) -> list[dict[str, Any]]:
         """Get all current positions."""
         from src.account.position_manager import convert_crypto_symbol_for_display
         positions = self.api.get_all_positions()
@@ -179,7 +179,7 @@ class TradingEngine(ABC):
             'current_price': float(pos.current_price) if pos.current_price else None
         } for pos in positions]
 
-    def close_position(self, symbol: str, percentage: float = 1.0) -> Dict[str, Any]:
+    def close_position(self, symbol: str, percentage: float = 1.0) -> dict[str, Any]:
         """Close a position (fully or partially)."""
         positions = self.get_current_positions()
         position = next((p for p in positions if p['symbol'] == symbol), None)
@@ -192,7 +192,7 @@ class TradingEngine(ABC):
 
         return self.place_market_order(symbol, qty_to_close, side)
 
-    def close_all_positions(self) -> List[Dict[str, Any]]:
+    def close_all_positions(self) -> list[dict[str, Any]]:
         """Close all open positions."""
         results = []
         positions = self.get_current_positions()
@@ -218,7 +218,7 @@ class TradingEngine(ABC):
         positions = self.get_current_positions()
         return any(p['symbol'] == symbol and float(p['qty']) != 0 for p in positions)
 
-    def _build_order_dict(self, order: Any) -> Dict[str, Any]:
+    def _build_order_dict(self, order: Any) -> dict[str, Any]:
         """Build standardized order dictionary from Alpaca order object."""
         return {
             'id': order.id,

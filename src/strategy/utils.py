@@ -1,32 +1,27 @@
 """Shared helpers for strategy implementations."""
 from __future__ import annotations
 
-from typing import List, Optional
-
 import pandas as pd
 
 
-def latest_price(data: Optional[pd.DataFrame], price_column: str = "close") -> float:
+def latest_price(data: pd.DataFrame | None, price_column: str = "close") -> float:
     """Return the latest price from a dataframe, falling back safely."""
     if data is None or data.empty:
         return 0.0
-    if price_column in data.columns:
-        series = data[price_column]
-    else:
-        series = data.iloc[:, -1]
+    series = data[price_column] if price_column in data.columns else data.iloc[:, -1]
     if series.empty:
         return 0.0
     return float(series.iloc[-1])
 
 
-def safe_series(series: Optional[pd.Series], default: float = 0.0) -> float:
+def safe_series(series: pd.Series | None, default: float = 0.0) -> float:
     """Return the last value from a series or a default when missing."""
     if series is None or series.empty:
         return default
     return float(series.iloc[-1])
 
 
-def rate_of_change(prices: List[float], period: int) -> List[Optional[float]]:
+def rate_of_change(prices: list[float], period: int) -> list[float | None]:
     """Calculate Rate of Change (ROC) momentum indicator.
 
     ROC = (Current Price - Price n periods ago) / Price n periods ago
@@ -38,7 +33,7 @@ def rate_of_change(prices: List[float], period: int) -> List[Optional[float]]:
     Returns:
         List of ROC values (None for insufficient data points)
     """
-    roc: List[Optional[float]] = []
+    roc: list[float | None] = []
     for i in range(len(prices)):
         if i < period:
             roc.append(None)
@@ -52,8 +47,8 @@ def rate_of_change(prices: List[float], period: int) -> List[Optional[float]]:
 
 
 def detect_momentum_crossover(
-    short_mom: List[Optional[float]],
-    long_mom: List[Optional[float]],
+    short_mom: list[float | None],
+    long_mom: list[float | None],
     threshold: float = 0.005,
 ) -> str:
     """Detect momentum crossover signal.

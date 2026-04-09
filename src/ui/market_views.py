@@ -4,10 +4,11 @@ Market Views Mixin - Market overview, indices, sectors, and cryptocurrency views
 
 import logging
 from datetime import timedelta
+
 import numpy as np
 import pandas as pd
-import streamlit as st
 import plotly.graph_objects as go
+import streamlit as st
 
 from src.data import AlpacaDataProvider
 from src.utils.timezone_utils import now_et
@@ -119,11 +120,11 @@ class MarketViewsMixin:
                 with col2:
                     st.write("**Market Sentiment Indicators**")
                     if current_vxx > 40:
-                        sentiment_color, sentiment_label = "red", "Fearful"
+                        sentiment_label = "Fearful"
                     elif current_vxx > 25:
-                        sentiment_color, sentiment_label = "yellow", "Neutral"
+                        sentiment_label = "Neutral"
                     else:
-                        sentiment_color, sentiment_label = "green", "Greedy"
+                        sentiment_label = "Greedy"
                     vxx_trend = "Rising" if current_vxx > vxx_30_avg else "Falling"
                     st.metric("Current VXX", f"${current_vxx:.2f}", f"30d avg: ${vxx_30_avg:.2f}")
                     st.write(f"**Market Mood:** {sentiment_label}")
@@ -255,7 +256,7 @@ class MarketViewsMixin:
                 sma_20 = btc_data['close'].rolling(window=20).mean()
                 fig.add_trace(go.Scatter(
                     x=btc_data.index, y=sma_20, mode='lines', name='20-day SMA',
-                    line=dict(color='orange', width=1)
+                    line={'color': 'orange', 'width': 1}
                 ))
                 fig.update_layout(
                     title="Bitcoin (BTC/USD) - 30 Day Chart", yaxis_title="Price (USD)",

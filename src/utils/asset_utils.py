@@ -1,10 +1,11 @@
 """Helpers for asset-type inference and symbol normalization."""
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any
 
 
-def normalize_asset_type(asset_type: Optional[str]) -> str:
+def normalize_asset_type(asset_type: str | None) -> str:
     """Normalize asset type names to stock/crypto/option."""
     if not asset_type:
         return "stock"
@@ -49,7 +50,7 @@ def infer_asset_type(symbol: str) -> str:
     return "stock"
 
 
-def normalize_symbol(symbol: str, asset_type: Optional[str] = None) -> str:
+def normalize_symbol(symbol: str, asset_type: str | None = None) -> str:
     """Normalize symbol formatting based on asset type."""
     if not isinstance(symbol, str):
         return ""
@@ -65,9 +66,9 @@ def normalize_symbol(symbol: str, asset_type: Optional[str] = None) -> str:
     return symbol
 
 
-def merge_unique_symbols(symbols: Iterable[str], asset_type: Optional[str] = None) -> List[str]:
+def merge_unique_symbols(symbols: Iterable[str], asset_type: str | None = None) -> list[str]:
     """Merge symbols into a unique, normalized list preserving order."""
-    result: List[str] = []
+    result: list[str] = []
     seen = set()
     for symbol in symbols:
         normalized = normalize_symbol(symbol, asset_type)
@@ -80,9 +81,9 @@ def merge_unique_symbols(symbols: Iterable[str], asset_type: Optional[str] = Non
     return result
 
 
-def parse_symbol_args(symbols: Iterable[str] | None, single_symbol: Optional[str]) -> List[str]:
+def parse_symbol_args(symbols: Iterable[str] | None, single_symbol: str | None) -> list[str]:
     """Parse comma-separated CLI symbol arguments into a list."""
-    parsed: List[str] = []
+    parsed: list[str] = []
     if symbols:
         for item in symbols:
             for part in item.split(","):
@@ -96,7 +97,7 @@ def parse_symbol_args(symbols: Iterable[str] | None, single_symbol: Optional[str
 
 def positions_for_asset_type(
     positions: Iterable[dict[str, Any]], asset_type: str
-) -> List[str]:
+) -> list[str]:
     """Return position symbols filtered by asset type."""
     normalized_type = normalize_asset_type(asset_type)
     symbols = []
@@ -110,9 +111,9 @@ def positions_for_asset_type(
     return merge_unique_symbols(symbols, normalized_type)
 
 
-def merge_symbol_sources(asset_type: str, *symbol_lists: Iterable[str]) -> List[str]:
+def merge_symbol_sources(asset_type: str, *symbol_lists: Iterable[str]) -> list[str]:
     """Merge symbol lists into a unique, normalized list."""
-    combined: List[str] = []
+    combined: list[str] = []
     for symbols in symbol_lists:
         if symbols:
             combined.extend(list(symbols))

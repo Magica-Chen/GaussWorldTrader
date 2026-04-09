@@ -2,11 +2,11 @@
 UI Components - Reusable UI elements for the dashboard.
 """
 
-from typing import List, Dict, Any
+from typing import Any
+
 import pandas as pd
 import streamlit as st
 
-from src.data import AlpacaDataProvider
 from src.trade.engine import TradingStockEngine
 
 
@@ -14,7 +14,7 @@ class UIComponents:
     """Collection of reusable UI components."""
 
     @staticmethod
-    def render_positions_table(positions: List[Dict[str, Any]]):
+    def render_positions_table(positions: list[dict[str, Any]]):
         """Render positions as a formatted table"""
         if not positions:
             st.info("No positions to display")
@@ -50,7 +50,7 @@ class UIComponents:
             st.info("No valid positions to display")
 
     @staticmethod
-    def render_orders_table(orders: List[Dict[str, Any]]):
+    def render_orders_table(orders: list[dict[str, Any]]):
         """Render orders as a formatted table"""
         if not orders:
             st.info("No orders to display")

@@ -1,17 +1,16 @@
 """Live crypto trading with 24/7 streaming."""
 from __future__ import annotations
 
-import logging
-from typing import Any, List, Optional
+from typing import Any
 
-from src.watchlist import WatchlistManager
 from src.strategy.base import StrategyBase
 from src.strategy.registry import get_strategy_registry
-from src.utils.asset_utils import merge_symbol_sources
-
 from src.trade.engine import TradingCryptoEngine
-from .live_trading_base import LiveTradingEngine
+from src.utils.asset_utils import merge_symbol_sources
+from src.watchlist import WatchlistManager
+
 from .live_runner import run_live_engines
+from .live_trading_base import LiveTradingEngine
 
 
 class LiveTradingCrypto(LiveTradingEngine):
@@ -84,7 +83,7 @@ class LiveTradingCrypto(LiveTradingEngine):
         return self._seconds_until_next_interval()
 
 
-def get_default_crypto_symbols() -> List[str]:
+def get_default_crypto_symbols() -> list[str]:
     """Get default crypto symbols from watchlist and open positions."""
     manager = WatchlistManager()
     watchlist_symbols = manager.get_watchlist(asset_type="crypto")
@@ -99,7 +98,7 @@ def get_default_crypto_symbols() -> List[str]:
 
 
 def create_crypto_engines(
-    symbols: Optional[List[str]] = None,
+    symbols: list[str] | None = None,
     timeframe: str = "1Hour",
     lookback_days: int = 14,
     crypto_loc: str = "us",
@@ -110,7 +109,7 @@ def create_crypto_engines(
     auto_exit: bool = True,
     strategy: str = "btc_volatility_breakout",
     order_type: str = "auto",
-) -> List[LiveTradingCrypto]:
+) -> list[LiveTradingCrypto]:
     """Create crypto trading engines without starting them.
 
     Returns:
@@ -138,7 +137,7 @@ def create_crypto_engines(
 
 
 def run_crypto_trading(
-    symbols: Optional[List[str]] = None,
+    symbols: list[str] | None = None,
     timeframe: str = "1Hour",
     lookback_days: int = 14,
     crypto_loc: str = "us",

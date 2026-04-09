@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -15,7 +15,6 @@ from src.strategy.base import ActionPlan, BaseOptionStrategy, SignalSnapshot, St
 from src.strategy.utils import safe_series
 from src.utils.timezone_utils import now_et
 
-
 ta = TechnicalAnalysis()
 
 
@@ -26,7 +25,7 @@ class _SpreadCandidate:
     limit_price: float
     score: float
     reason: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     max_loss: float
 
 
@@ -69,27 +68,27 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         "DTE filters, fixed OTM/width strikes, and IV/greeks computed via Black-Scholes."
     )
 
-    def __init__(self, parameters: Dict[str, Any] | None = None) -> None:
+    def __init__(self, parameters: dict[str, Any] | None = None) -> None:
         super().__init__(parameters)
         self.name = "VerticalSpreadStrategy"
         self.provider = AlpacaDataProvider()
         self.fred = FREDProvider()
-        self._risk_free_cache: Optional[Tuple[date, float]] = None
+        self._risk_free_cache: tuple[date, float] | None = None
 
-    def filter_underlying_stocks(self, client: Any) -> List[str]:
+    def filter_underlying_stocks(self, client: Any) -> list[str]:
         return self.symbol_list
 
     def filter_options(
         self, client: Any, underlying: str, option_type: str = "put"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         return []
 
-    def score_options(self, options: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def score_options(self, options: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return options
 
     def select_best_options(
-        self, scored_options: List[Dict[str, Any]], limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        self, scored_options: list[dict[str, Any]], limit: int | None = None
+    ) -> list[dict[str, Any]]:
         if limit is None:
             return scored_options
         return scored_options[:limit]
@@ -97,12 +96,12 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
     def generate_signals(
         self,
         current_date: datetime,
-        current_prices: Dict[str, float],
-        current_data: Dict[str, Any],
-        historical_data: Dict[str, pd.DataFrame],
+        current_prices: dict[str, float],
+        current_data: dict[str, Any],
+        historical_data: dict[str, pd.DataFrame],
         portfolio: Any = None,
-    ) -> List[Dict[str, Any]]:
-        signals: List[Dict[str, Any]] = []
+    ) -> list[dict[str, Any]]:
+        signals: list[dict[str, Any]] = []
 
         for symbol, data in historical_data.items():
             price = float(current_prices.get(symbol, 0.0))
@@ -142,10 +141,10 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         symbol: str,
         current_date: datetime,
         current_price: float,
-        current_data: Dict[str, Any],
+        current_data: dict[str, Any],
         historical_data: pd.DataFrame,
         portfolio: Any = None,
-    ) -> Optional[SignalSnapshot]:
+    ) -> SignalSnapshot | None:
         if historical_data is None or historical_data.empty:
             return None
 
@@ -236,7 +235,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         signal: SignalSnapshot,
         current_price: float,
         current_date: datetime,
-    ) -> Optional[ActionPlan]:
+    ) -> ActionPlan | None:
         if signal.signal == "HOLD":
             return ActionPlan(
                 symbol=signal.symbol,
@@ -299,7 +298,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         return rate
 
     @staticmethod
-    def _mid_price(row: pd.Series) -> Optional[float]:
+    def _mid_price(row: pd.Series) -> float | None:
         bid = float(row.get("bid_price") or 0.0)
         ask = float(row.get("ask_price") or 0.0)
         if bid > 0 and ask > 0:
@@ -310,7 +309,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         return None
 
     @staticmethod
-    def _parse_expiration(value: Any) -> Optional[date]:
+    def _parse_expiration(value: Any) -> date | None:
         if isinstance(value, date) and not isinstance(value, datetime):
             return value
         if isinstance(value, datetime):
@@ -326,7 +325,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         return None
 
     @staticmethod
-    def _pick_strike(strikes: List[float], target: float, direction: str) -> Optional[float]:
+    def _pick_strike(strikes: list[float], target: float, direction: str) -> float | None:
         if not strikes:
             return None
         if direction == "lte":
@@ -337,7 +336,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
             return min(candidates) if candidates else None
         return None
 
-    def _select_spread(self, symbol: str, spot: float, bias: str) -> Optional[_SpreadCandidate]:
+    def _select_spread(self, symbol: str, spot: float, bias: str) -> _SpreadCandidate | None:
         if spot <= 0:
             return None
         chain = self.provider.get_options_chain(symbol)
@@ -364,7 +363,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
         chain["option_type"] = chain["option_type"].astype(str).str.upper()
         expirations = sorted(chain["expiration"].unique())
 
-        candidates: List[_SpreadCandidate] = []
+        candidates: list[_SpreadCandidate] = []
         if bias == "bull":
             for spread_type in ("bull_put", "bull_call"):
                 candidate = self._best_candidate_for_type(
@@ -387,17 +386,17 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
     def _best_candidate_for_type(
         self,
         chain: pd.DataFrame,
-        expirations: List[date],
+        expirations: list[date],
         spot: float,
         symbol: str,
         spread_type: str,
-    ) -> Optional[_SpreadCandidate]:
+    ) -> _SpreadCandidate | None:
         option_type = "P" if "put" in spread_type else "C"
         width_target = spot * float(self.params["width_pct"])
         otm_pct = float(self.params["otm_pct"])
         r = self._get_risk_free_rate()
 
-        best: Optional[_SpreadCandidate] = None
+        best: _SpreadCandidate | None = None
         for exp in expirations:
             df_exp = chain[(chain["expiration"] == exp) & (chain["option_type"] == option_type)]
             if df_exp.empty:
@@ -545,11 +544,11 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
     def _spread_strikes(
         self,
         spread_type: str,
-        strikes: List[float],
+        strikes: list[float],
         spot: float,
         otm_pct: float,
         width_target: float,
-    ) -> Tuple[Optional[float], Optional[float], str, str, bool]:
+    ) -> tuple[float | None, float | None, str, str, bool]:
         if spread_type == "bull_put":
             short_target = spot * (1 - otm_pct)
             short_strike = self._pick_strike(strikes, short_target, "lte")

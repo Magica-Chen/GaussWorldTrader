@@ -11,14 +11,13 @@ This is intentionally long-only to match the current Alpaca crypto engine style.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
 from src.analysis.technical_analysis import TechnicalAnalysis
 from src.strategy.base import ActionPlan, SignalSnapshot, StrategyBase, StrategyMeta, StrategySignal
 from src.strategy.utils import latest_price, safe_series
-
 
 ta = TechnicalAnalysis()
 
@@ -72,12 +71,12 @@ class BTCVolatilityBreakoutStrategy(StrategyBase):
     def generate_signals(
         self,
         current_date: datetime,
-        current_prices: Dict[str, float],
-        current_data: Dict[str, Any],
-        historical_data: Dict[str, pd.DataFrame],
+        current_prices: dict[str, float],
+        current_data: dict[str, Any],
+        historical_data: dict[str, pd.DataFrame],
         portfolio: Any = None,
-    ) -> List[Dict[str, Any]]:
-        signals: List[StrategySignal] = []
+    ) -> list[dict[str, Any]]:
+        signals: list[StrategySignal] = []
         risk_pct = float(self.params["risk_pct"])
 
         for symbol, data in historical_data.items():
@@ -111,10 +110,10 @@ class BTCVolatilityBreakoutStrategy(StrategyBase):
         symbol: str,
         current_date: datetime,
         current_price: float,
-        current_data: Dict[str, Any],
+        current_data: dict[str, Any],
         historical_data: pd.DataFrame,
         portfolio: Any = None,
-    ) -> Optional[SignalSnapshot]:
+    ) -> SignalSnapshot | None:
         breakout_lookback = int(self.params["breakout_lookback"])
         exit_lookback = int(self.params["exit_lookback"])
         fast_ema_period = int(self.params["fast_ema"])
@@ -199,7 +198,7 @@ class BTCVolatilityBreakoutStrategy(StrategyBase):
         signal: SignalSnapshot,
         current_price: float,
         current_date: datetime,
-    ) -> Optional[ActionPlan]:
+    ) -> ActionPlan | None:
         if signal.signal == "HOLD":
             return None
 
