@@ -4,7 +4,7 @@ Strategy registry and factory.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Union
+from typing import Any
 
 from .base import StrategyBase, StrategyMeta
 from .crypto import BTCVolatilityBreakoutStrategy
@@ -20,7 +20,7 @@ from .stock import (
 )
 
 # Factory type: either a class or a callable that returns a strategy
-StrategyFactory = Union[type[StrategyBase], Callable[[dict | None], StrategyBase]]
+StrategyFactory = type[StrategyBase] | Callable[[dict | None], StrategyBase]
 
 
 def _create_crypto_momentum(params: dict[str, Any] | None = None) -> StrategyBase:

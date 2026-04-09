@@ -1,26 +1,26 @@
 """Execution layer for converting action plans into concrete orders."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
-import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
-from alpaca.trading.requests import OptionLegRequest
 from alpaca.trading.enums import OrderSide
+from alpaca.trading.requests import OptionLegRequest
 
-from src.settings import get_alpaca_base_url
 from src.account.account_manager import AccountManager
+from src.settings import get_alpaca_base_url
 from src.strategy.base import ActionPlan
 
-from .trading_engine import TradingEngine
 from .option_engine import TradingOptionEngine
+from .trading_engine import TradingEngine
 
 
 @dataclass(frozen=True)
 class ExecutionContext:
-    account_info: Dict[str, Any]
-    account_config: Dict[str, Any]
+    account_info: dict[str, Any]
+    account_config: dict[str, Any]
     buying_power: float
     cash: float
     portfolio_value: float
@@ -36,12 +36,12 @@ class ExecutionDecision:
     side: str
     quantity: float
     order_type: str
-    limit_price: Optional[float]
+    limit_price: float | None
     action: str
     reason: str
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class ExecutionEngine:
@@ -54,7 +54,7 @@ class ExecutionEngine:
         allow_sell_to_open: bool = False,
         order_type: str = "auto",
         execute: bool = True,
-        account_manager: Optional[AccountManager] = None,
+        account_manager: AccountManager | None = None,
     ) -> None:
         self.trading_engine = trading_engine
         self.asset_type = asset_type
@@ -112,9 +112,9 @@ class ExecutionEngine:
         position: Any,
         risk_pct: float,
         current_price: float,
-        override_qty: Optional[float] = None,
-        order_pref: Optional[str] = None,
-    ) -> Optional[ExecutionDecision]:
+        override_qty: float | None = None,
+        order_pref: str | None = None,
+    ) -> ExecutionDecision | None:
         action = (action_plan.action or "HOLD").upper()
         if action == "HOLD":
             return None
@@ -282,7 +282,7 @@ class ExecutionEngine:
         return True
 
     @staticmethod
-    def _parse_expiration(value: Any) -> Optional[date]:
+    def _parse_expiration(value: Any) -> date | None:
         if isinstance(value, datetime):
             return value.date()
         if isinstance(value, date):
@@ -323,7 +323,7 @@ class ExecutionEngine:
                 )
         return True
 
-    def _resolve_intent(self, action: str, pos_side: str) -> tuple[Optional[str], Optional[str]]:
+    def _resolve_intent(self, action: str, pos_side: str) -> tuple[str | None, str | None]:
         if action in {"BUY", "BUY_TO_OPEN"}:
             if pos_side == "short":
                 return "close_short", "buy"
@@ -338,7 +338,7 @@ class ExecutionEngine:
             return "open_short", "sell"
         return None, None
 
-    def _short_block_reason(self, context: ExecutionContext) -> Optional[str]:
+    def _short_block_reason(self, context: ExecutionContext) -> str | None:
         if self.asset_type == "crypto":
             return "crypto does not support short selling"
         if not self.allow_sell_to_open:
@@ -357,7 +357,7 @@ class ExecutionEngine:
         context: ExecutionContext,
         risk_pct: float,
         current_price: float,
-        override_qty: Optional[float],
+        override_qty: float | None,
     ) -> float:
         if intent in {"close_long", "close_short"}:
             if override_qty is None:
@@ -382,8 +382,8 @@ class ExecutionEngine:
         action_plan: ActionPlan,
         side: str,
         current_price: float,
-        order_pref: Optional[str],
-    ) -> tuple[str, Optional[float]]:
+        order_pref: str | None,
+    ) -> tuple[str, float | None]:
         preference = (order_pref or self.order_type or "auto").lower()
         if preference in {"market", "limit"}:
             if preference == "market":
@@ -440,7 +440,7 @@ class ExecutionEngine:
     @staticmethod
     def _position_side(position: Any) -> str:
         if hasattr(position, "side"):
-            return getattr(position, "side") or "flat"
+            return position.side or "flat"
         if isinstance(position, dict):
             return position.get("side", "flat")
         return "flat"
@@ -448,7 +448,7 @@ class ExecutionEngine:
     @staticmethod
     def _position_qty(position: Any) -> float:
         if hasattr(position, "qty"):
-            return float(getattr(position, "qty") or 0.0)
+            return float(position.qty or 0.0)
         if isinstance(position, dict):
             return float(position.get("qty") or 0.0)
         return 0.0

@@ -1,8 +1,9 @@
 import logging
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
+from typing import Any
 
 from src.settings import get_config, has_alpaca_credentials
+
 from .finnhub_provider import FinnhubProvider
 
 try:
@@ -41,7 +42,7 @@ class NewsDataProvider:
         if isinstance(result, dict) and "error" in result:
             raise RuntimeError(f"{action} failed: {result['error']}")
 
-    def _normalize_finnhub_article(self, article: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_finnhub_article(self, article: dict[str, Any]) -> dict[str, Any]:
         timestamp = article.get("datetime")
         published = "Unknown"
         sort_ts = 0
@@ -64,7 +65,7 @@ class NewsDataProvider:
             "_sort_ts": sort_ts,
         }
 
-    def _normalize_alpaca_article(self, article: Any) -> Dict[str, Any]:
+    def _normalize_alpaca_article(self, article: Any) -> dict[str, Any]:
         if hasattr(article, "model_dump"):
             payload = article.model_dump()
         elif isinstance(article, dict):
@@ -95,10 +96,10 @@ class NewsDataProvider:
             "_sort_ts": sort_ts,
         }
 
-    def _get_alpaca_news(self, symbols: Optional[List[str]] = None,
-                         start: Optional[datetime] = None,
-                         end: Optional[datetime] = None,
-                         limit: int = 50) -> List[Dict[str, Any]]:
+    def _get_alpaca_news(self, symbols: list[str] | None = None,
+                         start: datetime | None = None,
+                         end: datetime | None = None,
+                         limit: int = 50) -> list[dict[str, Any]]:
         if not self.alpaca_client:
             return []
 
@@ -116,7 +117,7 @@ class NewsDataProvider:
         except Exception as exc:
             raise RuntimeError("Failed to fetch Alpaca news") from exc
 
-        items: List[Any] = []
+        items: list[Any] = []
         if hasattr(result, "data"):
             for news_list in result.data.values():
                 items.extend(news_list)
@@ -125,8 +126,8 @@ class NewsDataProvider:
 
         return [self._normalize_alpaca_article(item) for item in items]
 
-    def _merge_news(self, *news_lists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        combined: List[Dict[str, Any]] = []
+    def _merge_news(self, *news_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        combined: list[dict[str, Any]] = []
         seen = set()
 
         for news in news_lists:
@@ -141,17 +142,17 @@ class NewsDataProvider:
         for article in combined:
             article.pop("_sort_ts", None)
         return combined
-    
-    def get_company_news(self, symbol: str, from_date: Optional[datetime] = None, 
-                        to_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+
+    def get_company_news(self, symbol: str, from_date: datetime | None = None,
+                        to_date: datetime | None = None) -> list[dict[str, Any]]:
         if from_date is None:
             from_date = datetime.now() - timedelta(days=30)
         if to_date is None:
             to_date = datetime.now()
-        
+
         from_str = from_date.strftime('%Y-%m-%d')
         to_str = to_date.strftime('%Y-%m-%d')
-        
+
         result = self.finnhub.get_company_news(symbol, from_str, to_str)
         self._raise_if_error(result, f"Fetch company news for {symbol}")
 
@@ -167,8 +168,8 @@ class NewsDataProvider:
         )
 
         return self._merge_news(finnhub_news, alpaca_news)
-    
-    def get_market_news(self, category: str = "general") -> List[Dict[str, Any]]:
+
+    def get_market_news(self, category: str = "general") -> list[dict[str, Any]]:
         result = self.finnhub.get_market_news(category)
         self._raise_if_error(result, f"Fetch market news for {category}")
 
@@ -180,36 +181,36 @@ class NewsDataProvider:
         alpaca_news = self._get_alpaca_news()
 
         return self._merge_news(finnhub_news, alpaca_news)
-    
-    def get_insider_transactions(self, symbol: str) -> List[Dict[str, Any]]:
+
+    def get_insider_transactions(self, symbol: str) -> list[dict[str, Any]]:
         """Get insider transactions"""
         result = self.finnhub.get_insider_transactions(symbol)
         self._raise_if_error(result, f"Fetch insider transactions for {symbol}")
         return result if isinstance(result, list) else []
-    
-    def get_insider_sentiment(self, symbol: str, 
-                            from_date: Optional[datetime] = None,
-                            to_date: Optional[datetime] = None) -> Dict[str, Any]:
+
+    def get_insider_sentiment(self, symbol: str,
+                            from_date: datetime | None = None,
+                            to_date: datetime | None = None) -> dict[str, Any]:
         """Get insider sentiment"""
         if from_date is None:
             from_date = datetime.now() - timedelta(days=90)
         if to_date is None:
             to_date = datetime.now()
-        
+
         from_str = from_date.strftime('%Y-%m-%d')
         to_str = to_date.strftime('%Y-%m-%d')
-        
+
         result = self.finnhub.get_insider_sentiment(symbol, from_str, to_str)
         self._raise_if_error(result, f"Fetch insider sentiment for {symbol}")
         return result
-    
-    def search_news(self, query: str, from_date: Optional[datetime] = None,
-                   to_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+
+    def search_news(self, query: str, from_date: datetime | None = None,
+                   to_date: datetime | None = None) -> list[dict[str, Any]]:
         if from_date is None:
             from_date = datetime.now() - timedelta(days=7)
         if to_date is None:
             to_date = datetime.now()
-        
+
         news_data = self.get_market_news("general")
 
         filtered_news = []

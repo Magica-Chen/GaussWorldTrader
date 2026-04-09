@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from datetime import time
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest
 
 from .trading_engine import TradingEngine
 
@@ -33,7 +33,7 @@ class TradingStockEngine(TradingEngine):
     EXTENDED_CLOSE = time(20, 0)
 
     def __init__(self, paper_trading: bool = True, allow_fractional: bool = False,
-                 notification_service: "NotificationService" = None) -> None:
+                 notification_service: NotificationService = None) -> None:
         super().__init__(paper_trading, notification_service)
         self.allow_fractional = allow_fractional
 
@@ -47,7 +47,7 @@ class TradingStockEngine(TradingEngine):
                 "Set allow_fractional=True to enable."
             )
 
-    def check_pdt_status(self) -> Dict[str, Any]:
+    def check_pdt_status(self) -> dict[str, Any]:
         """Check Pattern Day Trader status and day trade count."""
         account = self.get_account_info()
         return {
@@ -61,7 +61,7 @@ class TradingStockEngine(TradingEngine):
             )
         }
 
-    def check_margin_requirements(self, symbol: str, qty: float) -> Dict[str, Any]:
+    def check_margin_requirements(self, symbol: str, qty: float) -> dict[str, Any]:
         """Check if account has sufficient margin/buying power for the order."""
         account = self.get_account_info()
         buying_power = account.get('buying_power', 0)
@@ -82,7 +82,7 @@ class TradingStockEngine(TradingEngine):
         return True
 
     def place_market_order(self, symbol: str, qty: float, side: str = 'buy',
-                          time_in_force: str = 'day') -> Dict[str, Any]:
+                          time_in_force: str = 'day') -> dict[str, Any]:
         """Place a market order for stocks.
 
         Args:
@@ -108,7 +108,7 @@ class TradingStockEngine(TradingEngine):
         return order_dict
 
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
-                         side: str = 'buy', time_in_force: str = 'day') -> Dict[str, Any]:
+                         side: str = 'buy', time_in_force: str = 'day') -> dict[str, Any]:
         """Place a limit order for stocks.
 
         Args:
@@ -137,7 +137,7 @@ class TradingStockEngine(TradingEngine):
 
     def place_bracket_order(self, symbol: str, qty: float, side: str,
                            stop_loss: float, take_profit: float,
-                           time_in_force: str = 'day') -> Dict[str, Any]:
+                           time_in_force: str = 'day') -> dict[str, Any]:
         """Place a bracket order with stop loss and take profit.
 
         Alpaca bracket orders create three linked orders:
@@ -145,12 +145,14 @@ class TradingStockEngine(TradingEngine):
         2. Stop loss order (OCO)
         3. Take profit limit order (OCO)
         """
+        from alpaca.trading.enums import OrderClass
         from alpaca.trading.requests import (
             MarketOrderRequest as BracketMarketOrderRequest,
-            TakeProfitRequest,
-            StopLossRequest,
         )
-        from alpaca.trading.enums import OrderClass
+        from alpaca.trading.requests import (
+            StopLossRequest,
+            TakeProfitRequest,
+        )
 
         symbol = self.normalize_symbol(symbol)
         self.validate_order(symbol, qty, side)
@@ -177,7 +179,7 @@ class TradingStockEngine(TradingEngine):
         return order_dict
 
     def short_sell(self, symbol: str, qty: float,
-                   time_in_force: str = 'day') -> Dict[str, Any]:
+                   time_in_force: str = 'day') -> dict[str, Any]:
         """Open a short position.
 
         Note: Requires margin account. May fail for hard-to-borrow stocks.
@@ -187,7 +189,7 @@ class TradingStockEngine(TradingEngine):
 
         return self.place_market_order(symbol, qty, side='sell', time_in_force=time_in_force)
 
-    def cover_short(self, symbol: str, qty: float = None) -> Dict[str, Any]:
+    def cover_short(self, symbol: str, qty: float = None) -> dict[str, Any]:
         """Cover (close) a short position.
 
         Args:

@@ -4,10 +4,10 @@ Core account manager for Alpaca trading.
 Handles account information, authentication, and basic account operations.
 """
 
-from datetime import datetime
 import logging
 import os
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any
 
 import requests
 
@@ -40,7 +40,7 @@ class AccountManager:
             self.base_url = "https://paper-api.alpaca.markets"
         else:
             self.base_url = "https://api.alpaca.markets"
-        
+
         self.logger = logging.getLogger(__name__)
 
         if not self.api_key or not self.secret_key:
@@ -58,8 +58,8 @@ class AccountManager:
         path: str,
         *,
         action: str,
-        params: Dict[str, Any] | None = None,
-        json: Dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
         timeout: int = 10,
         allow_empty: bool = False,
     ) -> Any:
@@ -95,7 +95,7 @@ class AccountManager:
             self.logger.exception("%s returned invalid JSON", action)
             raise AccountAPIError(f"{action} returned invalid JSON") from exc
 
-    def get_account(self) -> Dict[str, Any]:
+    def get_account(self) -> dict[str, Any]:
         """Get account information."""
         account_data = self._request_json(
             "GET",
@@ -107,11 +107,11 @@ class AccountManager:
 
     def get_account_activities(
         self,
-        activity_types: List[str] = None,
+        activity_types: list[str] = None,
         start_date: str = None,
         end_date: str = None,
         page_size: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get account activities."""
         params = {
             "page_size": page_size,
@@ -138,7 +138,7 @@ class AccountManager:
         period: str = "1D",
         timeframe: str = "1Min",
         extended_hours: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get portfolio history."""
         params = {
             "period": period,
@@ -155,7 +155,7 @@ class AccountManager:
         self.logger.info("Portfolio history retrieved successfully")
         return history
 
-    def get_trading_account_status(self) -> Dict[str, Any]:
+    def get_trading_account_status(self) -> dict[str, Any]:
         """Get detailed trading account status."""
         account = self.get_account()
 
@@ -198,7 +198,7 @@ class AccountManager:
         self,
         start_date: str = None,
         end_date: str = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get market calendar."""
         params = {}
         if start_date:
@@ -215,7 +215,7 @@ class AccountManager:
         self.logger.info("Retrieved market calendar for %s days", len(calendar))
         return calendar
 
-    def get_market_clock(self) -> Dict[str, Any]:
+    def get_market_clock(self) -> dict[str, Any]:
         """Get market clock information."""
         clock = self._request_json(
             "GET",
@@ -269,7 +269,7 @@ Using: {"Paper Trading" if "paper" in self.base_url else "Live Trading"}
 
         return summary
 
-    def validate_account(self) -> Dict[str, Any]:
+    def validate_account(self) -> dict[str, Any]:
         """Validate account credentials and status."""
         validation = {
             "credentials_valid": False,
@@ -304,7 +304,7 @@ Using: {"Paper Trading" if "paper" in self.base_url else "Live Trading"}
 
         return validation
 
-    def get_account_configurations(self) -> Dict[str, Any]:
+    def get_account_configurations(self) -> dict[str, Any]:
         """Get account configurations."""
         configurations = self._request_json(
             "GET",
@@ -314,7 +314,7 @@ Using: {"Paper Trading" if "paper" in self.base_url else "Live Trading"}
         self.logger.info("Account configurations retrieved successfully")
         return configurations
 
-    def update_account_configurations(self, configurations: Dict[str, Any]) -> Dict[str, Any]:
+    def update_account_configurations(self, configurations: dict[str, Any]) -> dict[str, Any]:
         """Update account configurations."""
         updated_config = self._request_json(
             "PATCH",

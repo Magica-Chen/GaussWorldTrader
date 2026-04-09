@@ -4,9 +4,9 @@ Position Management for Alpaca Trading
 Handles position tracking, analysis, and management
 """
 
-from datetime import datetime
 import logging
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any
 
 import requests
 
@@ -41,12 +41,12 @@ def convert_crypto_symbol_for_display(symbol: str) -> str:
 
 class PositionManager:
     """Manages trading positions"""
-    
+
     def __init__(self, account_manager):
         self.account_manager = account_manager
         self.logger = logging.getLogger(__name__)
-    
-    def get_all_positions(self) -> List[Dict[str, Any]]:
+
+    def get_all_positions(self) -> list[dict[str, Any]]:
         """Get all current positions"""
         positions = self.account_manager._request_json(
             "GET",
@@ -61,8 +61,8 @@ class PositionManager:
 
         self.logger.info("Retrieved %s positions", len(positions))
         return positions
-    
-    def get_position(self, symbol: str) -> Dict[str, Any]:
+
+    def get_position(self, symbol: str) -> dict[str, Any]:
         """Get position for specific symbol"""
         try:
             response = requests.get(
@@ -96,8 +96,8 @@ class PositionManager:
         except requests.RequestException as exc:
             self.logger.exception("Error retrieving position for %s", symbol)
             raise AccountAPIError(f"Failed to retrieve position for {symbol}: {exc}") from exc
-    
-    def close_position(self, symbol: str, qty: str = None, percentage: str = None) -> Dict[str, Any]:
+
+    def close_position(self, symbol: str, qty: str = None, percentage: str = None) -> dict[str, Any]:
         """Close position (all or partial)"""
         params = {}
         if qty:
@@ -113,8 +113,8 @@ class PositionManager:
         )
         self.logger.info("Position close order submitted for %s", symbol)
         return result
-    
-    def close_all_positions(self, cancel_orders: bool = True) -> Dict[str, Any]:
+
+    def close_all_positions(self, cancel_orders: bool = True) -> dict[str, Any]:
         """Close all positions"""
         params = {}
         if cancel_orders:
@@ -128,8 +128,8 @@ class PositionManager:
         )
         self.logger.info("All positions close orders submitted")
         return {"success": True, "orders": results}
-    
-    def analyze_positions(self) -> Dict[str, Any]:
+
+    def analyze_positions(self) -> dict[str, Any]:
         """Analyze current positions"""
         positions = self.get_all_positions()
         analysis = {
@@ -217,7 +217,7 @@ class PositionManager:
             }
 
         return analysis
-    
+
     def get_positions_summary(self) -> str:
         """Generate formatted positions summary"""
         analysis = self.analyze_positions()
@@ -238,7 +238,7 @@ PERFORMANCE:
 • Total Unrealized P&L: ${analysis['total_unrealized_pnl']:,.2f}
 • Total Unrealized P&L %: {analysis['total_unrealized_pnl_percent']:+.2f}%
 """
-        
+
         # Risk metrics
         if analysis['risk_metrics']:
             risk = analysis['risk_metrics']
@@ -251,7 +251,7 @@ RISK METRICS:
 • Worst Performer: {risk['max_loss_percent']:+.2f}%
 • Average P&L: {risk['avg_pnl_percent']:+.2f}%
 """
-        
+
         # Top winners
         if analysis['top_winners']:
             summary += """
@@ -260,7 +260,7 @@ TOP WINNERS:
 """
             for i, pos in enumerate(analysis['top_winners'][:5], 1):
                 summary += f"{i}. {pos['symbol']:>6}: ${pos['unrealized_pnl']:>8,.2f} ({pos['unrealized_pnl_percent']:+.2f}%)\n"
-        
+
         # Top losers
         if analysis['top_losers']:
             summary += """
@@ -269,7 +269,7 @@ TOP LOSERS:
 """
             for i, pos in enumerate(analysis['top_losers'][:5], 1):
                 summary += f"{i}. {pos['symbol']:>6}: ${pos['unrealized_pnl']:>8,.2f} ({pos['unrealized_pnl_percent']:+.2f}%)\n"
-        
+
         # Largest positions
         if analysis['largest_positions']:
             summary += """
@@ -278,9 +278,9 @@ LARGEST POSITIONS:
 """
             for i, pos in enumerate(analysis['largest_positions'][:5], 1):
                 summary += f"{i}. {pos['symbol']:>6}: ${abs(pos['market_value']):>10,.2f} ({pos['qty']:>8.0f} shares)\n"
-        
+
         return summary
-    
+
     def get_position_details(self, symbol: str) -> str:
         """Get detailed information for a specific position"""
         position = self.get_position(symbol)

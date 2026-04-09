@@ -3,11 +3,12 @@ Shared strategy base classes and metadata.
 """
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-import logging
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -31,7 +32,7 @@ class StrategyMeta:
     description: str
     asset_type: str = "stock"
     visible_in_dashboard: bool = True
-    default_params: Dict[str, Any] = field(default_factory=dict)
+    default_params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -46,22 +47,22 @@ class StrategySignal:
     symbol: str
     action: str  # BUY|SELL|SELL_TO_OPEN|BUY_TO_CLOSE|ROLL|HOLD
     quantity: float
-    price: Optional[float] = None
+    price: float | None = None
     reason: str = ""
-    timestamp: Optional[datetime] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    timestamp: datetime | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
     # Option-specific fields (None for stocks/crypto)
-    underlying_symbol: Optional[str] = None
-    option_type: Optional[str] = None  # "put" or "call"
-    strike_price: Optional[float] = None
-    expiration_date: Optional[datetime] = None
-    delta: Optional[float] = None
-    premium: Optional[float] = None
-    strategy_stage: Optional[str] = None  # e.g., "cash_secured_put", "covered_call"
+    underlying_symbol: str | None = None
+    option_type: str | None = None  # "put" or "call"
+    strike_price: float | None = None
+    expiration_date: datetime | None = None
+    delta: float | None = None
+    premium: float | None = None
+    strategy_stage: str | None = None  # e.g., "cash_secured_put", "covered_call"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "symbol": self.symbol,
             "action": self.action,
@@ -96,11 +97,11 @@ class SignalSnapshot:
 
     symbol: str
     signal: str  # BUY|SELL|HOLD or strategy-specific
-    indicators: Dict[str, float]
+    indicators: dict[str, float]
     signal_strength: float
     reason: str = ""
-    timestamp: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -109,13 +110,13 @@ class ActionPlan:
 
     symbol: str
     action: str  # BUY|SELL|SELL_TO_OPEN|BUY_TO_CLOSE|HOLD
-    target_price: Optional[float]
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
+    target_price: float | None
+    stop_loss: float | None
+    take_profit: float | None
     reason: str = ""
     strength: float = 0.0
-    timestamp: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -127,14 +128,14 @@ class MarketDataContext:
     """
 
     current_date: datetime
-    current_prices: Dict[str, float]
-    historical_bars: Dict[str, pd.DataFrame]
+    current_prices: dict[str, float]
+    historical_bars: dict[str, pd.DataFrame]
     portfolio_value: float = 100000.0
     available_cash: float = 100000.0
-    current_positions: Optional[Dict[str, Any]] = None
+    current_positions: dict[str, Any] | None = None
     # Option-specific data injection (Phase 2)
-    options_chains: Optional[Dict[str, pd.DataFrame]] = None
-    option_positions: Optional[Dict[str, Any]] = None
+    options_chains: dict[str, pd.DataFrame] | None = None
+    option_positions: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -144,16 +145,16 @@ class TradingPlanItem:
     symbol: str
     action: str
     quantity: float
-    price: Optional[float] = None
+    price: float | None = None
     reason: str = ""
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
     asset_type: str = "stock"
     strategy: str = ""
     plan_type: str = "signal"
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "action": self.action,
@@ -178,26 +179,26 @@ class StrategyBase:
     meta: StrategyMeta
     summary: str = ""
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, params: dict[str, Any] | None = None) -> None:
         if not self.meta.description.strip():
             raise ValueError(f"{self.__class__.__name__} must define a non-empty meta.description.")
         if not self._skip_summary_check() and not self.summary.strip():
             raise ValueError(f"{self.__class__.__name__} must define a non-empty summary.")
         self.params = {**self.meta.default_params, **(params or {})}
         self.parameters = self.params
-        self.positions: Dict[str, Any] = {}
-        self.signals: List[Dict[str, Any]] = []
+        self.positions: dict[str, Any] = {}
+        self.signals: list[dict[str, Any]] = []
         self.logger = logging.getLogger(self.meta.name)
         self.name = self.meta.label
 
     def generate_signals(
         self,
         current_date: datetime,
-        current_prices: Dict[str, float],
-        current_data: Dict[str, Any],
-        historical_data: Dict[str, pd.DataFrame],
+        current_prices: dict[str, float],
+        current_data: dict[str, Any],
+        historical_data: dict[str, pd.DataFrame],
         portfolio: Any = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         raise NotImplementedError
 
     def get_signal(
@@ -205,10 +206,10 @@ class StrategyBase:
         symbol: str,
         current_date: datetime,
         current_price: float,
-        current_data: Dict[str, Any],
+        current_data: dict[str, Any],
         historical_data: pd.DataFrame,
         portfolio: Any = None,
-    ) -> Optional[SignalSnapshot]:
+    ) -> SignalSnapshot | None:
         """Compute per-symbol signal snapshot (no sizing)."""
         raise NotImplementedError
 
@@ -217,7 +218,7 @@ class StrategyBase:
         signal: SignalSnapshot,
         current_price: float,
         current_date: datetime,
-    ) -> Optional[ActionPlan]:
+    ) -> ActionPlan | None:
         """Translate a signal snapshot into an abstract action plan."""
         raise NotImplementedError
 
@@ -225,7 +226,7 @@ class StrategyBase:
         self,
         plan: ActionPlan,
         quantity: float,
-        price: Optional[float] = None,
+        price: float | None = None,
     ) -> StrategySignal:
         return StrategySignal(
             symbol=plan.symbol,
@@ -241,11 +242,11 @@ class StrategyBase:
     def generate_trading_plan(
         self,
         current_date: datetime,
-        current_prices: Dict[str, float],
-        current_data: Dict[str, Any],
-        historical_data: Dict[str, pd.DataFrame],
+        current_prices: dict[str, float],
+        current_data: dict[str, Any],
+        historical_data: dict[str, pd.DataFrame],
         portfolio: Any = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return a structured trading plan for the current market snapshot."""
         signals = self.generate_signals(
             current_date,
@@ -264,13 +265,13 @@ class StrategyBase:
             return 0.0
         return float(max(1, int((portfolio_value * risk_pct) / price)))
 
-    def _normalize(self, signals: Iterable[StrategySignal]) -> List[Dict[str, Any]]:
+    def _normalize(self, signals: Iterable[StrategySignal]) -> list[dict[str, Any]]:
         return [signal.to_dict() for signal in signals]
 
     def _plan_from_signals(
-        self, signals: Iterable[Dict[str, Any]], timestamp: Optional[datetime] = None
-    ) -> List[Dict[str, Any]]:
-        plan: List[TradingPlanItem] = []
+        self, signals: Iterable[dict[str, Any]], timestamp: datetime | None = None
+    ) -> list[dict[str, Any]]:
+        plan: list[TradingPlanItem] = []
         for signal in signals:
             quantity = signal.get("quantity", 0)
             quantity_value = float(quantity) if quantity is not None else 0.0
@@ -329,7 +330,7 @@ class StrategyBase:
             return price * (1 + risk.take_profit_pct)
         return price * (1 - risk.take_profit_pct)
 
-    def log_signal(self, signal: Dict[str, Any]) -> None:
+    def log_signal(self, signal: dict[str, Any]) -> None:
         signal_with_timestamp = {**signal, "timestamp": signal.get("timestamp") or datetime.now()}
         self.signals.append(signal_with_timestamp)
 
@@ -337,7 +338,7 @@ class StrategyBase:
         self.positions.clear()
         self.signals.clear()
 
-    def get_strategy_info(self) -> Dict[str, Any]:
+    def get_strategy_info(self) -> dict[str, Any]:
         return {
             "name": self.meta.label,
             "type": self.meta.category,
@@ -371,7 +372,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
         default_params={},
     )
 
-    def __init__(self, parameters: Dict[str, Any] | None = None) -> None:
+    def __init__(self, parameters: dict[str, Any] | None = None) -> None:
         """
         Initialize the base option strategy.
 
@@ -381,8 +382,8 @@ class BaseOptionStrategy(StrategyBase, ABC):
         super().__init__(parameters)
 
         # Option-specific state
-        self.option_positions: Dict[str, Dict[str, Any]] = {}
-        self.option_signals: List[Dict[str, Any]] = []
+        self.option_positions: dict[str, dict[str, Any]] = {}
+        self.option_signals: list[dict[str, Any]] = []
 
         # Load watchlist symbols instead of symbol_list.txt
         self.symbol_list = self._load_watchlist_symbols()
@@ -405,7 +406,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
         # Merge default params with provided params
         self.parameters = {**self.default_params, **self.parameters}
 
-    def _load_watchlist_symbols(self) -> List[str]:
+    def _load_watchlist_symbols(self) -> list[str]:
         """
         Load symbols from watchlist.json filtered to stock entries.
 
@@ -420,7 +421,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
         return symbols
 
     @abstractmethod
-    def filter_underlying_stocks(self, client: Any) -> List[str]:
+    def filter_underlying_stocks(self, client: Any) -> list[str]:
         """
         Filter underlying stocks based on strategy criteria.
 
@@ -434,7 +435,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
     @abstractmethod
     def filter_options(
         self, client: Any, underlying: str, option_type: str = "put"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Filter options based on strategy criteria.
 
@@ -448,7 +449,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
         """
 
     @abstractmethod
-    def score_options(self, options: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def score_options(self, options: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Score options based on strategy-specific criteria.
 
@@ -461,8 +462,8 @@ class BaseOptionStrategy(StrategyBase, ABC):
 
     @abstractmethod
     def select_best_options(
-        self, scored_options: List[Dict[str, Any]], limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        self, scored_options: list[dict[str, Any]], limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """
         Select the best options based on scores.
 
@@ -474,7 +475,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
             List of selected option contracts
         """
 
-    def calculate_option_yield(self, option: Dict[str, Any]) -> float:
+    def calculate_option_yield(self, option: dict[str, Any]) -> float:
         """
         Calculate the yield of an option.
 
@@ -503,7 +504,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
 
         return round(yield_pct, 2)
 
-    def calculate_option_score(self, option: Dict[str, Any]) -> float:
+    def calculate_option_score(self, option: dict[str, Any]) -> float:
         """
         Calculate option score using the wheel strategy scoring formula.
 
@@ -531,7 +532,7 @@ class BaseOptionStrategy(StrategyBase, ABC):
         score = delta_component * time_component * yield_component
         return round(score, 4)
 
-    def check_option_assignment_risk(self, option: Dict[str, Any], underlying_price: float) -> Dict[str, Any]:
+    def check_option_assignment_risk(self, option: dict[str, Any], underlying_price: float) -> dict[str, Any]:
         """
         Check assignment risk for an option position.
 

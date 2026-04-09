@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Optional
 
 
 def _norm_cdf(x: float) -> float:
@@ -57,7 +56,7 @@ def bs_greeks(
     volatility: float,
     option_type: str = "call",
     dividend_yield: float = 0.0,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Return delta, gamma, theta, vega for a European option (per-year theta, per-1.0 vega)."""
     if spot <= 0 or strike <= 0 or time_to_expiry <= 0 or volatility <= 0:
         return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
@@ -107,7 +106,7 @@ def implied_volatility(
     dividend_yield: float = 0.0,
     tol: float = 1e-5,
     max_iter: int = 100,
-) -> Optional[float]:
+) -> float | None:
     """Solve for implied volatility using bisection."""
     if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
         return None

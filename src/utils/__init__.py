@@ -1,4 +1,3 @@
-from .logger import setup_logger
 from .asset_utils import (
     infer_asset_type,
     merge_symbol_sources,
@@ -8,6 +7,7 @@ from .asset_utils import (
     parse_symbol_args,
     positions_for_asset_type,
 )
+from .logger import setup_logger
 
 __all__ = [
     'setup_logger',

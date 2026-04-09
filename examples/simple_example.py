@@ -18,8 +18,8 @@ import pandas as pd
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT_DIR)
 
-from src.settings import has_alpaca_credentials
 from src.data import AlpacaDataProvider
+from src.settings import has_alpaca_credentials
 from src.strategy import MomentumStrategy
 from src.trade import Portfolio
 from src.utils.timezone_utils import now_et

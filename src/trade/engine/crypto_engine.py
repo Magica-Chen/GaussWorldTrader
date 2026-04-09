@@ -1,10 +1,10 @@
 """Crypto-specific trading engine. NO margin, NO short selling, 24/7 trading."""
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest
 
 from .trading_engine import TradingEngine
 
@@ -43,7 +43,7 @@ class TradingCryptoEngine(TradingEngine):
                 raise ValueError("Insufficient cash for crypto purchase (no margin available)")
 
     def place_market_order(self, symbol: str, qty: float, side: str = 'buy',
-                          time_in_force: str = 'gtc') -> Dict[str, Any]:
+                          time_in_force: str = 'gtc') -> dict[str, Any]:
         """Place a market order for crypto."""
         symbol = self.normalize_symbol(symbol)
         self.validate_order(symbol, qty, side)
@@ -62,7 +62,7 @@ class TradingCryptoEngine(TradingEngine):
         return order_dict
 
     def place_limit_order(self, symbol: str, qty: float, limit_price: float,
-                         side: str = 'buy', time_in_force: str = 'gtc') -> Dict[str, Any]:
+                         side: str = 'buy', time_in_force: str = 'gtc') -> dict[str, Any]:
         """Place a limit order for crypto."""
         symbol = self.normalize_symbol(symbol)
         self.validate_order(symbol, qty, side)
@@ -81,7 +81,7 @@ class TradingCryptoEngine(TradingEngine):
         self._notify_order(order_dict)
         return order_dict
 
-    def get_crypto_positions(self) -> list[Dict[str, Any]]:
+    def get_crypto_positions(self) -> list[dict[str, Any]]:
         """Get only crypto positions (filter by symbol format)."""
         positions = self.get_current_positions()
         return [p for p in positions if '/' in p['symbol'] or p['symbol'].endswith('USD')]

@@ -1,10 +1,10 @@
+from .macro_factor import MacroFactorStrategy
+from .mean_reversion import MeanReversionStrategy
 from .momentum import MomentumStrategy
-from .value import ValueStrategy
-from .trend_following import TrendFollowingStrategy
 from .scalping import ScalpingStrategy
 from .statistical_arbitrage import StatisticalArbitrageStrategy
-from .mean_reversion import MeanReversionStrategy
-from .macro_factor import MacroFactorStrategy
+from .trend_following import TrendFollowingStrategy
+from .value import ValueStrategy
 
 __all__ = [
     "MomentumStrategy",

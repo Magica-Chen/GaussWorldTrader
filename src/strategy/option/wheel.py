@@ -5,10 +5,10 @@ Sells cash-secured puts, then sells covered calls after assignment to collect pr
 Repeats the cycle to generate income while managing share ownership.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
+
 import pandas as pd
-from typing import Dict, List, Any, Optional
-import logging
 
 from src.strategy.base import ActionPlan, BaseOptionStrategy, SignalSnapshot, StrategyMeta
 
@@ -37,7 +37,7 @@ class WheelStrategy(BaseOptionStrategy):
         "Filters enforce DTE and yield constraints."
     )
 
-    def __init__(self, parameters: Dict[str, Any] = None):
+    def __init__(self, parameters: dict[str, Any] = None):
         """
         Initialize the Wheel Strategy.
 
@@ -99,10 +99,10 @@ class WheelStrategy(BaseOptionStrategy):
 
         self.logger.info(f"Wheel Strategy initialized with {len(self.symbol_list)} watchlist symbols")
 
-    def generate_signals(self, current_date: datetime, current_prices: Dict[str, float],
-                        current_data: Dict[str, Any],
-                        historical_data: Dict[str, pd.DataFrame],
-                        portfolio: Any = None) -> List[Dict[str, Any]]:
+    def generate_signals(self, current_date: datetime, current_prices: dict[str, float],
+                        current_data: dict[str, Any],
+                        historical_data: dict[str, pd.DataFrame],
+                        portfolio: Any = None) -> list[dict[str, Any]]:
         """
         Generate wheel strategy trading signals.
 
@@ -162,10 +162,10 @@ class WheelStrategy(BaseOptionStrategy):
         symbol: str,
         current_date: datetime,
         current_price: float,
-        current_data: Dict[str, Any],
+        current_data: dict[str, Any],
         historical_data: pd.DataFrame,
         portfolio: Any = None,
-    ) -> Optional[SignalSnapshot]:
+    ) -> SignalSnapshot | None:
         """Wrap legacy multi-symbol logic into a per-symbol snapshot."""
         legacy_signals = self.generate_signals(
             current_date=current_date,
@@ -194,7 +194,7 @@ class WheelStrategy(BaseOptionStrategy):
         signal: SignalSnapshot,
         current_price: float,
         current_date: datetime,
-    ) -> Optional[ActionPlan]:
+    ) -> ActionPlan | None:
         """Convert a legacy wheel signal into an action plan."""
         legacy = signal.metadata.get("legacy_signal", {}) if signal.metadata else {}
         action = legacy.get("action", signal.signal)
@@ -212,8 +212,8 @@ class WheelStrategy(BaseOptionStrategy):
             metadata={"legacy_signal": legacy} if legacy else {},
         )
 
-    def _manage_existing_positions(self, current_prices: Dict[str, float],
-                                 portfolio: Any) -> List[Dict[str, Any]]:
+    def _manage_existing_positions(self, current_prices: dict[str, float],
+                                 portfolio: Any) -> list[dict[str, Any]]:
         """
         Manage existing option positions based on assignment risk and profit targets.
 
@@ -231,7 +231,7 @@ class WheelStrategy(BaseOptionStrategy):
 
         option_positions = getattr(portfolio, 'option_positions', {})
 
-        for symbol, position in option_positions.items():
+        for _, position in option_positions.items():
             underlying = position.get('underlying_symbol')
             current_stock_price = current_prices.get(underlying, 0)
 
@@ -247,8 +247,8 @@ class WheelStrategy(BaseOptionStrategy):
 
         return management_signals
 
-    def _evaluate_position_management(self, position: Dict[str, Any],
-                                    current_stock_price: float) -> Optional[Dict[str, Any]]:
+    def _evaluate_position_management(self, position: dict[str, Any],
+                                    current_stock_price: float) -> dict[str, Any] | None:
         """
         Evaluate whether a position needs management action.
 
@@ -327,9 +327,9 @@ class WheelStrategy(BaseOptionStrategy):
 
         return None
 
-    def _find_cash_secured_put_opportunities(self, current_prices: Dict[str, float],
-                                           current_data: Dict[str, Any],
-                                           portfolio: Any) -> List[Dict[str, Any]]:
+    def _find_cash_secured_put_opportunities(self, current_prices: dict[str, float],
+                                           current_data: dict[str, Any],
+                                           portfolio: Any) -> list[dict[str, Any]]:
         """
         Find opportunities to sell cash-secured puts.
 
@@ -387,9 +387,9 @@ class WheelStrategy(BaseOptionStrategy):
 
         return put_signals
 
-    def _find_covered_call_opportunities(self, current_prices: Dict[str, float],
-                                       current_data: Dict[str, Any],
-                                       portfolio: Any) -> List[Dict[str, Any]]:
+    def _find_covered_call_opportunities(self, current_prices: dict[str, float],
+                                       current_data: dict[str, Any],
+                                       portfolio: Any) -> list[dict[str, Any]]:
         """
         Find opportunities to sell covered calls on owned stocks.
 
@@ -454,8 +454,8 @@ class WheelStrategy(BaseOptionStrategy):
 
         return call_signals
 
-    def _filter_stocks_for_puts(self, current_prices: Dict[str, float],
-                               portfolio: Any) -> List[str]:
+    def _filter_stocks_for_puts(self, current_prices: dict[str, float],
+                               portfolio: Any) -> list[str]:
         """
         Filter stocks suitable for selling cash-secured puts.
 
@@ -495,7 +495,7 @@ class WheelStrategy(BaseOptionStrategy):
 
         return suitable_stocks
 
-    def _get_put_options_for_symbol(self, symbol: str, current_price: float) -> List[Dict[str, Any]]:
+    def _get_put_options_for_symbol(self, symbol: str, current_price: float) -> list[dict[str, Any]]:
         """
         Get suitable put options for a given symbol from the live options chain.
 
@@ -539,11 +539,10 @@ class WheelStrategy(BaseOptionStrategy):
                 continue
 
             delta = row.get('delta')
-            if delta is not None:
-                if not (self.parameters['put_delta_min']
-                        <= abs(delta)
-                        <= self.parameters['put_delta_max']):
-                    continue
+            if delta is not None and not (self.parameters['put_delta_min']
+                    <= abs(delta)
+                    <= self.parameters['put_delta_max']):
+                continue
 
             volume = row.get('volume')
             open_interest = row.get('open_interest')
@@ -569,7 +568,7 @@ class WheelStrategy(BaseOptionStrategy):
 
         return put_options
 
-    def _get_call_options_for_symbol(self, symbol: str, current_price: float) -> List[Dict[str, Any]]:
+    def _get_call_options_for_symbol(self, symbol: str, current_price: float) -> list[dict[str, Any]]:
         """
         Get suitable call options for a given symbol from the live options chain.
 
@@ -610,11 +609,10 @@ class WheelStrategy(BaseOptionStrategy):
                 continue
 
             delta = row.get('delta')
-            if delta is not None:
-                if not (self.parameters['call_delta_min']
-                        <= delta
-                        <= self.parameters['call_delta_max']):
-                    continue
+            if delta is not None and not (self.parameters['call_delta_min']
+                    <= delta
+                    <= self.parameters['call_delta_max']):
+                continue
 
             volume = row.get('volume')
             open_interest = row.get('open_interest')
@@ -672,7 +670,7 @@ class WheelStrategy(BaseOptionStrategy):
 
         return max(0.0, min(1.0, assignment_prob))
 
-    def _estimate_option_price(self, position: Dict[str, Any], current_stock_price: float) -> float:
+    def _estimate_option_price(self, position: dict[str, Any], current_stock_price: float) -> float:
         """
         Estimate current option price based on stock price movement.
 
@@ -713,7 +711,7 @@ class WheelStrategy(BaseOptionStrategy):
 
         return round(estimated_price, 2)
 
-    def _calculate_put_position_size(self, put_option: Dict[str, Any], portfolio: Any) -> int:
+    def _calculate_put_position_size(self, put_option: dict[str, Any], portfolio: Any) -> int:
         """
         Calculate position size for a cash-secured put.
 
@@ -749,8 +747,8 @@ class WheelStrategy(BaseOptionStrategy):
             return min(max_contracts, 3)
         return 0
 
-    def _apply_risk_management(self, signals: List[Dict[str, Any]],
-                             portfolio: Any) -> List[Dict[str, Any]]:
+    def _apply_risk_management(self, signals: list[dict[str, Any]],
+                             portfolio: Any) -> list[dict[str, Any]]:
         """
         Apply risk management rules to filter and limit signals.
 
@@ -806,17 +804,17 @@ class WheelStrategy(BaseOptionStrategy):
 
     # Implementation of abstract methods from BaseOptionStrategy
 
-    def filter_underlying_stocks(self, client: Any) -> List[str]:
+    def filter_underlying_stocks(self, client: Any) -> list[str]:
         """Filter underlying stocks based on wheel strategy criteria."""
         return self.symbol_list
 
     def filter_options(self, client: Any, underlying: str,
-                      option_type: str = 'put') -> List[Dict[str, Any]]:
+                      option_type: str = 'put') -> list[dict[str, Any]]:
         """Filter options based on wheel strategy criteria."""
         # This would be implemented with real Alpaca API calls
         return []
 
-    def score_options(self, options: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def score_options(self, options: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Score options using wheel strategy scoring formula."""
         scored_options = []
 
@@ -831,8 +829,8 @@ class WheelStrategy(BaseOptionStrategy):
 
         return scored_options
 
-    def select_best_options(self, scored_options: List[Dict[str, Any]],
-                           limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def select_best_options(self, scored_options: list[dict[str, Any]],
+                           limit: int | None = None) -> list[dict[str, Any]]:
         """Select best options based on score."""
         qualified_options = [
             opt for opt in scored_options
@@ -859,7 +857,7 @@ class WheelStrategy(BaseOptionStrategy):
 
         return max(0, position_size)
 
-    def get_strategy_info(self) -> Dict[str, Any]:
+    def get_strategy_info(self) -> dict[str, Any]:
         """Get comprehensive wheel strategy information."""
         base_info = super().get_strategy_info()
 

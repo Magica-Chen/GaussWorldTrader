@@ -4,7 +4,7 @@ Federal Reserve Economic Data (FRED) API provider
 
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 
@@ -20,11 +20,11 @@ class FREDProviderError(RuntimeError):
 
 class FREDProvider:
     """Federal Reserve Economic Data (FRED) API provider"""
-    
+
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv('FRED_API_KEY')
         self.logger = logging.getLogger(__name__)
-        
+
         if not self.api_key:
             self.logger.warning("FRED API key not provided")
             self.client = None
@@ -42,7 +42,7 @@ class FREDProvider:
         if self.client is None:
             raise FREDProviderError("FRED client is not initialized")
         return self.client
-    
+
     def get_series_data(
         self,
         series_id: str,
@@ -63,7 +63,7 @@ class FREDProvider:
         df = pd.DataFrame({'value': data})
         df.index.name = 'date'
         return df
-    
+
     def get_gdp_data(
         self,
         start_date: str = None,
@@ -71,7 +71,7 @@ class FREDProvider:
     ) -> pd.DataFrame:
         """Get GDP data"""
         return self.get_series_data('GDP', start_date, end_date)
-    
+
     def get_unemployment_rate(
         self,
         start_date: str = None,
@@ -79,7 +79,7 @@ class FREDProvider:
     ) -> pd.DataFrame:
         """Get unemployment rate"""
         return self.get_series_data('UNRATE', start_date, end_date)
-    
+
     def get_inflation_rate(
         self,
         start_date: str = None,
@@ -87,7 +87,7 @@ class FREDProvider:
     ) -> pd.DataFrame:
         """Get CPI inflation rate"""
         return self.get_series_data('CPIAUCSL', start_date, end_date)
-    
+
     def get_federal_funds_rate(
         self,
         start_date: str = None,
@@ -95,7 +95,7 @@ class FREDProvider:
     ) -> pd.DataFrame:
         """Get Federal Funds Rate"""
         return self.get_series_data('FEDFUNDS', start_date, end_date)
-    
+
     def get_treasury_yield(
         self,
         maturity: str = '10Y',
@@ -112,15 +112,15 @@ class FREDProvider:
             '10Y': 'GS10',
             '30Y': 'GS30'
         }
-        
+
         series_id = series_mapping.get(maturity, 'GS10')
         return self.get_series_data(series_id, start_date, end_date)
-    
+
     def get_economic_indicators(
         self,
         start_date: str = None,
         end_date: str = None,
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame]:
         """Get key economic indicators"""
         indicators = {
             'GDP': self.get_gdp_data(start_date, end_date),
@@ -129,10 +129,10 @@ class FREDProvider:
             'Federal_Funds_Rate': self.get_federal_funds_rate(start_date, end_date),
             'Treasury_10Y': self.get_treasury_yield('10Y', start_date, end_date)
         }
-        
+
         return indicators
-    
-    def search_series(self, search_text: str, limit: int = 10) -> List[Dict[str, Any]]:
+
+    def search_series(self, search_text: str, limit: int = 10) -> list[dict[str, Any]]:
         """Search for economic data series"""
         client = self._require_client()
         try:
@@ -141,7 +141,7 @@ class FREDProvider:
             raise FREDProviderError(f"Failed to search FRED series for {search_text}: {exc}") from exc
 
         result_list = []
-        for idx, row in search_results.iterrows():
+        for _, row in search_results.iterrows():
             result_list.append({
                 'id': row.get('id', ''),
                 'title': row.get('title', ''),

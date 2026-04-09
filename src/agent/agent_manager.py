@@ -5,25 +5,27 @@ Manages multiple AI agents and analysis workflows
 """
 
 import asyncio
-import logging
-from typing import Dict, List, Any, Optional
-from datetime import datetime
 import json
+import logging
+from datetime import datetime
+from typing import Any
+
+from src.llm import get_available_providers
 
 from .fundamental_analyzer import FundamentalAnalyzer
-from src.llm import get_available_providers
+
 
 class AgentManager:
     """Manages AI agents and analysis workflows"""
-    
-    def __init__(self, config: Dict[str, Any] = None):
+
+    def __init__(self, config: dict[str, Any] = None):
         self.config = config or {}
         self.logger = logging.getLogger(__name__)
         self.analyzers = {}
         self.available_providers = get_available_providers()
-        
+
         self.logger.info(f"Available LLM providers: {self.available_providers}")
-    
+
     def get_analyzer(self, provider: str = 'openai') -> FundamentalAnalyzer:
         """Get or create fundamental analyzer for specific provider"""
         if provider not in self.analyzers:
@@ -38,30 +40,30 @@ class AgentManager:
             except Exception as e:
                 self.logger.error(f"Failed to create analyzer with {provider}: {e}")
                 raise
-        
+
         return self.analyzers[provider]
-    
-    def analyze_symbol(self, symbol: str, provider: str = 'openai') -> Dict[str, Any]:
+
+    def analyze_symbol(self, symbol: str, provider: str = 'openai') -> dict[str, Any]:
         """Analyze a single symbol using specified provider"""
         analyzer = self.get_analyzer(provider)
         result = analyzer.analyze_company(symbol)
 
         self.logger.info(f"Completed analysis for {symbol} using {provider}")
         return result
-    
-    def analyze_multiple_symbols(self, symbols: List[str], 
-                                provider: str = 'openai') -> Dict[str, Dict[str, Any]]:
+
+    def analyze_multiple_symbols(self, symbols: list[str],
+                                provider: str = 'openai') -> dict[str, dict[str, Any]]:
         """Analyze multiple symbols sequentially"""
         results = {}
-        
+
         for symbol in symbols:
             self.logger.info(f"Analyzing {symbol}...")
             results[symbol] = self.analyze_symbol(symbol, provider)
-        
+
         return results
-    
-    async def analyze_symbols_async(self, symbols: List[str], 
-                                  provider: str = 'openai') -> Dict[str, Dict[str, Any]]:
+
+    async def analyze_symbols_async(self, symbols: list[str],
+                                  provider: str = 'openai') -> dict[str, dict[str, Any]]:
         """Analyze multiple symbols asynchronously"""
         async def analyze_single(symbol: str) -> tuple:
             """Async wrapper for single symbol analysis"""
@@ -70,38 +72,38 @@ class AgentManager:
                 None, self.analyze_symbol, symbol, provider
             )
             return symbol, result
-        
+
         # Create tasks for all symbols
         tasks = [analyze_single(symbol) for symbol in symbols]
-        
+
         # Execute all tasks concurrently
         results = await asyncio.gather(*tasks)
-        
+
         # Convert to dictionary
-        return {symbol: result for symbol, result in results}
-    
-    def compare_providers(self, symbol: str, 
-                         providers: List[str] = None) -> Dict[str, Dict[str, Any]]:
+        return dict(results)
+
+    def compare_providers(self, symbol: str,
+                         providers: list[str] = None) -> dict[str, dict[str, Any]]:
         """Compare analysis from multiple LLM providers"""
         if providers is None:
             providers = self.available_providers
-        
+
         if not providers:
             self.logger.warning("No LLM providers available")
             return {}
-        
+
         results = {}
-        
+
         for provider in providers:
             self.logger.info(f"Analyzing {symbol} with {provider}")
             results[provider] = self.analyze_symbol(symbol, provider)
-        
+
         return results
-    
-    def generate_comparative_report(self, symbol: str, 
-                                  provider_results: Dict[str, Dict[str, Any]]) -> str:
+
+    def generate_comparative_report(self, symbol: str,
+                                  provider_results: dict[str, dict[str, Any]]) -> str:
         """Generate comparative analysis report from multiple providers"""
-        
+
         report = f"""
 🌍 GAUSS WORLD TRADER - COMPARATIVE ANALYSIS REPORT
 =================================================
@@ -110,7 +112,7 @@ Generated: {datetime.now().isoformat()}
 Providers Compared: {', '.join(provider_results.keys())}
 
 """
-        
+
         for provider, result in provider_results.items():
             report += f"""
 {provider.upper()} ANALYSIS:
@@ -132,12 +134,12 @@ Financial Grades:
             sentiment = insider.get('sentiment') if insider else None
             if sentiment:
                 report += f"• Insider Sentiment: {sentiment.get('mspr_interpretation', 'N/A')}\n"
-            
+
             # Analyst consensus
             analyst = result.get('analyst_analysis', {})
             if analyst:
                 report += f"• Analyst Consensus: {analyst.get('consensus', 'N/A')}\n"
-            
+
             # AI insights summary
             ai_insights = result.get('ai_insights')
             if ai_insights and isinstance(ai_insights, str):
@@ -148,15 +150,15 @@ Financial Grades:
 AI Insights Summary:
 {summary}
 """
-            
+
             report += "\n"
-        
+
         # Consensus summary
         report += """
 CONSENSUS SUMMARY:
 -----------------
 """
-        
+
         # Aggregate sentiment
         sentiments = []
         for result in provider_results.values():
@@ -164,13 +166,13 @@ CONSENSUS SUMMARY:
             sentiment = insider.get('sentiment') if insider else None
             if sentiment and 'mspr_interpretation' in sentiment:
                 sentiments.append(sentiment['mspr_interpretation'])
-        
+
         if sentiments:
             from collections import Counter
             sentiment_counts = Counter(sentiments)
             dominant_sentiment = sentiment_counts.most_common(1)[0][0]
             report += f"• Dominant News Sentiment: {dominant_sentiment}\n"
-        
+
         # Aggregate grades
         all_grades = {}
         for result in provider_results.values():
@@ -179,14 +181,14 @@ CONSENSUS SUMMARY:
                 if grade_type not in all_grades:
                     all_grades[grade_type] = []
                 all_grades[grade_type].append(grade)
-        
+
         for grade_type, grades in all_grades.items():
             if grades:
                 from collections import Counter
                 grade_counts = Counter(grades)
                 dominant_grade = grade_counts.most_common(1)[0][0]
                 report += f"• Consensus {grade_type.title()} Grade: {dominant_grade}\n"
-        
+
         report += f"""
 
 DISCLAIMER:
@@ -198,41 +200,41 @@ Please conduct your own research and consult with a qualified financial advisor.
 Generated by Gauss World Trader - Named after Carl Friedrich Gauss
 Report Timestamp: {datetime.now().isoformat()}
 """
-        
+
         return report
-    
-    def save_analysis(self, symbol: str, analysis_data: Dict[str, Any], 
+
+    def save_analysis(self, symbol: str, analysis_data: dict[str, Any],
                      filename: str = None) -> str:
         """Save analysis data to file"""
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"fundamental_analysis_{symbol}_{timestamp}.json"
-        
+
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(analysis_data, f, indent=2, default=str)
-            
+
             self.logger.info(f"Analysis saved to {filename}")
             return filename
-            
+
         except Exception as e:
             self.logger.error(f"Failed to save analysis: {e}")
             raise
-    
-    def load_analysis(self, filename: str) -> Dict[str, Any]:
+
+    def load_analysis(self, filename: str) -> dict[str, Any]:
         """Load analysis data from file"""
         try:
-            with open(filename, 'r', encoding='utf-8') as f:
+            with open(filename, encoding='utf-8') as f:
                 data = json.load(f)
-            
+
             self.logger.info(f"Analysis loaded from {filename}")
             return data
-            
+
         except Exception as e:
             self.logger.error(f"Failed to load analysis: {e}")
             raise
-    
-    def get_system_status(self) -> Dict[str, Any]:
+
+    def get_system_status(self) -> dict[str, Any]:
         """Get system status and available resources"""
         status = {
             'available_llm_providers': self.available_providers,
@@ -241,5 +243,5 @@ Report Timestamp: {datetime.now().isoformat()}
             'fred_configured': bool(self.config.get('fred_api_key')),
             'timestamp': datetime.now().isoformat()
         }
-        
+
         return status

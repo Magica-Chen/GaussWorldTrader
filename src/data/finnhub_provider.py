@@ -2,10 +2,10 @@
 Finnhub API provider for financial market data and news
 """
 
-from datetime import datetime, timedelta
 import logging
 import os
-from typing import Any, Dict, List
+from datetime import datetime, timedelta
+from typing import Any
 
 import finnhub
 
@@ -34,12 +34,12 @@ class FinnhubProvider:
                 raise FinnhubProviderError(f"{action} failed: {first['error']}")
         return payload
 
-    def get_company_profile(self, symbol: str) -> Dict[str, Any]:
+    def get_company_profile(self, symbol: str) -> dict[str, Any]:
         """Get company profile information"""
         payload = self.client.company_profile2(symbol=symbol)
         return self._unwrap(payload, f"Fetch company profile for {symbol}")
 
-    def get_basic_financials(self, symbol: str) -> Dict[str, Any]:
+    def get_basic_financials(self, symbol: str) -> dict[str, Any]:
         """Get basic financial metrics"""
         payload = self.client.company_basic_financials(symbol, 'all')
         return self._unwrap(payload, f"Fetch basic financials for {symbol}")
@@ -48,7 +48,7 @@ class FinnhubProvider:
         self, symbol: str = None,
         from_date: str = None,
         to_date: str = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get earnings calendar"""
         payload = self.client.earnings_calendar(
             _from=from_date, to=to_date, symbol=symbol
@@ -59,7 +59,7 @@ class FinnhubProvider:
         self, symbol: str,
         from_date: str = None,
         to_date: str = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get company news"""
         if not from_date:
             from_date = (
@@ -74,24 +74,24 @@ class FinnhubProvider:
 
     def get_market_news(
         self, category: str = 'general'
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get general market news"""
         payload = self.client.general_news(category, min_id=0)
         return self._unwrap(payload, f"Fetch market news for {category}")
 
     def get_recommendation_trends(
         self, symbol: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get analyst recommendation trends"""
         payload = self.client.recommendation_trends(symbol)
         return self._unwrap(payload, f"Fetch recommendation trends for {symbol}")
 
-    def get_price_target(self, symbol: str) -> Dict[str, Any]:
+    def get_price_target(self, symbol: str) -> dict[str, Any]:
         """Get analyst price targets"""
         payload = self.client.price_target(symbol)
         return self._unwrap(payload, f"Fetch price target for {symbol}")
 
-    def get_quote(self, symbol: str) -> Dict[str, Any]:
+    def get_quote(self, symbol: str) -> dict[str, Any]:
         """Get real-time stock quote"""
         payload = self.client.quote(symbol)
         return self._unwrap(payload, f"Fetch quote for {symbol}")
@@ -100,7 +100,7 @@ class FinnhubProvider:
         self, symbol: str, resolution: str = 'D',
         from_timestamp: int = None,
         to_timestamp: int = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get stock price candles"""
         if not from_timestamp:
             from_timestamp = int(
@@ -115,14 +115,14 @@ class FinnhubProvider:
 
     def get_earnings_surprises(
         self, symbol: str, limit: int = 4
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get earnings surprises"""
         payload = self.client.company_earnings(symbol, limit)
         return self._unwrap(payload, f"Fetch earnings surprises for {symbol}")
 
     def get_insider_transactions(
         self, symbol: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get insider transactions"""
         payload = self.client.stock_insider_transactions(symbol)
         unwrapped = self._unwrap(payload, f"Fetch insider transactions for {symbol}")
@@ -138,7 +138,7 @@ class FinnhubProvider:
         self, symbol: str,
         from_date: str = None,
         to_date: str = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get insider sentiment"""
         if not from_date:
             from_date = (

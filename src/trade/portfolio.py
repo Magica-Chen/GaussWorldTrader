@@ -1,29 +1,30 @@
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
+
 
 class Portfolio:
     def __init__(self, initial_cash: float = 100000.0):
         self.initial_cash = initial_cash
         self.cash = initial_cash
-        self.positions: Dict[str, Dict[str, Any]] = {}
-        self.transactions: List[Dict[str, Any]] = []
-        self.performance_history: List[Dict[str, Any]] = []
-        
-    def add_position(self, symbol: str, quantity: float, price: float, 
-                    timestamp: Optional[datetime] = None):
+        self.positions: dict[str, dict[str, Any]] = {}
+        self.transactions: list[dict[str, Any]] = []
+        self.performance_history: list[dict[str, Any]] = []
+
+    def add_position(self, symbol: str, quantity: float, price: float,
+                    timestamp: datetime | None = None):
         if timestamp is None:
             timestamp = datetime.now()
-        
+
         if symbol in self.positions:
             current_qty = self.positions[symbol]['quantity']
             current_cost = self.positions[symbol]['cost_basis'] * current_qty
             new_cost = price * quantity
             total_qty = current_qty + quantity
-            
+
             if total_qty != 0:
                 new_avg_cost = (current_cost + new_cost) / total_qty
                 self.positions[symbol] = {
@@ -41,10 +42,10 @@ class Portfolio:
                 'last_price': price,
                 'last_updated': timestamp
             }
-        
+
         cost = quantity * price
         self.cash -= cost
-        
+
         self.transactions.append({
             'symbol': symbol,
             'quantity': quantity,
@@ -53,30 +54,30 @@ class Portfolio:
             'timestamp': timestamp,
             'type': 'BUY' if quantity > 0 else 'SELL'
         })
-    
+
     def remove_position(self, symbol: str, quantity: float, price: float,
-                       timestamp: Optional[datetime] = None):
+                       timestamp: datetime | None = None):
         if symbol not in self.positions:
             raise ValueError(f"No position found for symbol {symbol}")
-        
+
         if timestamp is None:
             timestamp = datetime.now()
-        
+
         current_qty = self.positions[symbol]['quantity']
         if abs(quantity) > abs(current_qty):
             raise ValueError(f"Cannot sell {quantity} shares, only {current_qty} available")
-        
+
         new_qty = current_qty - quantity
         proceeds = quantity * price
         self.cash += proceeds
-        
+
         if new_qty == 0:
             del self.positions[symbol]
         else:
             self.positions[symbol]['quantity'] = new_qty
             self.positions[symbol]['last_price'] = price
             self.positions[symbol]['last_updated'] = timestamp
-        
+
         self.transactions.append({
             'symbol': symbol,
             'quantity': -quantity,
@@ -85,50 +86,50 @@ class Portfolio:
             'timestamp': timestamp,
             'type': 'SELL'
         })
-    
-    def update_prices(self, price_data: Dict[str, float], timestamp: Optional[datetime] = None):
+
+    def update_prices(self, price_data: dict[str, float], timestamp: datetime | None = None):
         if timestamp is None:
             timestamp = datetime.now()
-        
+
         for symbol, price in price_data.items():
             if symbol in self.positions:
                 self.positions[symbol]['last_price'] = price
                 self.positions[symbol]['last_updated'] = timestamp
-    
-    def get_portfolio_value(self, current_prices: Optional[Dict[str, float]] = None) -> float:
+
+    def get_portfolio_value(self, current_prices: dict[str, float] | None = None) -> float:
         if current_prices:
             self.update_prices(current_prices)
-        
+
         portfolio_value = self.cash
-        for symbol, position in self.positions.items():
+        for _, position in self.positions.items():
             portfolio_value += position['quantity'] * position['last_price']
-        
+
         return portfolio_value
-    
+
     def get_position_value(self, symbol: str) -> float:
         if symbol not in self.positions:
             return 0.0
         position = self.positions[symbol]
         return position['quantity'] * position['last_price']
-    
+
     def get_unrealized_pnl(self, symbol: str) -> float:
         if symbol not in self.positions:
             return 0.0
-        
+
         position = self.positions[symbol]
         current_value = position['quantity'] * position['last_price']
         cost_basis = position['quantity'] * position['cost_basis']
         return current_value - cost_basis
-    
+
     def get_total_unrealized_pnl(self) -> float:
         total_pnl = 0.0
         for symbol in self.positions:
             total_pnl += self.get_unrealized_pnl(symbol)
         return total_pnl
-    
+
     def get_realized_pnl(self) -> float:
         realized_pnl = 0.0
-        position_lots: Dict[str, List[Dict[str, float]]] = {}
+        position_lots: dict[str, list[dict[str, float]]] = {}
 
         for transaction in self.transactions:
             symbol = transaction['symbol']
@@ -154,12 +155,12 @@ class Portfolio:
                     lots.pop(0)
 
         return realized_pnl
-    
-    def get_performance_metrics(self, current_prices: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+
+    def get_performance_metrics(self, current_prices: dict[str, float] | None = None) -> dict[str, float]:
         current_value = self.get_portfolio_value(current_prices)
         total_return = current_value - self.initial_cash
         total_return_pct = (total_return / self.initial_cash) * 100
-        
+
         return {
             'initial_cash': self.initial_cash,
             'current_cash': self.cash,
@@ -171,7 +172,7 @@ class Portfolio:
             'number_of_positions': len(self.positions),
             'number_of_transactions': len(self.transactions)
         }
-    
+
     def get_positions_summary(self) -> pd.DataFrame:
         data = []
         for symbol, position in self.positions.items():
@@ -185,19 +186,19 @@ class Portfolio:
                 'last_updated': position['last_updated']
             })
         return pd.DataFrame(data)
-    
+
     def get_transactions_history(self) -> pd.DataFrame:
         return pd.DataFrame(self.transactions)
-    
-    def record_performance(self, timestamp: Optional[datetime] = None, 
-                         current_prices: Optional[Dict[str, float]] = None):
+
+    def record_performance(self, timestamp: datetime | None = None,
+                         current_prices: dict[str, float] | None = None):
         if timestamp is None:
             timestamp = datetime.now()
-        
+
         metrics = self.get_performance_metrics(current_prices)
         metrics['timestamp'] = timestamp
         self.performance_history.append(metrics)
-    
+
     def get_performance_history(self) -> pd.DataFrame:
         return pd.DataFrame(self.performance_history)
 
@@ -234,7 +235,7 @@ class FinancialMetrics:
         return excess_returns.mean() * np.sqrt(252) / downside_deviation if downside_deviation > 0 else 0
 
     @staticmethod
-    def calculate_max_drawdown(prices: pd.Series) -> Tuple[float, int, int]:
+    def calculate_max_drawdown(prices: pd.Series) -> tuple[float, int, int]:
         cumulative = (1 + prices.pct_change()).cumprod()
         running_max = cumulative.expanding().max()
         drawdown = (cumulative - running_max) / running_max
@@ -304,9 +305,9 @@ class FinancialMetrics:
     def portfolio_performance_metrics(
         self,
         portfolio_returns: pd.Series,
-        benchmark_returns: Optional[pd.Series] = None,
+        benchmark_returns: pd.Series | None = None,
         risk_free_rate: float = 0.02
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
 
         metrics = {
             'total_return': (1 + portfolio_returns).prod() - 1,
@@ -359,7 +360,7 @@ class FinancialMetrics:
         confidence_level: float = 0.05,
         time_horizon: int = 252,
         num_simulations: int = 10000
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
 
         mean_return = returns.mean()
         std_return = returns.std()
@@ -401,7 +402,7 @@ class FinancialMetrics:
 
         return rolling_metrics.dropna()
 
-    def correlation_analysis(self, returns_data: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    def correlation_analysis(self, returns_data: pd.DataFrame) -> dict[str, pd.DataFrame]:
         correlation_matrix = returns_data.corr()
 
         # Calculate rolling correlations (30-day window)
@@ -424,13 +425,13 @@ class FinancialMetrics:
 class PerformanceAnalyzer:
     """Advanced performance analysis for backtest results"""
 
-    def __init__(self, backtest_results: Dict[str, Any]):
+    def __init__(self, backtest_results: dict[str, Any]):
         self.results = backtest_results
         self.portfolio_history = backtest_results.get('portfolio_history', pd.DataFrame())
         self.trades_history = backtest_results.get('trades_history', pd.DataFrame())
         self.daily_returns = backtest_results.get('daily_returns', [])
 
-    def calculate_advanced_metrics(self) -> Dict[str, float]:
+    def calculate_advanced_metrics(self) -> dict[str, float]:
         """Calculate advanced performance metrics"""
         if self.daily_returns:
             returns = np.array(self.daily_returns)
@@ -486,7 +487,7 @@ class PerformanceAnalyzer:
 
         return annual_return / max_drawdown
 
-    def _calculate_rolling_sharpe(self, returns: np.ndarray, window: int = 30) -> List[float]:
+    def _calculate_rolling_sharpe(self, returns: np.ndarray, window: int = 30) -> list[float]:
         """Calculate rolling Sharpe ratio"""
         if len(returns) < window:
             return []
@@ -503,7 +504,7 @@ class PerformanceAnalyzer:
 
         return rolling_sharpe
 
-    def _calculate_rolling_volatility(self, returns: np.ndarray, window: int = 30) -> List[float]:
+    def _calculate_rolling_volatility(self, returns: np.ndarray, window: int = 30) -> list[float]:
         """Calculate rolling volatility"""
         if len(returns) < window:
             return []
@@ -603,7 +604,7 @@ ROLLING METRICS:
 
         return report
 
-    def plot_performance_charts(self, save_path: Optional[str] = None) -> None:
+    def plot_performance_charts(self, save_path: str | None = None) -> None:
         """Generate performance visualization charts"""
         if self.portfolio_history.empty:
             print("No portfolio history data available for plotting")
@@ -676,26 +677,17 @@ class PortfolioTracker:
         return 0
 
     def get_portfolio_performance(self, period: str = '1D',
-                                  timeframe: str = '1Min') -> Dict[str, Any]:
+                                  timeframe: str = '1Min') -> dict[str, Any]:
         """Get portfolio performance data"""
         portfolio_history = self.account_manager.get_portfolio_history(period, timeframe)
 
         # Process portfolio history data
         timestamps = portfolio_history.get('timestamp', [])
         equity = portfolio_history.get('equity', [])
-        profit_loss = portfolio_history.get('profit_loss', [])
         profit_loss_pct = portfolio_history.get('profit_loss_pct', [])
 
         if not timestamps or not equity:
             raise ValueError("No portfolio history data available")
-
-        # Convert to DataFrame for analysis
-        df = pd.DataFrame({
-            'timestamp': pd.to_datetime([datetime.fromtimestamp(ts) for ts in timestamps]),
-            'equity': equity,
-            'profit_loss': profit_loss,
-            'profit_loss_pct': profit_loss_pct
-        })
 
         # Calculate performance metrics
         performance = {
@@ -739,7 +731,7 @@ class PortfolioTracker:
 
         return performance
 
-    def get_asset_allocation(self) -> Dict[str, Any]:
+    def get_asset_allocation(self) -> dict[str, Any]:
         """Analyze current asset allocation"""
         # Get account info for cash
         account = self.account_manager.get_account()
@@ -779,7 +771,8 @@ class PortfolioTracker:
             except (ValueError, TypeError) as exc:
                 raise ValueError(f"Invalid position data for {pos.get('symbol', 'UNKNOWN')}: {exc}") from exc
 
-        pct = lambda x: (x / portfolio_value * 100) if portfolio_value > 0 else 0
+        def pct(x):
+            return (x / portfolio_value * 100) if portfolio_value > 0 else 0
         allocation = {
             'total_portfolio_value': portfolio_value,
             'cash': cash,
@@ -804,7 +797,7 @@ class PortfolioTracker:
 
         return allocation
 
-    def calculate_risk_metrics(self, days: int = 30) -> Dict[str, Any]:
+    def calculate_risk_metrics(self, days: int = 30) -> dict[str, Any]:
         """Calculate portfolio risk metrics"""
         # Get portfolio performance for analysis
         performance = self.get_portfolio_performance('1M', '1D')
