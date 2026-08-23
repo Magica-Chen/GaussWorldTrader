@@ -395,7 +395,8 @@ sentiment, risk, and decision agents.
 
 ## 📚 Documentation
 
-- [Wheel Options Strategy](docs/wheel_strategy.md) — Detailed guide for the wheel options strategy
+- [Homepage](https://magica-chen.github.io/GaussWorldTrader/) — Project overview and quick start
+- [Project Structure](docs/PROJECT_STRUCTURE.md) — Layout, strategy template and execution layer
 
 ---
 
