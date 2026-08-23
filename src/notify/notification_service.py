@@ -194,17 +194,16 @@ class TradeStreamHandler:
             return
 
         from alpaca.trading.stream import TradingStream
-        from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
+        from src.settings import get_config, has_alpaca_credentials, is_paper_trading
 
         if not has_alpaca_credentials():
             raise RuntimeError("Alpaca credentials not configured")
 
         settings = get_config()
-        paper = get_alpaca_base_url() != "https://api.alpaca.markets"
         self._stream = TradingStream(
             api_key=settings.alpaca.api_key,
             secret_key=settings.alpaca.secret_key or "",
-            paper=paper
+            paper=is_paper_trading()
         )
         self._stream.subscribe_trade_updates(self._handle_trade_update)
         self._running = True

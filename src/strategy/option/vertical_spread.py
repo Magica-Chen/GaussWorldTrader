@@ -507,6 +507,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
                         "strike": short_strike,
                         "expiration": exp.isoformat(),
                         "side": short_side,
+                        "position_intent": "sell_to_open",
                         "ratio": 1,
                     },
                     {
@@ -514,6 +515,7 @@ class VerticalSpreadStrategy(BaseOptionStrategy):
                         "strike": long_strike,
                         "expiration": exp.isoformat(),
                         "side": long_side,
+                        "position_intent": "buy_to_open",
                         "ratio": 1,
                     },
                 ],

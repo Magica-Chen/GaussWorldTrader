@@ -348,11 +348,6 @@ def stream_market(
         "--asset-type",
         help="Asset type to stream: stock, crypto, or option",
     ),
-    crypto_loc: str = typer.Option(
-        "eu-1",
-        "--crypto-loc",
-        help="Crypto feed location: us, us-1, eu-1",
-    ),
     stream_type: str = typer.Option("trades", help="trades, quotes, or bars"),
     max_messages: int = typer.Option(0, help="Stop after N messages (0 = unlimited)"),
     raw: bool = typer.Option(False, help="Print raw stream payloads"),
@@ -375,11 +370,7 @@ def stream_market(
         raise typer.Exit(1)
 
     if asset_type == "crypto":
-        try:
-            stream = provider.create_crypto_stream(raw_data=raw, loc=crypto_loc)
-        except ValueError as exc:
-            print(exc)
-            raise typer.Exit(1) from exc
+        stream = provider.create_crypto_stream(raw_data=raw)
     elif asset_type == "option":
         stream = provider.create_option_stream(raw_data=raw)
     else:

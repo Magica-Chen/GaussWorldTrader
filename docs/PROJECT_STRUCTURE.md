@@ -71,19 +71,19 @@ Strategy flow:
 ## Execution Layer
 
 The execution layer converts action plans into concrete orders:
-- `ExecutionEngine` in `src/trade/execution.py` sizes quantity, applies order type policy, and enforces
+- `ExecutionEngine` in `src/trade/engine/execution.py` sizes quantity, applies order type policy, and enforces
   account constraints (fractional trading, shorting, margin).
 - Order type `auto` uses limit orders when a target price is present (with minimal price improvement);
   otherwise it uses market orders.
 
 ## Live Trading Helpers
 
-Live trading modules live in `src/trade/`:
-- `src/trade/live_trading_stock.py`
-- `src/trade/live_trading_crypto.py`
-- `src/trade/live_trading_option.py`
-- `src/trade/live_trading_base.py` (strategy -> plan -> execution loop)
-- `src/trade/live_runner.py` (shared websocket runner)
+Live trading modules live in `src/trade/live/`:
+- `src/trade/live/live_trading_stock.py`
+- `src/trade/live/live_trading_crypto.py`
+- `src/trade/live/live_trading_option.py`
+- `src/trade/live/live_trading_base.py` (strategy -> plan -> execution loop)
+- `src/trade/live/live_runner.py` (shared websocket runner)
 
 ## Entry Points
 

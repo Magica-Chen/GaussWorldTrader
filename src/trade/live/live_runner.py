@@ -31,11 +31,6 @@ def run_live_engines(engines: Iterable[LiveTradingEngine]) -> None:
     if not all(isinstance(engine, first_cls) for engine in engine_list):
         raise ValueError("Mixed asset types are not supported in a shared stream")
 
-    if hasattr(first, "crypto_loc"):
-        crypto_loc = getattr(first, "crypto_loc")
-        if any(getattr(engine, "crypto_loc", crypto_loc) != crypto_loc for engine in engine_list):
-            raise ValueError("All crypto engines must use the same crypto_loc for shared streaming")
-
     stream = first._create_stream()
     engine_map = {engine.symbol: engine for engine in engine_list}
 

@@ -29,7 +29,6 @@ class LiveTradingCrypto(LiveTradingEngine):
         symbol: str,
         timeframe: str = "1Hour",
         lookback_days: int = 14,
-        crypto_loc: str = "us",
         risk_pct: float = 0.10,
         stop_loss_pct: float = 0.03,
         take_profit_pct: float = 0.06,
@@ -38,7 +37,6 @@ class LiveTradingCrypto(LiveTradingEngine):
         strategy: str = "btc_volatility_breakout",
         order_type: str = "auto",
     ) -> None:
-        self.crypto_loc = crypto_loc
         self.strategy_name = strategy
         super().__init__(
             symbol=symbol,
@@ -73,7 +71,7 @@ class LiveTradingCrypto(LiveTradingEngine):
 
     def _create_stream(self) -> Any:
         """Create crypto data stream."""
-        return self.provider.create_crypto_stream(raw_data=False, loc=self.crypto_loc)
+        return self.provider.create_crypto_stream(raw_data=False)
 
     def _subscribe_to_stream(self, handler: Any, symbol: str) -> None:
         """Subscribe to crypto trade stream."""
@@ -102,7 +100,6 @@ def create_crypto_engines(
     symbols: Optional[List[str]] = None,
     timeframe: str = "1Hour",
     lookback_days: int = 14,
-    crypto_loc: str = "us",
     risk_pct: float = 0.10,
     stop_loss_pct: float = 0.03,
     take_profit_pct: float = 0.06,
@@ -124,7 +121,6 @@ def create_crypto_engines(
             symbol=symbol,
             timeframe=timeframe,
             lookback_days=lookback_days,
-            crypto_loc=crypto_loc,
             risk_pct=risk_pct,
             stop_loss_pct=stop_loss_pct,
             take_profit_pct=take_profit_pct,
@@ -141,7 +137,6 @@ def run_crypto_trading(
     symbols: Optional[List[str]] = None,
     timeframe: str = "1Hour",
     lookback_days: int = 14,
-    crypto_loc: str = "us",
     risk_pct: float = 0.10,
     stop_loss_pct: float = 0.03,
     take_profit_pct: float = 0.06,
@@ -157,7 +152,6 @@ def run_crypto_trading(
                  If None, uses watchlist and open positions.
         timeframe: Bar timeframe for signals.
         lookback_days: Historical lookback days.
-        crypto_loc: Crypto stream feed location (us, us-1, eu-1).
         risk_pct: Portfolio risk per trade.
         stop_loss_pct: Stop-loss percentage.
         take_profit_pct: Take-profit percentage.
@@ -169,7 +163,6 @@ def run_crypto_trading(
         symbols=symbols,
         timeframe=timeframe,
         lookback_days=lookback_days,
-        crypto_loc=crypto_loc,
         risk_pct=risk_pct,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,

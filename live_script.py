@@ -74,8 +74,6 @@ class TradingConfig:
     requested_sell_to_open: bool | None = None
     supports_fractional: bool | None = None
     supports_sell_to_open: bool | None = None
-    # Crypto-specific
-    crypto_loc: str = "us"
     # Option-specific
     roll_days: int = 5
 
@@ -449,7 +447,6 @@ def run_trading(config: TradingConfig) -> None:
                 symbols=symbols,
                 timeframe=config.timeframe,
                 lookback_days=config.lookback_days,
-                crypto_loc=config.crypto_loc,
                 risk_pct=config.risk_pct,
                 stop_loss_pct=config.stop_loss_pct,
                 take_profit_pct=config.take_profit_pct,

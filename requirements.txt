@@ -5,7 +5,7 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 
 # Trading API
-alpaca-py>=0.25.0
+alpaca-py>=0.42.0
 
 # Analysis
 ta-lib>=0.4.28

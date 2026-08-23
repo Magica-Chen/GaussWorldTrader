@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, date
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 from alpaca.trading.requests import (
     MarketOrderRequest,
@@ -21,9 +21,6 @@ from alpaca.trading.enums import (
 
 from .trading_engine import TradingEngine
 
-if TYPE_CHECKING:
-    from src.notify import NotificationService
-
 
 class TradingOptionEngine(TradingEngine):
     """Trading engine for options with Alpaca-specific rules.
@@ -36,10 +33,6 @@ class TradingOptionEngine(TradingEngine):
 
     See: https://docs.alpaca.markets/docs/options-trading
     """
-
-    def __init__(self, paper_trading: bool = True,
-                 notification_service: "NotificationService" = None) -> None:
-        super().__init__(paper_trading, notification_service)
 
     @staticmethod
     def _enum_value(value: Any) -> Any:

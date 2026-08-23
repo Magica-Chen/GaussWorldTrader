@@ -11,6 +11,9 @@
     </a>
   </p>
   <p>
+    <a href="https://magica-chen.github.io/GaussWorldTrader/"><strong>🌐 Visit the homepage</strong></a>
+  </p>
+  <p>
     <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized
     algorithmic trading platform featuring modern async operations, intelligent data
     feeds, multi-agent analysis, and advanced portfolio management.</em>
@@ -157,7 +160,7 @@ python main_cli.py backtest --strategy mean_reversion AAPL --days 365
 python main_cli.py backtest --strategy multi_agent AAPL --days 120 -p mode=fast
 python main_cli.py backtest --strategy trend_following AAPL --days 365 --walk-forward --splits 4
 python main_cli.py account-info                 # View account details
-python main_cli.py stream-market --asset-type crypto --crypto-loc eu-1 --symbols BTC/USD,ETH/USD
+python main_cli.py stream-market --asset-type crypto --symbols BTC/USD,ETH/USD
 ```
 
 ---
@@ -221,14 +224,15 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 
 **Usage in code:**
 ```python
-from src.agent import NotificationService, TradeStreamHandler
-from src.trade.crypto_engine import TradingCryptoEngine
+from src.notify import NotificationService, TradeStreamHandler
+from src.trade.engine import TradingCryptoEngine
 
 notification_service = NotificationService()
 stream_handler = TradeStreamHandler(notification_service)
 stream_handler.start()  # Start listening for fills
 
-engine = TradingCryptoEngine(paper_trading=True, notification_service=notification_service)
+# Paper vs live follows ALPACA_BASE_URL in your .env
+engine = TradingCryptoEngine(notification_service=notification_service)
 order = engine.place_market_order("BTC/USD", 0.001, "buy")  # Triggers SUBMITTED notification
 # FILLED notification arrives automatically when order fills
 ```
@@ -391,7 +395,8 @@ sentiment, risk, and decision agents.
 
 ## 📚 Documentation
 
-- [Wheel Options Strategy](docs/wheel_strategy.md) — Detailed guide for the wheel options strategy
+- [Homepage](https://magica-chen.github.io/GaussWorldTrader/) — Project overview and quick start
+- [Project Structure](docs/PROJECT_STRUCTURE.md) — Layout, strategy template and execution layer
 
 ---
 

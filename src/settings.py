@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 load_dotenv()
 
 DEFAULT_ALPACA_BASE_URL = "https://paper-api.alpaca.markets"
+LIVE_ALPACA_BASE_URL = "https://api.alpaca.markets"
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -305,6 +306,11 @@ def get_alpaca_base_url() -> str:
     """Return the configured Alpaca base URL with a safe default."""
     return get_config().alpaca.base_url or DEFAULT_ALPACA_BASE_URL
 
+
+def is_paper_trading() -> bool:
+    """Return whether the configured base URL targets Alpaca paper trading."""
+    return get_alpaca_base_url() != LIVE_ALPACA_BASE_URL
+
 def reload_config(force: bool = False) -> bool:
     """Reload global configuration"""
     return get_config().reload_if_changed(force)
@@ -316,9 +322,11 @@ __all__ = [
     "PerformanceConfig",
     "OptimizedConfig",
     "DEFAULT_ALPACA_BASE_URL",
+    "LIVE_ALPACA_BASE_URL",
     "get_config",
     "has_alpaca_credentials",
     "get_alpaca_base_url",
+    "is_paper_trading",
     "reload_config",
 ]
 
