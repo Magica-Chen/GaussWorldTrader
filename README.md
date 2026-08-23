@@ -11,6 +11,9 @@
     </a>
   </p>
   <p>
+    <a href="https://magica-chen.github.io/GaussWorldTrader/"><strong>🌐 Visit the homepage</strong></a>
+  </p>
+  <p>
     <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized
     algorithmic trading platform featuring modern async operations, intelligent data
     feeds, multi-agent analysis, and advanced portfolio management.</em>
