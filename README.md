@@ -405,8 +405,13 @@ or investment-related decisions.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left)](https://www.star-history.com/#Magica-Chen/GaussWorldTrader&type=date&legend=top-left)
-
+<a href="https://www.star-history.com/?type=date&legend=top-left&repos=Magica-Chen%2FGaussWorldTrader">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&theme=dark&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
+ </picture>
+</a>
 ---
 
 ## 🤝 Contributing
