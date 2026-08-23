@@ -5,12 +5,8 @@ from datetime import datetime, timedelta
 from src.settings import get_config, has_alpaca_credentials
 from .finnhub_provider import FinnhubProvider
 
-try:
-    from alpaca.data.historical import NewsClient
-    from alpaca.data.requests import NewsRequest
-    ALPACA_PY_AVAILABLE = True
-except ImportError:
-    ALPACA_PY_AVAILABLE = False
+from alpaca.data.historical import NewsClient
+from alpaca.data.requests import NewsRequest
 
 
 class NewsDataProvider:
@@ -20,17 +16,15 @@ class NewsDataProvider:
         self.alpaca_client = self._init_alpaca_client()
 
     def _init_alpaca_client(self):
-        if not ALPACA_PY_AVAILABLE or not has_alpaca_credentials():
+        """Alpaca news is an optional source; Finnhub covers the rest."""
+        if not has_alpaca_credentials():
             return None
-        try:
-            settings = get_config()
-            return NewsClient(
-                api_key=settings.alpaca.api_key,
-                secret_key=settings.alpaca.secret_key or ""
-            )
-        except Exception as exc:
-            self.logger.warning(f"Alpaca news client unavailable: {exc}")
-            return None
+
+        settings = get_config()
+        return NewsClient(
+            api_key=settings.alpaca.api_key,
+            secret_key=settings.alpaca.secret_key or ""
+        )
 
     def _has_error(self, result: Any) -> bool:
         return isinstance(result, list) and len(result) > 0 and "error" in result[0]
@@ -217,9 +211,11 @@ class NewsDataProvider:
             if (query.lower() in article.get('headline', '').lower() or
                 query.lower() in article.get('summary', '').lower()):
 
-                article_date = datetime.fromtimestamp(
-                    article.get('datetime', 0)
-                )
+                published = article.get('datetime')
+                if not published or published == "Unknown":
+                    continue
+
+                article_date = datetime.fromisoformat(published)
                 if from_date <= article_date <= to_date:
                     filtered_news.append(article)
 

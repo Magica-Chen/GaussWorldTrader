@@ -9,34 +9,39 @@ if TYPE_CHECKING:
     from src.notify import NotificationService
 
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import (
+    MarketOrderRequest,
+    LimitOrderRequest,
+    StopOrderRequest,
+    GetOrdersRequest,
+)
+from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
 
-from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
+from src.settings import get_config, has_alpaca_credentials, is_paper_trading
 from src.trade.portfolio import Portfolio
 
 
 class TradingEngine(ABC):
     """Abstract base trading engine for Alpaca API integration."""
 
-    def __init__(self, paper_trading: bool = True,
-                 notification_service: "NotificationService" = None) -> None:
+    def __init__(self, notification_service: "NotificationService" = None) -> None:
         if not has_alpaca_credentials():
             raise ValueError("Alpaca API credentials not configured")
         settings = get_config()
 
+        # Paper vs live is determined solely by the configured base URL.
+        self.paper_trading = is_paper_trading()
         self.api = TradingClient(
             api_key=settings.alpaca.api_key,
             secret_key=settings.alpaca.secret_key or "",
-            paper=get_alpaca_base_url() != "https://api.alpaca.markets"
+            paper=self.paper_trading
         )
 
-        self.paper_trading = paper_trading
         self.portfolio = Portfolio()
         self.logger = logging.getLogger(self.__class__.__name__)
         self._notification_service = notification_service
 
-        if paper_trading:
+        if self.paper_trading:
             self.logger.info("Trading engine initialized in PAPER TRADING mode")
         else:
             self.logger.warning("Trading engine initialized in LIVE TRADING mode")
@@ -121,7 +126,7 @@ class TradingEngine(ABC):
 
     def get_open_orders(self, symbol: str = None) -> List[Dict[str, Any]]:
         """Get all open orders, optionally filtered by symbol."""
-        orders = self.api.get_orders(status='open')
+        orders = self.api.get_orders(GetOrdersRequest(status=QueryOrderStatus.OPEN))
         result = []
         for order in orders:
             if symbol and order.symbol != self.normalize_symbol(symbol):

@@ -26,6 +26,7 @@ from src.agent.fundamental_analyzer import FundamentalAnalyzer
 from src.analysis import TechnicalAnalysis
 from src.backtest import Backtester
 from src.data import AlpacaDataProvider, FREDProvider, NewsDataProvider
+from src.settings import get_alpaca_base_url
 from src.strategy import get_strategy_registry
 from src.ui.account_views import AccountViewsMixin
 from src.ui.analysis_views import AnalysisViewsMixin
@@ -102,7 +103,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
         if 'dashboard_initialized' not in st.session_state:
             try:
-                st.session_state.account_manager = AccountManager()
+                st.session_state.account_manager = AccountManager(base_url=get_alpaca_base_url())
                 st.session_state.position_manager = PositionManager(st.session_state.account_manager)
                 st.session_state.order_manager = OrderManager(st.session_state.account_manager)
                 st.session_state.fundamental_analyzer = FundamentalAnalyzer()
@@ -667,9 +668,6 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         col1, col2 = st.columns([2, 3])
         with col1:
             asset_type = st.selectbox("Asset Type", ["stock", "crypto", "option"], key="stream_asset_type")
-            crypto_loc = "eu-1"
-            if asset_type == "crypto":
-                crypto_loc = st.selectbox("Crypto Location", ["us", "us-1", "eu-1"], index=2, key="stream_crypto_loc")
             symbols_input = st.text_input("Symbols (comma-separated, max 30)", value="AAPL, MSFT, NVDA",
                                           key="stream_symbols_input")
             stream_type = st.selectbox("Stream Type", ["trades", "quotes", "bars"], key="stream_type_select")
@@ -686,13 +684,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                     and symbols
                     and len(symbols) <= 30
                 ):
-                    self._start_stream(
-                        symbols,
-                        stream_type,
-                        raw_output,
-                        asset_type,
-                        crypto_loc,
-                    )
+                    self._start_stream(symbols, stream_type, raw_output, asset_type)
             with col_b:
                 if st.button("Stop Stream", disabled=not st.session_state.stream_running):
                     self._stop_stream()
@@ -713,7 +705,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             time.sleep(refresh_interval)
             st.rerun()
 
-    def _start_stream(self, symbols, stream_type, raw_output, asset_type, crypto_loc):
+    def _start_stream(self, symbols, stream_type, raw_output, asset_type):
         """Start Alpaca WebSocket stream."""
         if st.session_state.stream_running:
             return
@@ -721,12 +713,12 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         st.session_state.stream_messages = []
         st.session_state.stream_config = {
             "symbols": symbols, "stream_type": stream_type, "raw_output": raw_output,
-            "asset_type": asset_type, "crypto_loc": crypto_loc,
+            "asset_type": asset_type,
         }
         try:
             provider = AlpacaDataProvider()
             if asset_type == "crypto":
-                stream = provider.create_crypto_stream(raw_data=raw_output, loc=crypto_loc)
+                stream = provider.create_crypto_stream(raw_data=raw_output)
             elif asset_type == "option":
                 stream = provider.create_option_stream(raw_data=raw_output)
             else:

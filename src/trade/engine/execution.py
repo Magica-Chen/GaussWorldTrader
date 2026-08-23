@@ -7,7 +7,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from alpaca.trading.requests import OptionLegRequest
-from alpaca.trading.enums import OrderSide
+from alpaca.trading.enums import OrderSide, PositionIntent
 
 from src.settings import get_alpaca_base_url
 from src.account.account_manager import AccountManager
@@ -264,11 +264,17 @@ class ExecutionEngine:
             side = str(leg.get("side") or "buy").lower()
             side_enum = OrderSide.BUY if side == "buy" else OrderSide.SELL
 
+            intent = leg.get("position_intent")
+            if not intent:
+                self.logger.error("Leg missing position_intent: %s", leg)
+                return False
+
             legs.append(
                 OptionLegRequest(
                     symbol=symbol,
                     ratio_qty=ratio,
                     side=side_enum,
+                    position_intent=PositionIntent(str(intent).lower()),
                 )
             )
 

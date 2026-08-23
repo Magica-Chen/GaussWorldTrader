@@ -32,9 +32,9 @@ class TradingStockEngine(TradingEngine):
     EXTENDED_OPEN = time(4, 0)
     EXTENDED_CLOSE = time(20, 0)
 
-    def __init__(self, paper_trading: bool = True, allow_fractional: bool = False,
+    def __init__(self, allow_fractional: bool = False,
                  notification_service: "NotificationService" = None) -> None:
-        super().__init__(paper_trading, notification_service)
+        super().__init__(notification_service)
         self.allow_fractional = allow_fractional
 
     def validate_order(self, symbol: str, qty: float, side: str) -> None:

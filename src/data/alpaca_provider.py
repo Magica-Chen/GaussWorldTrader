@@ -4,47 +4,39 @@ import re
 from typing import List, Dict, Any, Optional, Union
 
 import pandas as pd
-from src.settings import get_alpaca_base_url, get_config, has_alpaca_credentials
+from src.settings import get_config, has_alpaca_credentials, is_paper_trading
 from src.utils.timezone_utils import EASTERN, now_et
 
-try:
-    from alpaca.data.historical import (
-        StockHistoricalDataClient, 
-        CryptoHistoricalDataClient, 
-        OptionHistoricalDataClient,
-        NewsClient
-    )
-    from alpaca.data.live import (
-        StockDataStream, 
-        CryptoDataStream, 
-        OptionDataStream,
-        NewsDataStream
-    )
-    from alpaca.data.requests import (
-        StockBarsRequest, 
-        StockLatestQuoteRequest,
-        StockLatestTradeRequest,
-        CryptoBarsRequest,
-        CryptoLatestQuoteRequest, 
-        CryptoLatestTradeRequest,
-        OptionBarsRequest,
-        OptionLatestQuoteRequest,
-        OptionLatestTradeRequest,
-        OptionSnapshotRequest,
-        OptionChainRequest
-    )
-    from alpaca.data.enums import DataFeed
-    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
-    from alpaca.trading.client import TradingClient
-    from alpaca.trading.requests import (
-        GetAssetsRequest,
-        GetPortfolioHistoryRequest,
-    )
-    from alpaca.common.exceptions import APIError
-    ALPACA_PY_AVAILABLE = True
-except ImportError:
-    logging.warning("alpaca-py not installed, using fallback mode")
-    ALPACA_PY_AVAILABLE = False
+from alpaca.data.historical import (
+    StockHistoricalDataClient,
+    CryptoHistoricalDataClient,
+    OptionHistoricalDataClient,
+    NewsClient
+)
+from alpaca.data.live import (
+    StockDataStream,
+    CryptoDataStream,
+    OptionDataStream,
+    NewsDataStream
+)
+from alpaca.data.requests import (
+    StockBarsRequest,
+    StockLatestQuoteRequest,
+    StockLatestTradeRequest,
+    CryptoBarsRequest,
+    CryptoLatestQuoteRequest,
+    CryptoLatestTradeRequest,
+    OptionBarsRequest,
+    OptionLatestQuoteRequest,
+    OptionLatestTradeRequest,
+    OptionSnapshotRequest,
+    OptionChainRequest
+)
+from alpaca.data.enums import CryptoFeed, DataFeed
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import GetPortfolioHistoryRequest
+from alpaca.common.exceptions import APIError
 
 
 class AlpacaDataProvider:
@@ -52,15 +44,14 @@ class AlpacaDataProvider:
     Modern Alpaca data provider using alpaca-py SDK with separate clients
     for stocks, options, and crypto data.
     """
-    
+
+    # Data-feed tier is a per-account property; probe once per process since
+    # this provider is constructed ad hoc across the CLI, dashboard and engines.
+    _pro_tier: Optional[bool] = None
+
     def __init__(self):
         if not has_alpaca_credentials():
             raise ValueError("Alpaca API credentials not configured")
-
-        if not ALPACA_PY_AVAILABLE:
-            raise ImportError(
-                "alpaca-py is required. Install with: pip install alpaca-py"
-            )
 
         self.settings = get_config()
         # Initialize clients with API credentials
@@ -68,7 +59,9 @@ class AlpacaDataProvider:
 
         # Check account tier and available feeds
         self.account_info = self._get_account_info()
-        self.is_pro_tier = self._check_pro_tier()
+        if AlpacaDataProvider._pro_tier is None:
+            AlpacaDataProvider._pro_tier = self._check_pro_tier()
+        self.is_pro_tier = AlpacaDataProvider._pro_tier
 
         logging.info(f"Alpaca Provider initialized - Pro tier: {self.is_pro_tier}")
     
@@ -99,7 +92,7 @@ class AlpacaDataProvider:
         self.trading_client = TradingClient(
             api_key=api_key,
             secret_key=secret_key,
-            paper=get_alpaca_base_url() != "https://api.alpaca.markets",
+            paper=is_paper_trading(),
         )
 
         # News client
@@ -110,11 +103,6 @@ class AlpacaDataProvider:
 
     def create_stock_stream(self, raw_data: bool = False):
         """Create a real-time stock data stream (quotes/trades/bars)."""
-        if not ALPACA_PY_AVAILABLE:
-            raise ImportError(
-                "alpaca-py is required. Install with: pip install alpaca-py"
-            )
-
         feed = DataFeed.SIP if self.is_pro_tier else DataFeed.IEX
         return StockDataStream(
             api_key=self.settings.alpaca.api_key,
@@ -123,31 +111,17 @@ class AlpacaDataProvider:
             raw_data=raw_data
         )
 
-    def create_crypto_stream(self, raw_data: bool = False, loc: str = "eu-1"):
+    def create_crypto_stream(self, raw_data: bool = False):
         """Create a real-time crypto data stream (quotes/trades/bars)."""
-        if not ALPACA_PY_AVAILABLE:
-            raise ImportError(
-                "alpaca-py is required. Install with: pip install alpaca-py"
-            )
-
-        loc = loc.strip().lower()
-        if loc not in {"us", "us-1", "eu-1"}:
-            raise ValueError("crypto loc must be one of: us, us-1, eu-1")
-
         return CryptoDataStream(
             api_key=self.settings.alpaca.api_key,
             secret_key=self.settings.alpaca.secret_key or "",
             raw_data=raw_data,
-            feed=loc,
+            feed=CryptoFeed.US,
         )
 
     def create_option_stream(self, raw_data: bool = False):
         """Create a real-time option data stream (quotes/trades/bars)."""
-        if not ALPACA_PY_AVAILABLE:
-            raise ImportError(
-                "alpaca-py is required. Install with: pip install alpaca-py"
-            )
-
         return OptionDataStream(
             api_key=self.settings.alpaca.api_key,
             secret_key=self.settings.alpaca.secret_key or "",
@@ -156,11 +130,6 @@ class AlpacaDataProvider:
 
     def create_news_stream(self, raw_data: bool = False):
         """Create a real-time news data stream."""
-        if not ALPACA_PY_AVAILABLE:
-            raise ImportError(
-                "alpaca-py is required. Install with: pip install alpaca-py"
-            )
-
         return NewsDataStream(
             api_key=self.settings.alpaca.api_key,
             secret_key=self.settings.alpaca.secret_key or "",
@@ -258,15 +227,14 @@ class AlpacaDataProvider:
             start = now_et() - timedelta(days=30)
 
         tf = self._parse_timeframe(timeframe)
-        feed = "opra" if self.is_pro_tier else "indicative"
 
+        # OptionBarsRequest has no feed field; the account's entitlement applies.
         request = OptionBarsRequest(
             symbol_or_symbols=symbol,
             timeframe=tf,
             start=start,
             end=end,
-            limit=limit,
-            feed=feed
+            limit=limit
         )
 
         bars = self.option_historical_client.get_option_bars(request)
