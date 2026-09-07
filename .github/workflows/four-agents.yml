@@ -1,7 +1,7 @@
 name: four-agent offline checks
 on:
   push:
-    branches: [four-agents]
+    branches: [master, four-agents]
   pull_request:
   workflow_dispatch:
 permissions:
