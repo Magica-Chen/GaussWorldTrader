@@ -29,6 +29,11 @@ class ConsoleOutput:
         self.stream = stream if stream is not None else sys.stdout
         self.json = output == "json" or (output == "auto" and not self.stream.isatty())
         self.previous = None
+        if not self.json:
+            from src.utils.branding import banner, make_console
+
+            self.console = make_console(file=self.stream)
+            banner(self.console, "Session monitor", "Four roles. One persistent view of the market.")
 
     def __call__(self, record):
         if self.json:
@@ -69,7 +74,10 @@ class ConsoleOutput:
             ]
             stamp = _time(record.get("at"))
             if lines != self.previous:
-                print("\n" + "\n".join(lines), file=self.stream)
+                from rich.panel import Panel
+                from rich.text import Text
+
+                self.console.print(Panel(Text("\n".join(lines)), border_style="cyan", padding=(1, 1)))
                 if self.previous is None:
                     print(
                         "  Ctrl+C: request shutdown (remaining exposure is reported first).",

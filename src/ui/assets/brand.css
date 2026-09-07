@@ -1,0 +1,28 @@
+:root { --gauss-navy: #183448; --gauss-teal: #237f80; }
+[data-testid="stMainBlockContainer"] { padding-top: 4rem; padding-bottom: 2rem; max-width: 1600px; }
+[data-testid="stSidebar"] { background: var(--secondary-background-color, #fff); border-right: 1px solid #e2e9ec; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 1rem; }
+.gauss-wordmark { display: flex; align-items: center; gap: 12px; margin: 0 0 28px; color: var(--text-color, #183448); }
+.gauss-wordmark img { background: #fff; border-radius: 6px; width: 60px; height: 60px; object-fit: contain; }
+.gauss-wordmark strong { display: block; font-size: 29px; letter-spacing: -1.2px; line-height: 1.1; }
+.gauss-wordmark span { display: block; font-size: 9px; letter-spacing: 2.1px; margin-top: 5px; }
+.gauss-masthead { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #dce5e9; padding: 0 0 25px; margin-bottom: 16px; color: var(--text-color, #183448); }
+.gauss-masthead h1 { font-size: clamp(28px, 3vw, 43px); font-weight: 550; letter-spacing: -1.5px; padding: 0; margin: 7px 0; }
+.gauss-masthead p { margin: 0; color: #60727f; font-size: 14px; }
+.gauss-masthead .gauss-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 2px; color: #237f80; }
+.gauss-label { font-size: 10px; letter-spacing: 1.6px; color: #60727f; white-space: nowrap; }
+.stApp h2 { font-size: 1.65rem; font-weight: 550; letter-spacing: -.6px; }
+.stApp h3 { font-size: 1.1rem; font-weight: 600; }
+[data-testid="stMetric"] { background: var(--secondary-background-color, #fff); border: 1px solid #e2e9ec; border-radius: 8px; padding: 17px 20px; }
+[data-testid="stMetricValue"] { font-size: 1.65rem; letter-spacing: -.5px; }
+.stTabs [data-baseweb="tab-list"] { gap: 24px; border-bottom: 1px solid #dce5e9; }
+.stTabs [data-baseweb="tab"] { padding: 12px 0; font-weight: 500; }
+.stTabs [aria-selected="true"] { color: #237f80; }
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 4px; }
+[data-testid="stSidebar"] [role="radiogroup"] label { padding: 9px 12px; border-radius: 6px; }
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) { background: #eaf3f2; color: #176467; }
+[data-testid="stExpander"], [data-testid="stForm"] { background: var(--secondary-background-color, #fff); border-color: #e2e9ec; }
+.stButton button, .stDownloadButton button { border-radius: 6px; }
+@media (max-width: 800px) { .gauss-label { display: none; } .gauss-masthead { padding-bottom: 20px; } }
+
+[data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] { gap: .65rem; }

@@ -15,7 +15,7 @@ class UI:
         if name == 'text_input': return lambda *a, **k: ''
         if name == 'selectbox': return lambda label, values, **k: list(values)[0]
         if name == 'form_submit_button': return lambda *a, **k: self.submitted
-        if name == 'form': return lambda *a, **k: self
+        if name in ('form', 'expander'): return lambda *a, **k: self
         if name == 'error': return lambda value: self.errors.append(value)
         return lambda *a, **k: None
 

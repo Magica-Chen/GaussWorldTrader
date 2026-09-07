@@ -297,6 +297,10 @@ installation outside the checkout.
 
 ## Extending the project
 
+The included basic strategies demonstrate the shared interfaces. Use them as
+starting points to develop your own signals and trading plans, while reusing the
+project's data access, backtesting, and execution components.
+
 1. Put a strategy in the appropriate stock/crypto/option module and define its `meta`
    and `summary`. Implement `get_signal()` and `get_action_plan()` using the shared
    contracts; reuse an existing strategy as the interface example.

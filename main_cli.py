@@ -10,7 +10,12 @@ from pathlib import Path
 
 import typer
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer(
+    add_completion=False, no_args_is_help=True,
+    help="Gauss World Trader · Research, backtest, and supervise your market strategies.",
+    epilog="Start with list-strategies. Use session --help for the persistent service.",
+    rich_markup_mode="rich",
+)
 
 
 from src.runtime.cli import app as session_app
@@ -96,29 +101,25 @@ def _parse_strategy_params(entries: list[str]) -> dict[str, object]:
 
 
 def _print_backtest_results(results: dict[str, object]) -> None:
-    summary = results.get("summary", results)
-    print("Backtest Summary:")
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    from rich.text import Text
+    from src.utils.branding import banner, make_console, table
 
-    benchmark = results.get("benchmark")
-    if isinstance(benchmark, dict):
-        print("\nBenchmark:")
-        for key, value in benchmark.items():
-            print(f"{key}: {value}")
-
+    console = make_console()
+    banner(console, "Backtest results", "Historical strategy evaluation")
+    for title, values in [("Backtest summary", results.get("summary", results)),
+                          ("Benchmark", results.get("benchmark"))]:
+        if isinstance(values, dict):
+            report = table(title, "Metric", "Value")
+            for key, value in values.items():
+                report.add_row(Text(str(key)), Text(str(value)))
+            console.print(report)
     splits = results.get("split_summaries")
     if isinstance(splits, list):
-        print("\nWalk-Forward Splits:")
+        report = table("Walk-forward splits", "Split", "Return (%)", "Sharpe", "Max drawdown (%)")
         for split in splits:
-            split_id = split.get("split", "?")
-            total_return = split.get("total_return_percentage")
-            sharpe = split.get("sharpe_ratio")
-            drawdown = split.get("max_drawdown_percentage")
-            print(
-                f"split {split_id}: return={total_return}, "
-                f"sharpe={sharpe}, max_drawdown={drawdown}"
-            )
+            report.add_row(*(Text(str(split.get(key, "—"))) for key in
+                             ["split", "total_return_percentage", "sharpe_ratio", "max_drawdown_percentage"]))
+        console.print(report)
 
 
 @app.command("list-strategies")
@@ -126,10 +127,20 @@ def list_strategies(dashboard_only: bool = False) -> None:
     """List available strategies."""
     registry = get_strategy_registry()
     strategies = registry.list_strategies(dashboard_only=dashboard_only)
+    from rich.text import Text
+    from src.utils.branding import banner, make_console, table
+
+    console = make_console()
+    banner(console, "Strategy library", "Stocks / Crypto / Options")
+    listing = table("Registered strategies", "Strategy", "Identifier", "Asset", "Interface")
     for strategy in strategies:
         meta = registry.get_meta(strategy)
-        visibility = "dashboard" if meta.visible_in_dashboard else "non-dashboard"
-        print(f"{meta.label} ({strategy}) - {visibility}")
+        listing.add_row(
+            Text(meta.label), Text(strategy), Text(meta.asset_type.title()),
+            "Dashboard + CLI" if meta.visible_in_dashboard else "CLI / session",
+        )
+    console.print(listing)
+    console.print(f"{len(strategies)} strategies · Inspect signals with run-strategy --help", style="dim")
 
 
 @app.command("account-info")
@@ -139,8 +150,13 @@ def account_info() -> None:
     info = engine.get_account_info()
     if not info:
         raise typer.Exit(1)
+    from rich.text import Text
+    from src.utils.branding import make_console, table
+
+    report = table("Account overview", "Field", "Value")
     for key, value in info.items():
-        print(f"{key}: {value}")
+        report.add_row(Text(str(key)), Text(str(value)))
+    make_console().print(report)
 
 
 @app.command("run-strategy")

@@ -94,6 +94,7 @@ include = ["src", "src.*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.toml", "*.yaml", "*.yml", "*.json"]
+"src.ui" = ["assets/*.png", "assets/*.css"]
 
 # Black configuration (Python 3.12 optimized)
 [tool.black]

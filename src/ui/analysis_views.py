@@ -15,8 +15,8 @@ class AnalysisViewsMixin:
 
     def render_live_analysis_tab(self):
         """Live Analysis: Symbol Analysis & Market Stream"""
-        st.header("🔍 Live Analysis")
-        analysis_tabs = st.tabs(["📊 Symbol Analysis", "📡 Market Stream"])
+        st.header("Live Analysis")
+        analysis_tabs = st.tabs(["Symbol Analysis", "Market Stream"])
         with analysis_tabs[0]:
             self.render_symbol_analysis()
         with analysis_tabs[1]:
@@ -24,7 +24,7 @@ class AnalysisViewsMixin:
 
     def render_symbol_analysis(self):
         """Render symbol analysis with AI insights"""
-        st.subheader("📊 Symbol Analysis")
+        st.subheader("Symbol Analysis")
         col1, col2 = st.columns([3, 1])
         with col1:
             from src.ui.dashboard_utils import get_default_symbols
@@ -132,7 +132,7 @@ class AnalysisViewsMixin:
 
     def render_market_stream(self):
         """Render real-time market data stream"""
-        st.subheader("📡 Market Stream")
+        st.subheader("Market Stream")
         col1, col2 = st.columns(2)
         with col1:
             from src.ui.dashboard_utils import get_default_symbols
@@ -188,8 +188,8 @@ class AnalysisViewsMixin:
 
     def render_news_report_tab(self):
         """News Report: Market News & Analysis"""
-        st.header("📰 News & Analysis")
-        news_tabs = st.tabs(["📰 Market News", "🤖 AI Analysis Report"])
+        st.header("News & Analysis")
+        news_tabs = st.tabs(["Market News", "AI Analysis Report"])
         with news_tabs[0]:
             self.render_market_news()
         with news_tabs[1]:

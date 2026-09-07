@@ -1,5 +1,12 @@
 <div align="center">
-  <img src="assets/logo3.png" width="600" alt="Gauss World Trader logo">
+  <img src="assets/brand/gauss-banner.png" width="1200" alt="Gauss World Trader — Research. Validate. Execute. A navy and teal Gaussian surface illustration.">
+  <p><strong>A connected Python workspace for market research, strategy backtesting, and supervised trading.</strong></p>
+  <p>
+    <a href="https://magica-chen.github.io/GaussWorldTrader/">Explore the website</a> ·
+    <a href="#try-the-workspace">Try the workspace</a> ·
+    <a href="docs/FOUR_AGENT_OPERATIONS.md">Operations guide</a> ·
+    <a href="examples/README.md">Examples</a>
+  </p>
   <p>
     <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
     <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
@@ -10,16 +17,44 @@
            alt="Join Gauss World Slack">
     </a>
   </p>
-  <p><strong>Market research, strategy backtesting, and supervised trading with Alpaca.</strong></p>
-  <p>Python 3.12+ · Streamlit · Stocks, crypto, and options · MIT license</p>
-  <p><a href="https://magica-chen.github.io/GaussWorldTrader/">Homepage</a> ·
-  <a href="docs/PROJECT_STRUCTURE.md">Project structure</a> ·
-  <a href="docs/FOUR_AGENT_OPERATIONS.md">Operations guide</a></p>
 </div>
 
-GaussWorldTrader combines registered trading strategies, Alpaca market/account data,
-Finnhub earnings and news, and FRED economic data. Use it to generate a next-session
-watchlist, inspect signals, run backtests, or supervise an approved trading session.
+Gauss World Trader brings price history, technical signals, news, and economic data into
+one research process. Explore **stocks, crypto, and options**, inspect a strategy's
+behavior, and follow an approved session from research through supervision. Start
+with the included basic strategies, then [build your own](#build-your-own-strategy)
+using the shared data, backtesting, and execution components.
+
+| Research | Validate | Execute & supervise |
+|---|---|---|
+| Screen a market universe and build a next-session watchlist. | Run backtests, walk-forward tests, and account suitability checks. | Inspect plans, entry blockers, agent health, and account exposure. |
+| Alpaca · Finnhub · FRED | Your strategy logic · shared backtesting | Four session roles · audited controls |
+
+## Try the workspace
+
+After [installing the dependencies](#installation), explore the real session interface
+with synthetic records. **No API keys or broker connection required.**
+
+```bash
+python -m streamlit run examples/dashboard_preview.py
+```
+
+[![Gauss World Trader dashboard — real Streamlit session view with an offline synthetic fixture](docs/images/dashboard-preview.png)](https://magica-chen.github.io/GaussWorldTrader/#workspace)
+
+*Actual application capture. The offline preview uses synthetic account and session
+records; the connected dashboard has eight sections for sessions, market data,
+accounts, analysis, watchlists, backtests, orders, and news.*
+
+<details>
+<summary><strong>See the terminal experience</strong></summary>
+
+![Real session terminal formatter with synthetic status records](docs/images/terminal-preview.png)
+
+The terminal shows session state, data freshness, entry blockers, and scheduled roles.
+Use `--output json` for complete structured records. The main CLI also provides a
+formatted strategy library, and `live_script.py` walks through account and strategy setup.
+
+</details>
 
 ## Choose a workflow
 
@@ -166,7 +201,7 @@ view reads the service ledger and offers authenticated controls; opening the bro
 does not start the service. Other views can fetch data or perform explicitly selected
 account actions.
 
-![Trading dashboard](assets/screenshot2.png)
+See the [workspace preview above](#try-the-workspace) or the [interactive website](https://magica-chen.github.io/GaussWorldTrader/#workspace).
 
 The interactive CLI supports quick-start watchlist defaults and custom asset,
 strategy, and parameter selection. Stock and crypto execution follows the reviewed
@@ -182,7 +217,11 @@ same account/environment.
 
 ## Strategies, analysis, and backtesting
 
-| Asset type | Registered strategy identifiers |
+The included basic strategies are starting points for learning the interfaces,
+trying ideas, and developing your own approach. Adapt an example or implement a
+new strategy using the shared contracts.
+
+| Asset type | Included strategy examples |
 |---|---|
 | Stock | `momentum`, `trend_following`, `mean_reversion`, `value`, `scalping`, `statistical_arbitrage`, `macro_factor`, `multi_agent` |
 | Crypto | `crypto_momentum`, `btc_volatility_breakout` |
@@ -209,6 +248,23 @@ and decision agents. Its `fast` mode uses deterministic analysis; `llm` mode cal
 configured provider. This analyst committee is separate from the four session roles.
 Dashboard multi-agent backtests use `fast` mode. Optional paid research in the session
 service uses isolated workers, recorded model pricing, and bounded time/cost budgets.
+
+### Build your own strategy
+
+1. Add your strategy to the appropriate asset package in `src/strategy/`. Define
+   `meta` and `summary`, then implement `get_signal()` and `get_action_plan()` using
+   the [shared strategy contracts](src/strategy/base.py).
+2. Register it in [the strategy registry](src/strategy/registry.py) so the CLI and
+   applicable dashboard views can discover it.
+3. Test it with your intended research, backtest, or execution workflow. Connect
+   the required adapters and approvals when adding it to the session runtime.
+
+See [Extending the project](docs/PROJECT_STRUCTURE.md#extending-the-project) for
+integration details. You supply the strategy logic; the shared components handle
+data access, backtesting, and execution policy.
+
+<details>
+<summary><strong>Configuration and data sources</strong></summary>
 
 ## Configuration and data sources
 
@@ -245,6 +301,8 @@ Typed entries in `watchlist.json` use `symbol` and `asset_type` (`stock`, `crypt
 `option`). Watchlist management lives in `src/watchlist/`. Notifications live in
 `src/notify/`; enable email with `NOTIFICATION_EMAIL_ENABLED`, `GMAIL_ADDRESS`, and
 `GMAIL_APP_PASSWORD`, or Slack with `NOTIFICATION_SLACK_ENABLED` and `SLACK_WEBHOOK_URL`.
+
+</details>
 
 ## Repository and development
 
@@ -283,6 +341,7 @@ focused, add behavior coverage where useful, and include screenshots for UI chan
 
 ## Documentation
 
+- [Brand and preview guide](docs/BRAND.md) — visual assets, screenshot reproduction, and website checks.
 - [Project structure](docs/PROJECT_STRUCTURE.md) — packages, data flows, and extension points.
 - [Operations](docs/FOUR_AGENT_OPERATIONS.md) — configuration, controls, calendars, shutdown, and recovery.
 - [Validation](docs/FOUR_AGENT_VALIDATION.md) — evidence and deployment requirements.
@@ -293,14 +352,19 @@ focused, add behavior coverage where useful, and include screenshots for UI chan
 Read [DISCLAIMER.md](DISCLAIMER.md) before using trading or investment-related
 features. Released under the [MIT license](LICENSE).
 
-## Star History
+## Community
+
+Join the [Gauss World Slack](https://join.slack.com/t/gaussianprocessmodels/shared_invite/zt-5acinu03-qvIOXiqSX0tvQmwPL2D7Nw) or use [GitHub issues](https://github.com/Magica-Chen/GaussWorldTrader/issues) for bugs and feature requests.
+
+<details>
+<summary>Star history</summary>
 
 <a href="https://www.star-history.com/?type=date&legend=top-left&repos=Magica-Chen%2FGaussWorldTrader">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&theme=dark&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left" />
  </picture>
 </a>
 
----
+</details>

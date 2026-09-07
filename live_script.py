@@ -13,11 +13,10 @@ if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "session":
     session_app(args=sys.argv[2:])
     raise SystemExit(0)
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich.text import Text
+from src.utils.branding import banner, make_console
 
 from src.settings import get_alpaca_base_url
 from src.strategy.registry import get_strategy_registry
@@ -41,19 +40,10 @@ from src.trade.live.live_trading_stock import (
 )
 from src.watchlist import WatchlistManager
 
-console = Console()
+console = make_console()
 
 
-BANNER = """
- ██████╗  █████╗ ██╗   ██╗███████╗███████╗ ██╗    ██╗ ██████╗ ██████╗ ██╗     ██████╗
-██╔════╝ ██╔══██╗██║   ██║██╔════╝██╔════╝ ██║    ██║██╔═══██╗██╔══██╗██║     ██╔══██╗
-██║  ███╗███████║██║   ██║███████╗███████╗ ██║ █╗ ██║██║   ██║██████╔╝██║     ██║  ██║
-██║   ██║██╔══██║██║   ██║╚════██║╚════██║ ██║███╗██║██║   ██║██╔══██╗██║     ██║  ██║
-╚██████╔╝██║  ██║╚██████╔╝███████║███████║ ╚███╔███╔╝╚██████╔╝██║  ██║███████╗██████╔╝
- ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝  ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═════╝
-                              T  R  A  D  E  R
-"""
-
+BANNER = "GAUSS WORLD TRADER"
 
 DEFAULT_STRATEGIES = {"stock": "momentum", "crypto": "crypto_momentum", "option": "wheel"}
 
@@ -92,15 +82,13 @@ class TradingConfig:
 
 def show_banner() -> None:
     """Display the application banner."""
-    banner_text = Text(BANNER, style="bold cyan")
-    console.print(banner_text)
-    console.print()
+    banner(console, "Live trading console", "Configure your universe, review the account, start a session.")
 
 
 def show_watchlist_summary() -> None:
     """Display current watchlist summary."""
     manager = WatchlistManager()
-    table = Table(title="Current Watchlist", show_header=True, header_style="bold magenta")
+    table = Table(title="Current Watchlist", show_header=True, header_style="bold cyan")
     table.add_column("Asset Type", style="cyan", width=12)
     table.add_column("Symbols", style="green")
 
@@ -126,7 +114,7 @@ def load_account_context() -> ExecutionContext | None:
 
 def show_account_summary(context: ExecutionContext) -> None:
     """Display account capability summary."""
-    console.print(Panel("[bold]Account Summary[/bold]", style="blue"))
+    console.print(Panel("[bold]Account Summary[/bold]", border_style="cyan"))
 
     mode = "Paper Trading" if "paper" in get_alpaca_base_url() else "Live Trading"
     info = context.account_info or {}
@@ -168,7 +156,7 @@ def show_account_summary(context: ExecutionContext) -> None:
 
 def select_asset_types() -> list[str]:
     """Interactive selection of asset types to trade."""
-    console.print(Panel("[bold]Asset Type Selection[/bold]", style="blue"))
+    console.print(Panel("[bold]Asset Type Selection[/bold]", border_style="cyan"))
     console.print("Select which asset types to trade:\n")
 
     options = [
@@ -207,7 +195,7 @@ def get_symbols_for_type(asset_type: str) -> list[str]:
 def configure_symbols(asset_types: list[str]) -> dict[str, list[str]]:
     """Configure symbols for each asset type."""
     console.print()
-    console.print(Panel("[bold]Symbol Configuration[/bold]", style="blue"))
+    console.print(Panel("[bold]Symbol Configuration[/bold]", border_style="cyan"))
 
     symbols: dict[str, list[str]] = {}
 
@@ -249,7 +237,7 @@ def get_default_strategy(asset_type: str) -> str:
 def configure_strategies(asset_types: list[str]) -> dict[str, str]:
     """Configure strategies for each asset type."""
     console.print()
-    console.print(Panel("[bold]Strategy Selection[/bold]", style="blue"))
+    console.print(Panel("[bold]Strategy Selection[/bold]", border_style="cyan"))
 
     strategies: dict[str, str] = {}
 
@@ -284,7 +272,7 @@ def configure_strategy_options(config: TradingConfig) -> TradingConfig:
         return config
 
     console.print()
-    console.print(Panel("[bold]Multi-Agent Settings[/bold]", style="blue"))
+    console.print(Panel("[bold]Multi-Agent Settings[/bold]", border_style="cyan"))
     console.print("`fast` avoids live LLM calls. `llm` uses the configured LLM provider.")
 
     stock_params = dict(config.strategy_params.get("stock", {}))
@@ -309,7 +297,7 @@ def configure_parameters(config: TradingConfig, context: ExecutionContext | None
         config.supports_fractional = context.fractional_enabled
         config.supports_sell_to_open = context.margin_enabled and context.shorting_enabled
     console.print()
-    console.print(Panel("[bold]Trading Parameters[/bold]", style="blue"))
+    console.print(Panel("[bold]Trading Parameters[/bold]", border_style="cyan"))
 
     # Show defaults
     table = Table(show_header=True, header_style="bold")
@@ -396,7 +384,7 @@ def apply_account_constraints(
 def show_final_config(config: TradingConfig, _context: ExecutionContext | None) -> None:
     """Display final configuration before starting."""
     console.print()
-    console.print(Panel("[bold]Trading Configuration Summary[/bold]", style="green"))
+    console.print(Panel("[bold]Trading Configuration Summary[/bold]", border_style="cyan"))
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("Setting", style="cyan")
@@ -555,7 +543,7 @@ def run_trading(config: TradingConfig) -> None:
 def quick_start() -> TradingConfig | None:
     """Quick start with all defaults from watchlist."""
     console.print()
-    console.print(Panel("[bold]Quick Start[/bold]", style="green"))
+    console.print(Panel("[bold]Quick Start[/bold]", border_style="cyan"))
     console.print("Starting with all defaults from watchlist.json\n")
 
     config = TradingConfig()
@@ -600,7 +588,7 @@ def main() -> None:
             show_account_summary(account_context)
 
         # Main menu
-        console.print(Panel("[bold]Trading Mode Selection[/bold]", style="blue"))
+        console.print(Panel("[bold]Trading Mode Selection[/bold]", border_style="cyan"))
         console.print("  [cyan]1[/cyan] - Quick Start (use watchlist defaults)")
         console.print("  [cyan]2[/cyan] - Custom Configuration")
         console.print("  [cyan]q[/cyan] - Quit")

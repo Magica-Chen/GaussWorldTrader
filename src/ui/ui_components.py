@@ -80,7 +80,7 @@ class UIComponents:
     @staticmethod
     def render_trading_interface():
         """Render trading order entry interface"""
-        st.subheader("🚀 Place Order")
+        st.subheader("Place Order")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -141,7 +141,7 @@ class UIComponents:
     @staticmethod
     def render_watchlist_interface():
         """Render watchlist management interface"""
-        st.subheader("👁️ Watchlist Management")
+        st.subheader("Watchlist Management")
 
         if 'watchlist_manager' not in st.session_state:
             st.error("Watchlist manager not initialized")

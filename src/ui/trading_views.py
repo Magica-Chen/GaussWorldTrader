@@ -58,8 +58,8 @@ class TradingViewsMixin:
 
     def render_strategy_backtest_tab(self):
         """Strategy Backtest: Quick Backtest & Strategy Comparison"""
-        st.header("📈 Strategy Backtest")
-        backtest_tabs = st.tabs(["⚡ Quick Backtest", "📊 Strategy Comparison"])
+        st.header("Strategy Backtest")
+        backtest_tabs = st.tabs(["Quick Backtest", "Strategy Comparison"])
         with backtest_tabs[0]:
             self.render_quick_backtest()
         with backtest_tabs[1]:
@@ -67,7 +67,7 @@ class TradingViewsMixin:
 
     def render_quick_backtest(self):
         """Render simplified single strategy backtest"""
-        st.subheader("⚡ Quick Backtest")
+        st.subheader("Quick Backtest")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             asset_type = st.selectbox(
@@ -184,7 +184,7 @@ class TradingViewsMixin:
 
     def render_strategy_comparison(self):
         """Render strategy comparison"""
-        st.subheader("📊 Strategy Comparison")
+        st.subheader("Strategy Comparison")
         col1, col2, col3 = st.columns(3)
         with col1:
             asset_type = st.selectbox(
@@ -324,8 +324,8 @@ class TradingViewsMixin:
 
     def render_trade_order_tab(self):
         """Trade: Order Entry, Watchlist, Orders History"""
-        st.header("⚡ Trade")
-        trade_tabs = st.tabs(["🚀 Order Entry", "👁️ Watchlist", "📋 Order History"])
+        st.header("Trade")
+        trade_tabs = st.tabs(["Order Entry", "Watchlist", "Order History"])
         with trade_tabs[0]:
             UIComponents.render_trading_interface()
         with trade_tabs[1]:
@@ -335,7 +335,7 @@ class TradingViewsMixin:
 
     def render_orders_table(self):
         """Render orders history table"""
-        st.subheader("📋 Recent Orders")
+        st.subheader("Recent Orders")
         try:
             if 'order_manager' in st.session_state:
                 orders = st.session_state.order_manager.get_orders(status='all', limit=50)

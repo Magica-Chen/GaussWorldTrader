@@ -17,8 +17,8 @@ class AccountViewsMixin:
 
     def render_account_info_tab(self):
         """Account Info: Account, Positions, Portfolio, Configuration"""
-        st.header("💼 Account Information")
-        account_tabs = st.tabs(["📊 Account", "📈 Positions", "💰 Portfolio", "⚙️ Configuration"])
+        st.header("Account Information")
+        account_tabs = st.tabs(["Account", "Positions", "Portfolio", "Configuration"])
         with account_tabs[0]:
             self.render_account_overview()
         with account_tabs[1]:
@@ -30,7 +30,7 @@ class AccountViewsMixin:
 
     def render_account_overview(self):
         """Render account overview"""
-        st.subheader("📊 Account Overview")
+        st.subheader("Account Overview")
         account_info, error = self.get_account_info()
         if account_info:
             col1, col2, col3, col4 = st.columns(4)
@@ -50,7 +50,7 @@ class AccountViewsMixin:
 
     def render_positions_view(self):
         """Render current positions"""
-        st.subheader("📈 Current Positions")
+        st.subheader("Current Positions")
         if 'position_manager' in st.session_state:
             positions = st.session_state.position_manager.get_all_positions()
             if positions:
@@ -62,13 +62,13 @@ class AccountViewsMixin:
 
     def render_portfolio_analytics(self):
         """Render portfolio analytics with real data"""
-        st.subheader("💰 Portfolio Analytics")
+        st.subheader("Portfolio Analytics")
         self.render_portfolio_allocation()
         self.render_portfolio_metrics()
 
     def render_risk_configuration(self):
         """Render risk management configuration"""
-        st.subheader("⚙️ Risk Management Configuration")
+        st.subheader("Risk Management Configuration")
         col1, col2 = st.columns(2)
         with col1:
             st.write("**Position Sizing**")

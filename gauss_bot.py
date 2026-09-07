@@ -10,7 +10,10 @@ import os
 
 def parser():
     result = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Research once: --once\nSession logs:  --output text | --output json",
         description=(
+            "GAUSS WORLD TRADER | Session service\n\n"
             "Run PostGauss, CloseGauss, PreGauss and LiveGauss in one persistent service. "
             "Default: paper account, shadow execution, FREE_DELAYED information."
         )
@@ -103,11 +106,15 @@ def main(argv=None, *, service_factory=None):
         from src.runtime.screening import render_report, run_research
 
         report, path = run_research(config)
-        print(
-            json.dumps({"report_path": str(path), **report}, default=str)
-            if args.output == "json"
-            else render_report(report)
-        )
+        if args.output == "json":
+            print(json.dumps({"report_path": str(path), **report}, default=str))
+        else:
+            from rich.markdown import Markdown
+            from src.utils.branding import banner, make_console
+
+            console = make_console()
+            banner(console, "Market research", "Completed-session evidence · Next-session watchlist")
+            console.print(Markdown(render_report(report)))
         return 0
     if service_factory is None:
         from src.runtime.service import build_service

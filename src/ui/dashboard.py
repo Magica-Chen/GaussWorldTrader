@@ -12,7 +12,6 @@ import queue
 import threading
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -33,6 +32,7 @@ from src.ui.analysis_views import AnalysisViewsMixin
 from src.ui.market_views import MarketViewsMixin
 from src.ui.trading_views import TradingViewsMixin
 from src.ui.ui_components import UIComponents
+from src.ui.brand import MARK, apply_brand, wordmark, workspace_header
 from src.utils.timezone_utils import get_market_status, now_et
 from src.watchlist import WatchlistManager
 
@@ -79,21 +79,14 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         """Configure Streamlit page settings."""
         st.set_page_config(
             page_title=self.title,
-            page_icon=f":{self.icon}:",
+            page_icon=str(MARK),
             layout="wide",
             initial_sidebar_state="expanded"
         )
 
     def apply_styles(self):
         """Apply custom CSS styles."""
-        st.markdown("""
-        <style>
-        .main .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-        .stTabs [data-baseweb="tab"] { padding: 10px 20px; }
-        div[data-testid="stMetricValue"] { font-size: 1.5rem; }
-        </style>
-        """, unsafe_allow_html=True)
+        apply_brand()
 
     def initialize_modules(self):
         """Initialize all trading modules."""
@@ -176,9 +169,9 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         sma_20 = data['close'].rolling(window=20).mean()
         sma_50 = data['close'].rolling(window=min(50, len(data))).mean()
         fig.add_trace(go.Scatter(x=data.index, y=sma_20, mode='lines', name='SMA 20',
-                                 line={"color": "orange", "width": 1}))
+                                 line={"color": "#b58950", "width": 1}))
         fig.add_trace(go.Scatter(x=data.index, y=sma_50, mode='lines', name='SMA 50',
-                                 line={"color": "purple", "width": 1}))
+                                 line={"color": "#748ca3", "width": 1}))
         fig.update_layout(title=f"{symbol} Price Chart", height=500, showlegend=True)
         return fig
 
@@ -261,7 +254,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=portfolio_history.index, y=portfolio_history['portfolio_value'],
-                mode='lines', name='Portfolio Value', line={"color": "blue", "width": 2}
+                mode='lines', name='Portfolio Value', line={"color": "#237f80", "width": 2}
             ))
             fig.update_layout(title="Portfolio Performance", yaxis_title="Value ($)", height=400)
             st.plotly_chart(fig, width="stretch")
@@ -269,17 +262,15 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
     def create_main_navigation(self):
         """Create main navigation tabs in the sidebar."""
         with st.sidebar:
-            logo_path = Path(__file__).resolve().parents[2] / "assets" / "logo2.png"
-            if logo_path.exists():
-                st.image(str(logo_path), width=150)
-
-
-            st.header("Navigation")
+            wordmark()
+            st.caption("WORKSPACE")
             selected_tab = st.radio(
                 "Choose a section:",
                 ["🧭 Gauss Session", "📊 Market Overview", "💼 Account Info", "🔍 Live Analysis", "👁️ Watchlist",
                  "📈 Strategy Backtest", "⚡ Trade & Order", "📰 News & Report"],
-                key="main_navigation"
+                key="main_navigation",
+                format_func=lambda label: label.split(" ", 1)[1],
+                label_visibility="collapsed"
             )
 
             if selected_tab == "🧭 Gauss Session":
@@ -314,7 +305,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_market_status_sidebar(self):
         """Render market status in sidebar."""
-        st.subheader("🏛️ Market Status")
+        st.subheader("Market Status")
         local_time, et_time = datetime.now(), now_et()
         market_status = get_market_status()
         status_color = "green" if market_status == 'open' else "red"
@@ -325,7 +316,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_portfolio_quick_view(self):
         """Render portfolio quick view in sidebar."""
-        st.subheader("📊 Quick View")
+        st.subheader("Quick View")
         try:
             account_info, error = self.get_account_info()
             if account_info:
@@ -350,8 +341,8 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_live_analysis_tab_extended(self):
         """Extended live analysis with market stream."""
-        st.header("🔍 Live Analysis")
-        analysis_tabs = st.tabs(["📊 Historical Market", "🤖 Multi-Agent", "📡 Market Stream"])
+        st.header("Live Analysis")
+        analysis_tabs = st.tabs(["Historical Market", "Multi-Agent", "Market Stream"])
         with analysis_tabs[0]:
             self.render_symbol_analysis_extended()
         with analysis_tabs[1]:
@@ -398,7 +389,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_multi_agent_analysis_extended(self):
         """Render a dedicated multi-agent decision view."""
-        st.subheader("🤖 Multi-Agent Analysis")
+        st.subheader("Multi-Agent Analysis")
         col1, col2 = st.columns([1, 2])
         with col1:
             from src.ui.dashboard_utils import get_default_symbols
@@ -824,13 +815,13 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_watchlist_tab(self):
         """Render watchlist management."""
-        st.header("👁️ Watchlist")
+        st.header("Watchlist")
         UIComponents.render_watchlist_interface()
 
     def render_strategy_backtest_tab_extended(self):
         """Extended strategy backtest with comparison."""
-        st.header("📈 Strategy Backtesting")
-        backtest_tabs = st.tabs(["⚡ Quick Backtest", "📊 Strategy Comparison"])
+        st.header("Strategy Backtesting")
+        backtest_tabs = st.tabs(["Quick Backtest", "Strategy Comparison"])
         with backtest_tabs[0]:
             self.render_quick_backtest_extended()
         with backtest_tabs[1]:
@@ -982,8 +973,8 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_trade_order_tab_extended(self):
         """Extended trade and order tab."""
-        st.header("⚡ Trade & Order Management")
-        trade_tabs = st.tabs(["🚀 Quick Trade", "📋 Recent Orders"])
+        st.header("Trade & Order Management")
+        trade_tabs = st.tabs(["Quick Trade", "Recent Orders"])
         with trade_tabs[0]:
             UIComponents.render_trading_interface()
         with trade_tabs[1]:
@@ -991,8 +982,8 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_news_report_tab_extended(self):
         """Extended news and report tab."""
-        st.header("📰 News & Reports")
-        news_tabs = st.tabs(["📰 Company News", "👔 Insider Activity", "🤖 AI Reports", "🛰️ Live News"])
+        st.header("News & Reports")
+        news_tabs = st.tabs(["Company News", "Insider Activity", "AI Reports", "Live News"])
         with news_tabs[0]:
             self.render_company_news_extended()
         with news_tabs[1]:
@@ -1004,7 +995,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_company_news_extended(self):
         """Extended company news."""
-        st.subheader("📰 Company News")
+        st.subheader("Company News")
         col1, col2 = st.columns([1, 3])
         with col1:
             news_symbol = st.text_input("Symbol", value="AAPL", key="news_symbol").upper()
@@ -1035,7 +1026,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_insider_activity_extended(self):
         """Extended insider activity."""
-        st.subheader("👔 Insider Activity")
+        st.subheader("Insider Activity")
         col1, col2 = st.columns([1, 3])
         with col1:
             insider_symbol = st.text_input("Symbol", value="AAPL", key="insider_symbol").upper()
@@ -1075,7 +1066,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def render_news_stream_extended(self):
         """Extended live news stream."""
-        st.subheader("🛰️ Live News Stream")
+        st.subheader("Live News Stream")
         col1, col2 = st.columns([2, 3])
         with col1:
             symbols_input = st.text_input("Symbols (* for all)", value="*", key="news_stream_symbols")
@@ -1212,10 +1203,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
 
     def run_dashboard(self):
         """Main dashboard execution."""
-        st.markdown("<h1 style='text-align: center;'>🌍 Gauss World Trader</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-style: italic;'>Advanced Trading Platform with Comprehensive Market Analysis</p>",
-                    unsafe_allow_html=True)
-        st.divider()
+        workspace_header()
         self.create_main_navigation()
         st.divider()
         st.markdown(

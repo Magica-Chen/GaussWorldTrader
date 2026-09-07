@@ -155,12 +155,24 @@ def render_gauss_session(client=None):
         report = client.report()
         account = client.account()
         plans = client.plans()
+    except FileNotFoundError:
+        st.info("Your session workspace is ready. Start the service to see its activity here.")
+        st.markdown("Use the same configuration for the service and dashboard.")
+        st.code("python gauss_bot.py --config examples/gauss.free-delayed.example.toml", language="bash")
+        st.caption("Explore the interface without credentials with the offline preview:")
+        st.code("python -m streamlit run examples/dashboard_preview.py", language="bash")
+        return
     except Exception as exc:
         st.error(f"Session service state unavailable: {exc}")
         return
 
     mode = status.get("execution_mode", "UNKNOWN")
     profile = status.get("data_profile", "UNKNOWN")
+    overview = st.columns(4)
+    overview[0].metric("Execution mode", str(mode).title())
+    overview[1].metric("Environment", str(status.get("environment", "Unknown")).title())
+    overview[2].metric("Plans recorded", str(len(plans)))
+    overview[3].metric("Entries", "Paused" if status.get("entries_paused") else "Review readiness")
     if str(mode).lower() == "shadow":
         st.info("SHADOW MODE — decisions are observations; broker submission is disabled.")
     else:
@@ -221,7 +233,8 @@ def render_gauss_session(client=None):
         "A deliberate market-information delay does not delay broker orders and positions. "
         "Indicative quotes do not establish genuine OPRA coverage."
     )
-    show_records("Execution readiness", status.get("readiness"))
+    with st.expander("Execution readiness"):
+        show_records("Entry checks", status.get("readiness"))
     st.write(
         "Runtime:",
         status.get("runtime_state", "Unknown"),

@@ -1,6 +1,21 @@
-# Examples Directory
+# Examples
+
+Preview the redesigned workspace without credentials:
+
+```bash
+python -m streamlit run examples/dashboard_preview.py
+```
+
+This uses the production session view with synthetic records and disabled operator
+commands. Launch the connected dashboard with `python dashboard.py`.
+See [the brand guide](../docs/BRAND.md) to reproduce screenshots and check the website.
+
 
 This directory contains example scripts demonstrating various features of Gauss World Trader.
+
+Use the basic strategy examples to learn the interfaces, then
+[build your own strategy](../docs/PROJECT_STRUCTURE.md#extending-the-project)
+with the shared research and execution components.
 
 ## Available Examples
 

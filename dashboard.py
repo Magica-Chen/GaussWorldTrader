@@ -22,21 +22,22 @@ def main() -> None:
         "--server.port=3721",
         "--server.address=localhost",
         "--theme.base=light",
-        "--theme.primaryColor=#1f77b4",
-        "--theme.backgroundColor=#ffffff",
-        "--theme.secondaryBackgroundColor=#f0f2f6",
-        "--theme.textColor=#262730",
+        "--theme.primaryColor=#237f80",
+        "--theme.backgroundColor=#f7f9fa",
+        "--theme.secondaryBackgroundColor=#ffffff",
+        "--theme.textColor=#183448",
     ]
 
-    print("🚀 Launching dashboard on http://localhost:3721")
-    print("🔄 Press Ctrl+C to stop")
+    from src.utils.branding import banner, make_console
+
+    banner(make_console(), "Market workspace", "http://localhost:3721  ·  Ctrl+C to stop")
 
     try:
         subprocess.run(cmd, check=False)
     except KeyboardInterrupt:
-        print("\n⏹️  Dashboard stopped by user")
+        print("\nDashboard stopped.")
     except FileNotFoundError:
-        print("❌ Streamlit not found. Install with: pip install streamlit")
+        print("Streamlit not found. Install with: pip install streamlit")
         sys.exit(1)
 
 

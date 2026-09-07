@@ -20,7 +20,7 @@ class MarketViewsMixin:
 
     def render_market_overview_tab(self):
         """Market Overview: Index, VIX, Market Sentiment, Sector Performance, Crypto"""
-        st.header("📊 Market Overview")
+        st.header("Market Overview")
         st.divider()
         self.render_standard_market_indices()
         st.divider()
