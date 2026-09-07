@@ -26,8 +26,10 @@ from src.runtime.console import ConsoleOutput
 from src.utils.branding import make_console
 
 
-def capture():
+def capture(review_directory: Path | None = None):
     pictures = ROOT / "docs/images"
+    if review_directory is not None:
+        review_directory.mkdir(parents=True, exist_ok=True)
     with closing(socket.socket()) as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -100,7 +102,8 @@ def capture():
                     page.get_by_role("tab", name=tab, exact=True).click()
                     assert page.locator('[data-testid="stException"]').count() == 0
                 page.set_viewport_size({"width": 390, "height": 844})
-                page.screenshot(path=str(pictures / "dashboard-mobile.png"))
+                if review_directory is not None:
+                    page.screenshot(path=str(review_directory / "dashboard-mobile.png"))
                 page.set_viewport_size({"width": 1440, "height": 1050})
 
                 output = ConsoleOutput("text", StringIO())
@@ -123,7 +126,8 @@ def capture():
                 )
                 svg = output.console.export_svg(title="Gauss World Trader / Session monitor")
                 svg = "\n".join(line.rstrip() for line in svg.splitlines()) + "\n"
-                (pictures / "terminal-preview.svg").write_text(svg)
+                if review_directory is not None:
+                    (review_directory / "terminal-preview.svg").write_text(svg)
                 page.set_content(
                     '<html><body style="margin:0;background:#f7f9fa;display:grid;place-items:center;height:100vh">'
                     + svg
@@ -170,7 +174,8 @@ def capture():
                     "window.getSelection().removeAllRanges(); document.activeElement.blur(); document.querySelector('#copy-status').textContent = ''; window.scrollTo({top:0,behavior:'instant'})"
                 )
                 page.mouse.move(0, 0)
-                page.screenshot(path=str(pictures / "site-desktop.png"), full_page=True)
+                if review_directory is not None:
+                    page.screenshot(path=str(review_directory / "site-desktop.png"), full_page=True)
                 for width in [390, 768, 1024, 1440]:
                     page.set_viewport_size({"width": width, "height": 844})
                     assert page.evaluate(
@@ -183,7 +188,8 @@ def capture():
                 expect(page.locator(".menu-button")).to_have_attribute("aria-expanded", "false")
                 page.locator(".menu-button").blur()
                 page.evaluate("window.scrollTo({top:0,behavior:'instant'})")
-                page.screenshot(path=str(pictures / "site-mobile.png"), full_page=True)
+                if review_directory is not None:
+                    page.screenshot(path=str(review_directory / "site-mobile.png"), full_page=True)
                 browser.close()
             print(
                 "Captured real dashboard and terminal. Site filters, roles, previews, commands, clipboard, assets and responsive layouts passed."
@@ -198,4 +204,10 @@ def capture():
 
 
 if __name__ == "__main__":
-    capture()
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--review-dir", type=Path, help="Optional output directory for review-only captures"
+    )
+    capture(parser.parse_args().review_dir)

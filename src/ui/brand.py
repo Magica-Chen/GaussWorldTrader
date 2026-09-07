@@ -30,7 +30,7 @@ def wordmark():
     encoded = b64encode(MARK.read_bytes()).decode("ascii")
     st.html(
         '<div class="gauss-wordmark">'
-        f'<img src="data:image/png;base64,{encoded}" alt="Gaussian curve brand mark">'
+        f'<img src="data:image/png;base64,{encoded}" alt="Gaussian curve, candlesticks, and upward trend brand mark">'
         "<div><strong>Gauss</strong><span>WORLD TRADER</span></div></div>"
     )
 

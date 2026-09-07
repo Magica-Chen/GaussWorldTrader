@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/brand/gauss-banner.png" width="1200" alt="Gauss World Trader — Research. Validate. Execute. A navy and teal Gaussian surface illustration.">
+  <img src="assets/brand/gauss-banner.png" width="1200" alt="Gauss World Trader — Research. Validate. Execute. A world map projected onto a Gaussian surface, with candlesticks and an upward trend inside.">
   <p><strong>A connected Python workspace for market research, strategy backtesting, and supervised trading.</strong></p>
   <p>
     <a href="https://magica-chen.github.io/GaussWorldTrader/">Explore the website</a> ·

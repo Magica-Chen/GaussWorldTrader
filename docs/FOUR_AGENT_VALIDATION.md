@@ -61,9 +61,9 @@ checkout, and run the installed `trading-cli session validate-config` and
 `trading-cli list-strategies` commands.
 
 Real Streamlit rendering and a persisted replay client were exercised with AppTest.
-The inspected browser captures show the [session view](images/gauss_session_offline.png)
-and [operator controls](images/gauss_session_controls_offline.png). Opening these views
-did not start the session runtime or submit orders.
+Opening these views did not start the session runtime or submit orders.
+The current [session preview](images/dashboard-preview.png) uses the synthetic fixture
+described in the [brand and preview guide](BRAND.md).
 
 The [T01–T60 acceptance matrix](FOUR_AGENT_ACCEPTANCE_MATRIX.md) names individual test
 functions and their evidence scope. A named synthetic test establishes its

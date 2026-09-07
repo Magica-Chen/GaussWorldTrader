@@ -28,7 +28,7 @@ GaussWorldTrader/
 ├── examples/                   # Runnable examples and Gauss TOML configurations
 ├── tests/                      # Tracked offline suite plus ignored local tests
 ├── docs/                       # Operations, validation, design, and structure docs
-├── assets/                     # Logos and screenshots
+├── assets/                     # Canonical brand mark and banner
 └── site/                       # Static homepage (index.html)
 ```
 
@@ -281,7 +281,8 @@ credentials; the TOML examples define operational settings rather than historica
 `docs/` contains this map, the operations guide, validation record, acceptance matrix,
 design/planning documents, and session screenshots under `docs/images/`. Design plans
 record intended architecture; use code and the operations guide for current behavior.
-`assets/` holds logos and general screenshots. `.github/workflows/pages.yml` publishes
+`assets/brand/` holds the current logo and banner; `docs/images/` holds the active
+interface screenshots. `.github/workflows/pages.yml` publishes
 `site/` when its configured branch/path triggers match.
 
 The tracked offline suite covers runtime lifecycle, SDK adapters, risk/gateway behavior,
