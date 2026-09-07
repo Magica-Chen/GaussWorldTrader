@@ -6,6 +6,13 @@ import logging
 import sys
 from dataclasses import dataclass, field
 
+# Session commands use the persistent service without loading interactive broker modules.
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "session":
+    from src.runtime.cli import app as session_app
+
+    session_app(args=sys.argv[2:])
+    raise SystemExit(0)
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
@@ -49,6 +56,11 @@ BANNER = """
 
 
 DEFAULT_STRATEGIES = {"stock": "momentum", "crypto": "crypto_momentum", "option": "wheel"}
+
+OPTION_RESEARCH_NOTICE = (
+    "Options in this menu run underlying research only: no option orders or automatic exits. "
+    "Option execution uses the Gauss session with approved strategies and readiness checks."
+)
 
 
 @dataclass
@@ -128,10 +140,12 @@ def show_account_summary(context: ExecutionContext) -> None:
     overview.add_row("Daytrading BP", f"${float(info.get('daytrading_buying_power', 0.0)):,.2f}")
     overview.add_row("Cash", f"${context.cash:,.2f}")
     overview.add_row("Portfolio Value", f"${context.portfolio_value:,.2f}")
-    overview.add_row("Pattern Day Trader", "Yes" if info.get("pattern_day_trader", False) else "No")
+    pdt = info.get("pattern_day_trader")
+    overview.add_row("Pattern Day Trader", "N/A" if pdt is None else "Yes" if pdt else "No")
+    daytrade_count = info.get("daytrade_count", info.get("day_trade_count"))
     overview.add_row(
         "Daytrade Count",
-        str(info.get("daytrade_count", info.get("day_trade_count", "N/A"))),
+        "N/A" if daytrade_count is None else str(daytrade_count),
     )
     console.print(overview)
 
@@ -160,8 +174,8 @@ def select_asset_types() -> list[str]:
     options = [
         ("1", "stock", "Stocks (equities)"),
         ("2", "crypto", "Cryptocurrency (24/7)"),
-        ("3", "option", "Options (wheel or vertical spread)"),
-        ("4", "all", "All asset types"),
+        ("3", "option", "Options research (wheel or vertical spread; no orders)"),
+        ("4", "all", "All asset types (options research only)"),
     ]
 
     for key, _, desc in options:
@@ -287,6 +301,10 @@ def configure_strategy_options(config: TradingConfig) -> TradingConfig:
 
 def configure_parameters(config: TradingConfig, context: ExecutionContext | None) -> TradingConfig:
     """Configure trading parameters interactively."""
+    if not any(asset in {"stock", "crypto"} for asset in config.asset_types):
+        config.execute = False
+    if "option" in config.asset_types:
+        console.print(f"[yellow]{OPTION_RESEARCH_NOTICE}[/yellow]")
     if context:
         config.supports_fractional = context.fractional_enabled
         config.supports_sell_to_open = context.margin_enabled and context.shorting_enabled
@@ -304,7 +322,7 @@ def configure_parameters(config: TradingConfig, context: ExecutionContext | None
     table.add_row("Risk %", f"{config.risk_pct:.1%}", "Portfolio risk per trade")
     table.add_row("Stop Loss", f"{config.stop_loss_pct:.1%}", "Stop-loss percentage")
     table.add_row("Take Profit", f"{config.take_profit_pct:.1%}", "Take-profit percentage")
-    table.add_row("Execute", str(config.execute), "Execute live trades")
+    table.add_row("Execute", str(config.execute), "Submit stock/crypto orders; options research only")
     table.add_row("Auto Exit", str(config.auto_exit), "Auto-close on SL/TP")
     table.add_row("Order Type", config.order_type, "auto, market, or limit")
     table.add_row("Sell to Open", str(config.allow_sell_to_open), "Allow shorting")
@@ -328,7 +346,8 @@ def configure_parameters(config: TradingConfig, context: ExecutionContext | None
         config.take_profit_pct = float(Prompt.ask(
             "Take profit % (decimal)", default=str(config.take_profit_pct)
         ))
-        config.execute = Confirm.ask("Execute live trades?", default=config.execute)
+        if any(asset in {"stock", "crypto"} for asset in config.asset_types):
+            config.execute = Confirm.ask("Submit stock/crypto orders?", default=config.execute)
         config.auto_exit = Confirm.ask("Auto-exit on SL/TP?", default=config.auto_exit)
         config.order_type = Prompt.ask(
             "Order type",
@@ -387,6 +406,11 @@ def show_final_config(config: TradingConfig, _context: ExecutionContext | None) 
         table.add_row(f"{asset_type.upper()} Symbols", ", ".join(symbols))
         strategy = config.strategies.get(asset_type, get_default_strategy(asset_type))
         table.add_row(f"{asset_type.upper()} Strategy", strategy)
+        table.add_row(
+            f"{asset_type.upper()} Mode",
+            "Research only (no orders or automatic exits)" if asset_type == "option"
+            else "Submit orders" if config.execute else "Dry run",
+        )
         if strategy == "multi_agent":
             mode = config.strategy_params.get(asset_type, {}).get("mode", "fast")
             table.add_row(f"{asset_type.upper()} Multi-Agent Mode", str(mode))
@@ -396,18 +420,22 @@ def show_final_config(config: TradingConfig, _context: ExecutionContext | None) 
     table.add_row("Risk", f"{config.risk_pct:.1%}")
     table.add_row("Stop Loss", f"{config.stop_loss_pct:.1%}")
     table.add_row("Take Profit", f"{config.take_profit_pct:.1%}")
-    table.add_row("Execute", "[green]Yes[/green]" if config.execute else "[red]No (Dry Run)[/red]")
-    table.add_row("Auto Exit", "[green]Yes[/green]" if config.auto_exit else "[yellow]No[/yellow]")
+    table.add_row("Stock/Crypto Auto Exit", "[green]Yes[/green]" if config.auto_exit else "[yellow]No[/yellow]")
     table.add_row("Order Type", config.order_type)
 
     console.print(table)
+    if config.symbols.get("option"):
+        console.print(f"[yellow]{OPTION_RESEARCH_NOTICE}[/yellow]")
     console.print()
 
 
 def run_trading(config: TradingConfig) -> None:
     """Execute trading based on configuration."""
     console.print()
-    mode = "[green]LIVE[/green]" if config.execute else "[yellow]DRY RUN[/yellow]"
+    submits_orders = config.execute and any(
+        asset in {"stock", "crypto"} and config.symbols.get(asset) for asset in config.asset_types
+    )
+    mode = "[green]ORDER EXECUTION[/green]" if submits_orders else "[yellow]RESEARCH / DRY RUN[/yellow]"
     console.print(Panel(f"[bold]Starting Trading - {mode}[/bold]", style="cyan"))
     console.print()
 
@@ -458,6 +486,7 @@ def run_trading(config: TradingConfig) -> None:
             if engines:
                 engine_groups["crypto"] = engines
         elif asset_type == "option":
+            console.print(f"[yellow]{OPTION_RESEARCH_NOTICE}[/yellow]")
             engines = create_option_engines(
                 symbols=symbols,
                 timeframe=config.timeframe,
@@ -465,8 +494,8 @@ def run_trading(config: TradingConfig) -> None:
                 risk_pct=config.risk_pct,
                 stop_loss_pct=config.stop_loss_pct,
                 take_profit_pct=config.take_profit_pct,
-                execute=config.execute,
-                auto_exit=config.auto_exit,
+                execute=False,
+                auto_exit=False,
                 roll_days=config.roll_days,
                 strategy=strategy,
                 allow_sell_to_open=config.allow_sell_to_open,
@@ -544,9 +573,12 @@ def quick_start() -> TradingConfig | None:
 
     console.print()
     config = configure_strategy_options(config)
-    config.execute = Confirm.ask(
-        "Execute live trades? (No = dry run)",
-        default=False,
+    if config.symbols.get("option"):
+        console.print(f"[yellow]{OPTION_RESEARCH_NOTICE}[/yellow]")
+    config.execute = (
+        Confirm.ask("Submit stock/crypto orders? (No = dry run; options remain research only)",
+                    default=False)
+        if any(config.symbols.get(asset) for asset in ("stock", "crypto")) else False
     )
 
     return config
@@ -604,4 +636,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description="Interactive trading setup. Use 'live_script.py session --help' for session commands."
+    ).parse_args()
     main()

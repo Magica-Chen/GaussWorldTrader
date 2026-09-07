@@ -1,425 +1,284 @@
 <div align="center">
   <img src="assets/logo3.png" width="600" alt="Gauss World Trader logo">
-  <p>
-    <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-    <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Platform">
-    <img src="https://img.shields.io/badge/Trading-Alpaca-yellow?style=for-the-badge" alt="Alpaca">
-    <a href="https://join.slack.com/t/gaussianprocessmodels/shared_invite/zt-5acinu03-qvIOXiqSX0tvQmwPL2D7Nw">
-      <img src="https://img.shields.io/badge/Slack-Join%20the%20Community-4A154B?style=for-the-badge&logo=slack&logoColor=white"
-           alt="Join Gauss World Slack">
-    </a>
-  </p>
-  <p>
-    <a href="https://magica-chen.github.io/GaussWorldTrader/"><strong>🌐 Visit the homepage</strong></a>
-  </p>
-  <p>
-    <strong>Gauss World Trader</strong> — <em>A high-performance, Python 3.12+ optimized
-    algorithmic trading platform featuring modern async operations, intelligent data
-    feeds, multi-agent analysis, and advanced portfolio management.</em>
-  </p>
-  <p>
-    <strong>Named after Carl Friedrich Gauss</strong>, who revolutionized statistics and probability theory — the foundations of modern quantitative finance.
-  </p>
+  <p><strong>Market research, strategy backtesting, and supervised trading with Alpaca.</strong></p>
+  <p>Python 3.12+ · Streamlit · Stocks, crypto, and options · MIT license</p>
+  <p><a href="https://magica-chen.github.io/GaussWorldTrader/">Homepage</a> ·
+  <a href="docs/PROJECT_STRUCTURE.md">Project structure</a> ·
+  <a href="docs/FOUR_AGENT_OPERATIONS.md">Operations guide</a></p>
 </div>
 
----
+GaussWorldTrader combines registered trading strategies, Alpaca market/account data,
+Finnhub earnings and news, and FRED economic data. Use it to generate a next-session
+watchlist, inspect signals, run backtests, or supervise an approved trading session.
 
-## 📖 What is Algorithmic Trading?
+## Choose a workflow
 
-Algorithmic trading (also called algo trading or automated trading) uses computer programs to execute trades based on predefined rules and strategies. Instead of manually watching charts and clicking buy/sell buttons, algorithms analyze market data and make trading decisions automatically.
+Run commands from the repository root with your Python environment activated.
 
-**Key concepts:**
-- **Automated Execution** — Trades happen without manual intervention once rules are set
-- **Speed & Efficiency** — Computers can process data and execute orders faster than humans
-- **Emotion-Free Trading** — Algorithms follow rules consistently without fear or greed
-- **Backtesting** — Strategies can be tested on historical data before risking real money
+| Workflow | Command | Behavior |
+|---|---|---|
+| One-shot market research | `python gauss_bot.py --config examples/gauss.free-delayed.example.toml --once` | Discovers symbols, screens strategies, writes a next-session report, then exits |
+| Continuous Gauss session | `python gauss_bot.py --config examples/gauss.free-delayed.example.toml` | Runs the four session roles and supervises account exposure; defaults to shadow execution |
+| Web dashboard | `python dashboard.py` | Opens the Streamlit server at `http://localhost:3721` |
+| Interactive trading setup | `python live_script.py` | Configures stock/crypto execution and options research |
+| General CLI | `python main_cli.py --help` | Signals, backtests, account information, market streams, and session commands |
 
-Algorithmic trading is used by individual traders, hedge funds, and institutions worldwide to implement strategies ranging from simple moving average crossovers to complex statistical arbitrage.
+One-shot research submits no orders and does not start monitoring. The continuous
+service's `shadow` mode records proposed actions without submitting orders. Selecting
+a paper account and enabling paper order execution are separate settings.
 
----
+## Installation
 
-## 🌐 What is GaussWorldTrader?
-
-GaussWorldTrader is an open-source algorithmic trading platform designed for both learning and practical use.
-
-- **Multiple Asset Classes** — Trade stocks, cryptocurrencies, and options through a unified interface
-- **Pre-built Strategies** — Ready-to-use strategies including momentum, value investing,
-  trend following, multi-agent trading, and more
-- **Educational Foundation** — Clear code structure and documentation to help you understand how trading systems work
-- **Real-time & Backtesting** — Test strategies on historical data or run them live with paper or real money
-- **Modern Architecture** — Built with Python 3.12+ using async patterns for efficient data processing
-
-Whether you're a beginner learning about markets or an experienced trader building custom strategies, GaussWorldTrader provides the tools and framework to get started.
-
----
-
-## 🏁 How to Start GaussWorldTrader
-
-**Step 1: Set Up Your Environment**
-- Install Python 3.12 or higher on your system
-- Clone the repository and install the required dependencies
-- Create your `.env` file with API keys (see Configuration section below)
-
-**Step 2: Get API Access**
-- Sign up for an [Alpaca](https://alpaca.markets/) account (free) for trading and market data
-- Obtain API keys from [Finnhub](https://finnhub.io/) and [FRED](https://fred.stlouisfed.org/) for additional data sources
-
-**Step 3: Choose Your Interface**
-- **Dashboard** — Launch the web-based Streamlit interface for visual analysis and monitoring
-- **CLI** — Use the command-line interface for scripting and automation
-- **Live Trading CLI** — Use the unified interactive CLI for live trading sessions
-
-**Step 4: Start with Paper Trading**
-- Always begin with Alpaca's paper trading mode to test strategies without risking real money
-- Run backtests on historical data to understand strategy performance
-- Monitor results and adjust parameters before considering live trading
-
-**Step 5: Explore and Learn**
-- Review the built-in strategies to understand different trading approaches
-- Study the codebase structure to learn how trading systems are designed
-- Join the Slack community to ask questions and share ideas
-
----
-
-## ✨ Features
-
-- **🚀 Modern Async Architecture** — Built for Python 3.12+ with async/await patterns
-- **📊 Multiple Trading Strategies** — Momentum, Value, Trend Following, Statistical Arbitrage, and more
-- **📈 Real-time Dashboard** — Interactive Streamlit interface for monitoring and analysis
-- **Strategy and Execution Layers** — Signals and plans live in strategies; sizing and orders live in execution
-- **💼 Portfolio Management** — Advanced position tracking and risk management
-- **🔌 Multi-source Data Feeds** — Alpaca, Finnhub, FRED, and News integrations
-- **🤖 Multi-Agent Trading** — Committee-style stock analysis with `fast` and `llm` modes
-- **🧪 Vectorbt Backtests** — Stock and crypto backtests run through `vectorbt`; options stay on the legacy path
-- **🧩 Options Multi-Leg Orders** — `TradingOptionEngine` supports MLEG submissions
-- **🧮 Options Vertical Spreads** — IV/greeks-filtered bull/bear call/put spreads via multi-leg orders
-
----
-
-## Architecture: Strategy -> Plan -> Execution
-
-- **Strategy layer** builds indicators and signals in `get_signal()`, then maps them to an abstract
-  `ActionPlan` in `get_action_plan()` (target price, stop loss, take profit, intent).
-- **Execution layer** (`ExecutionEngine`) turns an `ActionPlan` into concrete orders: sizes quantity,
-  enforces account limits (fractional, shorting, margin), and applies order type policy.
-- **Live trading** runs on `live_trading_*.py` using the execution layer.
-- **Backtesting** uses `vectorbt` for stock and crypto strategies and keeps the legacy engine for
-  option strategies.
-- **Dashboard analysis** can run the multi-agent stock strategy directly and render agent reports,
-  risk assessment, debate output, and usage metadata.
-
-Order type default (`auto`): if a plan provides a target price, a limit order is used (price improved by
-the minimum tick); otherwise a market order is used. Sell-to-open is disabled by default and only used
-when the user opts in and the account supports margin + shorting.
-
----
-
-## 🚀 Quick Start
+Use Python 3.12 or newer. The account ownership checks use POSIX file locks; run the
+session runtime on Linux/macOS, or in Linux through WSL on Windows.
 
 ```bash
-# Clone the repository
 git clone https://github.com/Magica-Chen/GaussWorldTrader.git
 cd GaussWorldTrader
-
-# Create environment (Python 3.12+ required)
-conda create -n gaussworldtrader python=3.12
+conda create -n gaussworldtrader python=3.13
 conda activate gaussworldtrader
+python -m pip install -r requirements.txt
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure API keys
+# On a new checkout, create and edit your local credentials file.
 cp .env.example .env
 
-# Run the dashboard
-python dashboard.py
-
-# Or use the CLI
+# Verify the CLI without submitting orders.
 python main_cli.py list-strategies
 ```
 
----
+Use `python -m pip` so dependencies go into the same environment as the entry points.
+The dependency files include Alpaca-py, Streamlit 1.54+, Plotly, vectorbt, TA-Lib,
+Finnhub, and FRED clients. An editable development install is available with
+`python -m pip install -e '.[dev]'`; it also installs `gauss-bot`, `trading-cli`, and
+`trading-dashboard` console commands.
 
-## 🎯 Entry Points
-
-| Entry Point | Command | Description |
-|-------------|---------|-------------|
-| **CLI** | `python main_cli.py` | Typer-based command-line interface for scripting and automation |
-| **Dashboard** | `python dashboard.py` | Interactive Streamlit web interface at `http://localhost:3721` |
-| **Live Trading CLI** | `python live_script.py` | Unified interactive live trading menu |
-
- ![Trading Dashboard](assets/screenshot2.png)
-
-### CLI Examples
+## One-shot market research
 
 ```bash
-python main_cli.py list-strategies              # List all available strategies
+python gauss_bot.py --config examples/gauss.free-delayed.example.toml --once
+```
+
+The example selects `momentum`, `trend_following`, and `mean_reversion`. With
+`symbols = []`, the scanner discovers active tradable US equities from Alpaca,
+including eligible ETFs. It excludes OTC listings and names identifying leveraged or
+inverse products, warrants, preferred shares, or rights.
+
+The screen requires a price of at least $5 and average recent dollar volume of at
+least $20 million. It analyzes up to the 200 most liquid qualifying names using
+completed daily bars, requires at least 60 bars per name, and ranks BUY candidates by
+signal count and then 20-session dollar volume. The report states actual coverage;
+the entire discovered universe is screened, while deeper analysis uses the shortlist.
+
+The output includes conditional entry, maximum-entry, stop, and target levels; current
+news links; event-calendar coverage; and a next-session plan. Holidays and weekends
+use the latest completed session and the next scheduled opening. These are research
+scenarios, not strategy execution approvals or estimates of validated profitability.
+Intraday triggers still require fresh data when acted on.
+
+By default, each run writes to `results/gauss/research/<timestamp>/`:
+
+- `report.md` — readable watchlist and plan.
+- `report.json` — coverage, rankings, scenarios, news, and calendar details.
+- `universe.json` — selected screening universe.
+- `screen.csv` and `history.csv` — the bars used for screening and deeper analysis.
+
+Use `--symbols AAPL,MSFT` to narrow the universe or `--output json` for structured
+output. Both are optional. The research directory follows the configured evidence
+parent directory when storage paths change.
+
+**Two different `--once` commands:** `gauss_bot.py --once` runs read-only research and
+exits even when the account has positions. `main_cli.py session run --once` runs a
+supervision cycle and may continue managing unresolved exposure.
+
+## Continuous four-role sessions
+
+The persistent service schedules four responsibilities around the exchange calendar:
+
+| Role | Responsibility |
+|---|---|
+| PostGauss | Review completed-session evidence and screen candidates |
+| CloseGauss | Research conditional plans from frozen evidence |
+| PreGauss | Validate plans, funds, permissions, data, and event readiness |
+| LiveGauss | Evaluate entry triggers and supervise positions during the session |
+
+```bash
+python main_cli.py session validate-config --config examples/gauss.free-delayed.example.toml
+python gauss_bot.py --config examples/gauss.free-delayed.example.toml
+
+# In another terminal, inspect the same configured database.
+python main_cli.py session status --config examples/gauss.free-delayed.example.toml
+python main_cli.py session plans --config examples/gauss.free-delayed.example.toml
+python main_cli.py session report --config examples/gauss.free-delayed.example.toml --format markdown
+```
+
+Continuous research uses configured stock underlyings; it does not automatically run
+the whole-market discovery performed by `gauss_bot.py --once`. Stock holdings remain
+included in collection and supervision. Add `--symbols` or configure `GAUSS_SYMBOLS`
+when selecting a continuous research universe.
+
+`FREE_DELAYED` uses consolidated SIP history at least 900 seconds old, plus an
+entitlement-boundary buffer. `SUBSCRIBED_REALTIME` requires verified endpoint access.
+Account reconciliation and received safety events use current information in both
+profiles. See the [real-time example](examples/gauss.subscribed-realtime.example.toml).
+
+Execution requires applicable `StrategyApproval` records, a matching strategy allowlist,
+current account facts, and the plan's risk/data gates. The example's research allowlist
+alone does not grant approval. Options entries are disabled in the example. Live
+execution additionally requires the intended account, live enablement, and an audited
+arming decision. Read the [operations guide](docs/FOUR_AGENT_OPERATIONS.md) and
+[validation requirements](docs/FOUR_AGENT_VALIDATION.md) before enabling execution.
+
+### Display and shutdown
+
+Terminal output shows health, agent states, entry blockers, and session times, with a
+short heartbeat between changes. Use `--output text` or `--output json` to select a
+format explicitly; redirected continuous output defaults to JSON.
+
+Press **Ctrl+C** to request shutdown. If residual or unverified exposure remains, the
+service reports it and continues management. **After that notice**, another Ctrl+C
+acknowledges ending supervision with exposure. This does not liquidate positions or
+cancel every broker order. Entry pauses persist across restarts.
+
+An abrupt exit can leave a database lease for up to 120 seconds after its last renewal.
+A blocked restart reports the lease expiry and exits. Keep the database intact and
+retry after expiry once the previous process has stopped.
+
+## Dashboard and interactive trading
+
+```bash
+python dashboard.py
+python live_script.py
+```
+
+The dashboard includes Gauss Session, Market Overview, Account Info, Live Analysis,
+Watchlist, Strategy Backtest, Trade & Order, and News & Report views. The Gauss Session
+view reads the service ledger and offers authenticated controls; opening the browser
+does not start the service. Other views can fetch data or perform explicitly selected
+account actions.
+
+![Trading dashboard](assets/screenshot2.png)
+
+The interactive CLI supports quick-start watchlist defaults and custom asset,
+strategy, and parameter selection. Stock and crypto execution follows the reviewed
+configuration. **Options in this menu run underlying research only**, with no option
+orders or automatic exits; automated option execution belongs to the gated Gauss
+session workflow.
+
+Multi-symbol live runs share a websocket per asset type. Mixed asset types run
+sequentially; Ctrl+C advances to the next group. Defaults come from typed watchlist
+entries and current positions, with asset-specific defaults when those are empty.
+Legacy automated order paths reject submissions when the Gauss service owns the
+same account/environment.
+
+## Strategies, analysis, and backtesting
+
+| Asset type | Registered strategy identifiers |
+|---|---|
+| Stock | `momentum`, `trend_following`, `mean_reversion`, `value`, `scalping`, `statistical_arbitrage`, `macro_factor`, `multi_agent` |
+| Crypto | `crypto_momentum`, `btc_volatility_breakout` |
+| Option | `wheel`, `vertical_spread` |
+
+`crypto_momentum` is a factory alias for `MomentumStrategy` with crypto defaults.
+The one-shot daily screen supports the three strategies listed in its example;
+registry membership does not imply support in every workflow. Option strategies are
+excluded from the general dashboard strategy picker.
+
+```bash
 python main_cli.py run-strategy --strategy momentum AAPL MSFT --days 90
 python main_cli.py backtest --strategy mean_reversion AAPL --days 365
-python main_cli.py backtest --strategy multi_agent AAPL --days 120 -p mode=fast
 python main_cli.py backtest --strategy trend_following AAPL --days 365 --walk-forward --splits 4
-python main_cli.py account-info                 # View account details
+python main_cli.py backtest --strategy multi_agent AAPL --days 120 -p mode=fast
 python main_cli.py stream-market --asset-type crypto --symbols BTC/USD,ETH/USD
 ```
 
----
+`run-strategy` prints signals by default; `--execute` enables its order path.
+Stock/crypto backtests use vectorbt; options use the event-loop backtester.
 
-## 🛰️ Live Trading
+The `multi_agent` stock strategy combines technical, fundamental, sentiment, risk,
+and decision agents. Its `fast` mode uses deterministic analysis; `llm` mode calls a
+configured provider. This analyst committee is separate from the four session roles.
+Dashboard multi-agent backtests use `fast` mode. Optional paid research in the session
+service uses isolated workers, recorded model pricing, and bounded time/cost budgets.
+
+## Configuration and data sources
+
+Credentials are loaded from the environment and local `.env`. Session configuration
+uses `[gauss]` in the selected TOML file. `GAUSS_*` environment values override TOML;
+explicit bot CLI mode/profile/symbol arguments override the loaded configuration.
+An explicitly blank `GAUSS_SYMBOLS` or `GAUSS_STRATEGY_ALLOWLIST` clears the corresponding
+TOML list. The one-shot scanner uses its three default strategies when its list is empty.
+
+| Setting | Purpose |
+|---|---|
+| `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | Broker credentials and entitled market data |
+| `ALPACA_BASE_URL` | Paper/live endpoint for general account and interactive trading paths |
+| `FINNHUB_API_KEY` | Earnings calendar, company news, and supported fundamentals |
+| `FRED_API_KEY` | Economic series and scheduled release dates |
+| `GAUSS_CONFIG` | Default session TOML path; alternatively pass `--config` |
+| `GAUSS_MODE`, `GAUSS_ENVIRONMENT` | Session execution mode and paper/live account environment |
+| `GAUSS_DATABASE_PATH` | Shared session database; default `results/gauss/session.sqlite3` |
+| `GAUSS_ACCOUNT_ID` | Intended account identity; blank allows broker discovery |
+| `GAUSS_SYMBOLS`, `GAUSS_STRATEGY_ALLOWLIST` | Comma-separated universe and strategy selection |
+| `GAUSS_CONTROL_TOKEN` | Private token for authenticated session commands |
+| `GAUSS_EVENT_CALENDAR` | Optional verified operator calendar file overriding automatic feeds |
+| Provider credentials and `MULTI_AGENT_*` | Optional LLM-backed analysis; see `.env.example` and the provider implementation |
+
+Alpaca's calendar supplies trading sessions. Finnhub earnings and FRED release dates
+supply the automatic event calendar, cached for 15 minutes with seven days of forward
+coverage. FRED events are date-only. The runtime uses all-day entry restrictions for
+an affected symbol's earnings and selected major economic releases; routine releases
+are informational. FRED dataset updates are not inferred FOMC policy meetings.
+Missing source coverage remains visible and blocks the corresponding readiness gate.
+See [calendar behavior](docs/FOUR_AGENT_OPERATIONS.md#research-and-options-policy).
+
+Typed entries in `watchlist.json` use `symbol` and `asset_type` (`stock`, `crypto`, or
+`option`). Watchlist management lives in `src/watchlist/`. Notifications live in
+`src/notify/`; enable email with `NOTIFICATION_EMAIL_ENABLED`, `GMAIL_ADDRESS`, and
+`GMAIL_APP_PASSWORD`, or Slack with `NOTIFICATION_SLACK_ENABLED` and `SLACK_WEBHOOK_URL`.
+
+## Repository and development
+
+The detailed [structure guide](docs/PROJECT_STRUCTURE.md) maps every source package,
+the two execution paths, generated artifacts, and strategy extension points.
+
+```text
+src/
+├── runtime/     # One-shot screening and the persistent four-role service
+├── strategy/    # Strategy contracts, registry, and stock/crypto/option implementations
+├── trade/       # Shared/asset engines, live loops, and portfolio analytics
+├── backtest/    # Vectorbt and event-loop backtesting
+├── data/        # Alpaca, Finnhub, FRED, and news providers
+├── account/     # Account, order, position, and configuration operations
+├── agent/       # Fundamental analysis and the multi-agent analyst committee
+├── llm/         # Provider adapters and usage records
+├── notify/      # Email/Slack alerts and trade-fill stream handling
+├── watchlist/   # Typed watchlist persistence
+├── analysis/    # Technical indicators and option pricing/greeks
+├── ui/          # Streamlit dashboard and shared components
+└── utils/       # Symbols, timezones, and logging
+```
+
+Install development tools with `python -m pip install -e '.[dev]'`. The CI suite uses
+explicit offline tests so local credential-dependent tests are excluded:
 
 ```bash
-# Launch unified interactive CLI
-python live_script.py
-```
- ![Live Trading CLI](assets/screenshot1.png)
-
-The unified CLI provides:
-- **Quick Start** — Trade all asset types with watchlist defaults
-- **Custom Configuration** — Select asset types, symbols, strategies, and parameters interactively
-
-**Strategy Selection by Asset Type:**
-| Asset Type | Available Strategies |
-|------------|---------------------|
-| Stock | momentum, mean_reversion, macro_factor, multi_agent, value, trend_following, scalping, statistical_arbitrage |
-| Crypto | crypto_momentum, btc_volatility_breakout |
-| Option | wheel |
-
-Note: `crypto_momentum` is the unified MomentumStrategy configured with crypto defaults.
-
-Notes:
-- Multi-symbol runs share a single websocket per asset type to stay within Alpaca connection limits.
-- Due to Alpaca connection limits, multiple asset types run sequentially (press Ctrl+C to advance).
-- Stock and option engines check market hours before trading.
-- Defaults are pulled from `watchlist.json` + current positions for each asset type.
-- Live trading checks account capabilities up front; fractional/shorting prompts appear only when supported.
-- Sell-to-open remains disabled unless the user explicitly enables it.
-- Choosing `multi_agent` in the live stock CLI now prompts for `fast` or `llm` mode before startup.
-- `fast` mode avoids LLM calls and is the safer default for routine live paper-trading tests.
-
----
-
-## 🔔 Order Notifications
-
-Get notified when orders are submitted and filled via Email (Gmail SMTP) or Slack webhook.
-
-**Setup:**
-```bash
-# In your .env file:
-
-# Email notifications
-NOTIFICATION_EMAIL_ENABLED=true
-GMAIL_ADDRESS=your@gmail.com
-GMAIL_APP_PASSWORD=your_app_password
-
-# Slack notifications
-NOTIFICATION_SLACK_ENABLED=true
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+python -m pytest tests/test_four_agent*.py tests/test_execution_safety.py \
+  tests/test_live_session_safety.py tests/test_gauss_existing_adapters.py \
+  tests/test_runtime_operational.py tests/test_momentum_strategy.py tests/runtime tests/ui
 ```
 
-**Notification events:**
-| Event | When |
-|-------|------|
-| SUBMITTED | Immediately when order is placed |
-| FILLED | When order is filled (via Alpaca websocket stream) |
+CI tests Python 3.12/3.13 and builds/imports the wheel. Approved offline tests and
+sanitized fixtures are tracked; other local tests remain ignored. Keep changes
+focused, add behavior coverage where useful, and include screenshots for UI changes.
 
-**Usage in code:**
-```python
-from src.notify import NotificationService, TradeStreamHandler
-from src.trade.engine import TradingCryptoEngine
+## Documentation
 
-notification_service = NotificationService()
-stream_handler = TradeStreamHandler(notification_service)
-stream_handler.start()  # Start listening for fills
+- [Project structure](docs/PROJECT_STRUCTURE.md) — packages, data flows, and extension points.
+- [Operations](docs/FOUR_AGENT_OPERATIONS.md) — configuration, controls, calendars, shutdown, and recovery.
+- [Validation](docs/FOUR_AGENT_VALIDATION.md) — evidence and deployment requirements.
+- [Acceptance matrix](docs/FOUR_AGENT_ACCEPTANCE_MATRIX.md) — requirement-to-test mapping.
+- [Examples](examples/README.md) — signal, backtest, and options examples.
+- [Implementation plan](docs/GaussWorldTrader_Four_Agent_Implementation_Plan_v1_1.md) — design reference; executable behavior is defined by the current code.
 
-# Paper vs live follows ALPACA_BASE_URL in your .env
-engine = TradingCryptoEngine(notification_service=notification_service)
-order = engine.place_market_order("BTC/USD", 0.001, "buy")  # Triggers SUBMITTED notification
-# FILLED notification arrives automatically when order fills
-```
-
----
-
-## 📊 Built-in Strategies
-
-| Strategy | Category | Dashboard |
-|----------|----------|-----------|
-| 🤖 Multi-Agent | Signal | ✅ |
-| 📉 Mean Reversion | Signal | ✅ |
-| 🌍 Macro Factor | Signal | ✅ |
-| 📈 Momentum | Signal | ✅ |
-| 🪙 Crypto Momentum | Signal | ✅ |
-| ₿ BTC Volatility Breakout | Signal | ✅ |
-| 💰 Value | Signal | ✅ |
-| 📉 Trend Following | Signal | ✅ |
-| ⚡ Scalping | Signal | ✅ |
-| 📐 Statistical Arbitrage | Signal | ✅ |
-| 🎡 Wheel (Options) | Options | ❌ |
-| 🧩 Vertical Spread (Options) | Options | ❌ |
-
----
-
-## 🏗️ Project Structure
-
-```
-GaussWorldTrader/
-├── 📄 main_cli.py          # CLI entry point
-├── 📄 dashboard.py         # Streamlit dashboard entry
-├── 📄 live_script.py       # Unified live trading CLI
-├── 📄 watchlist.json       # Watchlist entries with asset_type
-├── 📁 src/
-│   ├── 📁 strategy/        # Strategy base, registry, per-asset strategies
-│   ├── 📁 trade/           # Trading engines, backtester, live trading, portfolio analytics
-│   ├── 📁 data/            # Market data providers
-│   ├── 📁 account/         # Account + positions management
-│   ├── 📁 analysis/        # Technical analysis (metrics re-exported)
-│   ├── 📁 agent/           # Watchlist, fundamentals, notifications
-│   ├── 📁 ui/              # Dashboard (mixin-based architecture)
-│   └── 📁 utils/           # Core utilities (asset, timezone, logger)
-└── 📁 docs/                # Documentation and images
-```
-
----
-
-## 🧩 Adding a Strategy
-
-```python
-from src.strategy.base import StrategyBase, StrategyMeta, StrategySignal
-
-class MyStrategy(StrategyBase):
-    meta = StrategyMeta(
-        name="my_strategy",
-        label="My Strategy",
-        category="signal",
-        description="Your strategy description here.",
-        visible_in_dashboard=True,
-        default_params={"lookback": 20}
-    )
-    summary = "Brief intro + formulas/logic for this strategy."
-
-    def generate_signals(self, current_date, current_prices, current_data,
-                         historical_data, portfolio=None):
-        return self._normalize([
-            StrategySignal(
-                symbol="AAPL",
-                action="BUY",
-                quantity=1,
-                price=current_prices.get("AAPL"),
-                reason="example signal",
-                timestamp=current_date,
-            )
-        ])
-```
-
-Register your strategy in `src/strategy/registry.py`. For crypto strategies, set
-`asset_type="crypto"` in `StrategyMeta` (or use the built-in `crypto_momentum` alias).
-
----
-
-## ⚙️ Configuration
-
-Create a `.env` file with the following API keys:
-
-| Key | Required | Description |
-|-----|----------|-------------|
-| `ALPACA_API_KEY` | ✅ | Alpaca trading API key |
-| `ALPACA_SECRET_KEY` | ✅ | Alpaca secret key |
-| `ALPACA_BASE_URL` | ✅ | Alpaca API endpoint |
-| `FINNHUB_API_KEY` | ✅ | Finnhub market data |
-| `FRED_API_KEY` | ✅ | Federal Reserve economic data |
-| `OPENAI_API_KEY` | ❌ | Required for `multi_agent` in `llm` mode when using OpenAI |
-| `MULTI_AGENT_MODE` | ❌ | Default multi-agent mode: `fast` or `llm` |
-| `MULTI_AGENT_LLM_PROVIDER` | ❌ | Override the LLM provider for multi-agent runs |
-| `MULTI_AGENT_LLM_MODEL` | ❌ | Override the model used by multi-agent runs |
-| `NOTIFICATION_EMAIL_ENABLED` | ❌ | Enable email notifications (true/false) |
-| `GMAIL_ADDRESS` | ❌ | Gmail address for notifications |
-| `GMAIL_APP_PASSWORD` | ❌ | Gmail app password |
-| `NOTIFICATION_SLACK_ENABLED` | ❌ | Enable Slack notifications (true/false) |
-| `SLACK_WEBHOOK_URL` | ❌ | Slack webhook URL |
-
----
-
-## 👁️ Watchlist
-
-Watchlist entries are typed by asset so the dashboard and live scripts can filter symbols correctly.
-
-```json
-{
-  "watchlist": [
-    {"symbol": "AAPL", "asset_type": "stock"},
-    {"symbol": "BTC/USD", "asset_type": "crypto"}
-  ],
-  "metadata": {
-    "created": "2025-08-21",
-    "last_updated": "2026-01-16 00:11:10",
-    "description": "Gauss World Trader Default Watchlist",
-    "version": "2.0"
-  }
-}
-```
-
-- Supported `asset_type`: `stock`, `crypto`, `option`.
-- The dashboard Watchlist tab lets you add/remove symbols with an asset type.
-
----
-
-## 🤖 Multi-Agent Mode
-
-The `multi_agent` strategy is a stock-only committee strategy with technical, fundamental,
-sentiment, risk, and decision agents.
-
-- `fast` mode skips LLM calls and uses deterministic weighted voting for backtests, dashboard
-  runs, and safer live-paper tests.
-- `llm` mode uses the configured LLM provider for agent reports and final decisions.
-- The dashboard `Live Analysis -> 🤖 Multi-Agent` panel shows the final action, confidence,
-  risk assessment, agent reports, debate positions, and usage data.
-- Dashboard backtests force `multi_agent` to `fast` mode to avoid live LLM and news costs.
-
----
-
-## 📝 Changelog
-
-### v1.2.0-beta.1 — 2026-04-06
-
-- Added a dedicated multi-agent dashboard panel with final decision, risk, reports, debate,
-  and usage details.
-- Added `fast` versus `llm` multi-agent mode selection to the live stock CLI.
-- Switched stock and crypto backtests to `vectorbt` while keeping the legacy options path.
-- Added `mean_reversion`, `macro_factor`, and `btc_volatility_breakout` strategy support to
-  the current CLI and dashboard flows.
-- Fixed multi-agent backtest correctness around evaluation dates, ATR warmup, and async loop
-  reuse.
-- Fixed live trading issues around Alpaca options chains and stock fractional order sizing.
-- Hardened multi-agent fundamental analysis against Finnhub entitlement-limited datasets.
-
----
-
-## 📚 Documentation
-
-- [Homepage](https://magica-chen.github.io/GaussWorldTrader/) — Project overview and quick start
-- [Project Structure](docs/PROJECT_STRUCTURE.md) — Layout, strategy template and execution layer
-
----
-
-## ⚠️ Important Disclaimer
-
-Live trading can result in substantial financial loss. Read [DISCLAIMER.md](DISCLAIMER.md)
-before using this repository for paper trading, live trading, strategy development,
-or investment-related decisions.
-
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left)](https://www.star-history.com/#Magica-Chen/GaussWorldTrader&type=date&legend=top-left)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-<p align="center">
-  Made with ❤️ by <a href="https://github.com/Magica-Chen">Magica-Chen</a>
-</p>
+Read [DISCLAIMER.md](DISCLAIMER.md) before using trading or investment-related
+features. Released under the [MIT license](LICENSE).

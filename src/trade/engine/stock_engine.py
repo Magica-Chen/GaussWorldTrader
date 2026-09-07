@@ -100,7 +100,7 @@ class TradingStockEngine(TradingEngine):
             side=OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL,
             time_in_force=TimeInForce.DAY if time_in_force == 'day' else TimeInForce.GTC
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Stock market order placed: {side} {qty} shares of {symbol}")
@@ -128,7 +128,7 @@ class TradingStockEngine(TradingEngine):
             time_in_force=TimeInForce.DAY if time_in_force == 'day' else TimeInForce.GTC,
             limit_price=limit_price
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Stock limit order placed: {side} {qty} shares of {symbol} at ${limit_price}")
@@ -164,7 +164,7 @@ class TradingStockEngine(TradingEngine):
             take_profit=TakeProfitRequest(limit_price=take_profit),
             stop_loss=StopLossRequest(stop_price=stop_loss)
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         order_dict['stop_loss'] = stop_loss

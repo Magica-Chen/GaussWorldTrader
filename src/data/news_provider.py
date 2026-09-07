@@ -1,6 +1,9 @@
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
+from datetime import timezone
+import hashlib
+import json
 
 from src.settings import get_config, has_alpaca_credentials
 from .finnhub_provider import FinnhubProvider
@@ -10,6 +13,22 @@ from alpaca.data.requests import NewsRequest
 
 
 class NewsDataProvider:
+    @staticmethod
+    def _version_fields(provider, payload, published, updated=None):
+        content = json.dumps(payload, sort_keys=True, default=str)
+        fingerprint = hashlib.sha256(content.encode()).hexdigest()
+        received = datetime.now(timezone.utc).isoformat()
+        def iso(value):
+            if isinstance(value, (int, float)):
+                return datetime.fromtimestamp(value, timezone.utc).isoformat()
+            if isinstance(value, datetime):
+                return value.isoformat()
+            return value
+        return {'source_version': fingerprint, 'content_hash': fingerprint,
+                'published_at': iso(published), 'updated_at': iso(updated or published),
+                'received_at': received, 'available_at': received,
+                'content_reference': payload.get('url'), 'provenance': provider}
+
     def __init__(self, api_key: str = None):
         self.finnhub = FinnhubProvider(api_key)
         self.logger = logging.getLogger(__name__)
@@ -47,6 +66,7 @@ class NewsDataProvider:
             published = timestamp
 
         return {
+            **self._version_fields('finnhub', article, timestamp),
             "provider": "finnhub",
             "id": f"finnhub-{article.get('id', timestamp)}",
             "headline": article.get("headline"),
@@ -78,6 +98,7 @@ class NewsDataProvider:
         summary = payload.get("summary") or payload.get("content")
 
         return {
+            **self._version_fields('alpaca', payload, payload.get('created_at'), payload.get('updated_at')),
             "provider": "alpaca",
             "id": f"alpaca-{payload.get('id')}",
             "headline": payload.get("headline"),
@@ -125,7 +146,7 @@ class NewsDataProvider:
 
         for news in news_lists:
             for article in news:
-                key = article.get("url") or article.get("id") or article.get("headline")
+                key = (article.get('provider'), article.get('id'), article.get('source_version'))
                 if key in seen:
                     continue
                 seen.add(key)

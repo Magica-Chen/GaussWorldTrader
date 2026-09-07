@@ -17,7 +17,7 @@ vectorbt>=0.26.0
 matplotlib>=3.8.0
 plotly>=5.17.0
 seaborn>=0.13.0
-streamlit>=1.28.0
+streamlit>=1.54.0
 
 # Financial data
 yfinance>=0.2.20

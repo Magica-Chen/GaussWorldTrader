@@ -1,9 +1,12 @@
 """Execution layer for converting action plans into concrete orders."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 import logging
+import math
 from typing import Any, Dict, Optional
 
 from alpaca.trading.requests import OptionLegRequest
@@ -78,23 +81,30 @@ class ExecutionEngine:
         multiplier = self._safe_float(account_raw.get("multiplier"), default=1.0)
         margin_enabled = account_type == "MARGIN" or multiplier > 1.0
 
-        shorting_enabled = not bool(account_config.get("no_shorting", False))
+        shorting_enabled = bool(account_raw.get("shorting_enabled", False)) and not bool(
+            account_config.get("no_shorting", False)
+        )
         fractional_enabled = bool(account_config.get("fractional_trading", False))
 
-        buying_power = self._safe_float(
-            account_info.get("buying_power") or account_raw.get("buying_power")
+        def supplied_number(*sources):
+            for source, key in sources:
+                if key in source:
+                    return self._safe_float(source[key])
+            return 0.0
+
+        buying_power = supplied_number(
+            (account_info, "buying_power"), (account_raw, "buying_power")
         )
-        cash = self._safe_float(account_info.get("cash") or account_raw.get("cash"))
-        portfolio_value = self._safe_float(
-            account_info.get("portfolio_value")
-            or account_raw.get("portfolio_value")
-            or account_info.get("equity")
-            or account_raw.get("equity"),
-            default=100000.0,
+        cash = supplied_number((account_info, "cash"), (account_raw, "cash"))
+        portfolio_value = supplied_number(
+            (account_info, "portfolio_value"),
+            (account_raw, "portfolio_value"),
+            (account_info, "equity"),
+            (account_raw, "equity"),
         )
 
         return ExecutionContext(
-            account_info=account_info,
+            account_info={**account_raw, **account_info},
             account_config=account_config,
             buying_power=buying_power,
             cash=cash,
@@ -114,6 +124,9 @@ class ExecutionEngine:
         current_price: float,
         override_qty: Optional[float] = None,
         order_pref: Optional[str] = None,
+        *,
+        planned_loss_pct: Optional[float] = None,
+        structural_loss_pct: Optional[float] = None,
     ) -> Optional[ExecutionDecision]:
         action = (action_plan.action or "HOLD").upper()
         if action == "HOLD":
@@ -146,7 +159,18 @@ class ExecutionEngine:
         if override_qty is None and metadata:
             meta_override = metadata.get("override_qty")
             if meta_override is not None:
-                override_qty = float(meta_override)
+                override_qty = self._safe_float(meta_override)
+
+        if metadata.get("order_class") == "mleg":
+            # Combined structures require the typed session gateway's structural risk model.
+            self.logger.warning("Multi-leg action plans require the session execution gateway")
+            return None
+        order_type, limit_price = self._resolve_order_type(
+            action_plan, side, current_price, order_pref
+        )
+        sizing_price = limit_price if limit_price is not None else current_price
+        if not math.isfinite(sizing_price) or sizing_price <= 0:
+            return None
 
         quantity = self._resolve_quantity(
             action_plan=action_plan,
@@ -154,21 +178,13 @@ class ExecutionEngine:
             position_qty=pos_qty,
             context=context,
             risk_pct=risk_pct,
-            current_price=current_price,
+            current_price=sizing_price,
             override_qty=override_qty,
+            planned_loss_pct=planned_loss_pct,
+            structural_loss_pct=structural_loss_pct,
         )
         if quantity <= 0:
             return None
-
-        if metadata.get("order_class") == "mleg":
-            order_type = "limit"
-            limit_price = action_plan.target_price
-            if limit_price is None:
-                return None
-        else:
-            order_type, limit_price = self._resolve_order_type(
-                action_plan, side, current_price, order_pref
-            )
 
         return ExecutionDecision(
             symbol=action_plan.symbol,
@@ -238,7 +254,9 @@ class ExecutionEngine:
             self.logger.error("Multi-leg order missing legs metadata.")
             return False
 
-        underlying = metadata.get("underlying_symbol") or metadata.get("underlying") or decision.symbol
+        underlying = (
+            metadata.get("underlying_symbol") or metadata.get("underlying") or decision.symbol
+        )
         legs: list[OptionLegRequest] = []
         for leg in legs_meta:
             symbol = leg.get("symbol")
@@ -330,6 +348,14 @@ class ExecutionEngine:
         return True
 
     def _resolve_intent(self, action: str, pos_side: str) -> tuple[Optional[str], Optional[str]]:
+        if action == "SELL_TO_CLOSE":
+            return ("close_long", "sell") if pos_side == "long" else (None, None)
+        if action == "BUY_TO_CLOSE":
+            return ("close_short", "buy") if pos_side == "short" else (None, None)
+        if action == "BUY_TO_OPEN":
+            return ("open_long", "buy") if pos_side == "flat" else (None, None)
+        if action == "SELL_TO_OPEN":
+            return ("open_short", "sell") if pos_side == "flat" else (None, None)
         if action in {"BUY", "BUY_TO_OPEN"}:
             if pos_side == "short":
                 return "close_short", "buy"
@@ -364,24 +390,54 @@ class ExecutionEngine:
         risk_pct: float,
         current_price: float,
         override_qty: Optional[float],
+        planned_loss_pct: Optional[float] = None,
+        structural_loss_pct: Optional[float] = None,
     ) -> float:
+        if override_qty is not None and (not math.isfinite(override_qty) or override_qty <= 0):
+            return 0.0
         if intent in {"close_long", "close_short"}:
+            if not math.isfinite(position_qty) or position_qty <= 0:
+                return 0.0
             if override_qty is None:
                 return position_qty
-            return min(position_qty, abs(float(override_qty)))
+            return min(position_qty, self._adjust_for_fractional(override_qty, context))
 
+        values = (current_price, context.portfolio_value, risk_pct)
+        if any(not math.isfinite(value) or value <= 0 for value in values) or risk_pct > 1:
+            return 0.0
+        if any(
+            context.account_info.get(key)
+            for key in ("trading_blocked", "account_blocked", "trade_suspended_by_user")
+        ):
+            return 0.0
+        multiplier = 1.0
+        if self.asset_type == "option":
+            # Legacy short option sizing cannot infer collateral from a premium.
+            if intent == "open_short":
+                return 0.0
+            contract = self.trading_engine.api.get_option_contract(action_plan.symbol)
+            get = (
+                contract.get if isinstance(contract, dict) else lambda k: getattr(contract, k, None)
+            )
+            multiplier = self._safe_float(get("size"))
+            if multiplier != 100 or not get("tradable"):
+                return 0.0
+        unit_capital = current_price * multiplier
+        bounds = [context.portfolio_value * risk_pct / unit_capital]
         if override_qty is not None:
-            return self._adjust_for_fractional(abs(float(override_qty)), context)
-
-        if current_price <= 0:
-            return 0.0
-        raw_qty = (context.portfolio_value * risk_pct) / current_price
-        raw_qty = self._adjust_for_fractional(raw_qty, context)
-        if raw_qty <= 0:
-            return 0.0
-
-        max_qty = self._max_affordable_qty(raw_qty, context, current_price)
-        return min(raw_qty, max_qty)
+            bounds.append(override_qty)
+        if planned_loss_pct is not None and self.asset_type != "option":
+            stop = self._safe_float(action_plan.stop_loss)
+            distance = current_price - stop if intent == "open_long" else stop - current_price
+            if not 0 < planned_loss_pct <= 1 or stop <= 0 or distance <= 0:
+                return 0.0
+            bounds.append(context.portfolio_value * planned_loss_pct / distance)
+        if structural_loss_pct is not None and self.asset_type == "option":
+            if not 0 < structural_loss_pct <= 1:
+                return 0.0
+            bounds.append(context.portfolio_value * structural_loss_pct / unit_capital)
+        bounds.append(self._max_affordable_qty(min(bounds), context, unit_capital))
+        return self._adjust_for_fractional(min(bounds), context)
 
     def _resolve_order_type(
         self,
@@ -403,10 +459,12 @@ class ExecutionEngine:
         return "limit", self._improve_limit_price(action_plan.target_price, side)
 
     def _improve_limit_price(self, price: float, side: str) -> float:
-        increment = self._min_price_increment()
-        if side == "buy":
-            return price + increment
-        return max(0.0, price - increment)
+        """Round within the plan's price bound; never pay an extra fixed increment."""
+        if not math.isfinite(price) or price <= 0:
+            return 0.0
+        tick = Decimal(str(self._min_price_increment()))
+        rounding = ROUND_FLOOR if side == "buy" else ROUND_CEILING
+        return float((Decimal(str(price)) / tick).to_integral_value(rounding=rounding) * tick)
 
     def _min_price_increment(self) -> float:
         if self.asset_type == "crypto":
@@ -416,13 +474,22 @@ class ExecutionEngine:
     @staticmethod
     def _safe_float(value: Any, default: float = 0.0) -> float:
         try:
-            return float(value)
+            number = float(value)
+            return number if math.isfinite(number) else default
         except (TypeError, ValueError):
             return default
 
-    def _max_affordable_qty(self, desired_qty: float, context: ExecutionContext, price: float) -> float:
-        buying_power = context.buying_power if self.asset_type != "crypto" else context.cash
-        if buying_power <= 0 or price <= 0:
+    def _max_affordable_qty(
+        self, desired_qty: float, context: ExecutionContext, price: float
+    ) -> float:
+        buying_power = (
+            context.buying_power
+            if context.margin_enabled
+            else min(context.buying_power, context.cash)
+        )
+        if self.asset_type == "crypto":
+            buying_power = context.cash
+        if not math.isfinite(buying_power) or buying_power <= 0 or price <= 0:
             return 0.0
         max_qty = buying_power / price
         if self._fractional_allowed(context):
@@ -430,13 +497,15 @@ class ExecutionEngine:
         return float(int(max_qty))
 
     def _adjust_for_fractional(self, quantity: float, context: ExecutionContext) -> float:
-        if quantity <= 0:
+        if not math.isfinite(quantity) or quantity <= 0:
             return 0.0
         if self._fractional_allowed(context):
             return quantity
         return float(int(quantity))
 
     def _fractional_allowed(self, context: ExecutionContext) -> bool:
+        if self.asset_type == "option":
+            return False
         if self.asset_type == "crypto":
             return True
         if not context.fractional_enabled:

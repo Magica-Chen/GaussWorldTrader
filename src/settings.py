@@ -185,6 +185,11 @@ class OptimizedConfig:
     def database_url(self) -> str:
         """Database connection URL"""
         return self._database_url
+
+    @property
+    def session_runtime(self):
+        """Validated Gauss configuration from the same TOML and environment loader."""
+        return get_gauss_config(self._config_file_path)
     
     @property
     def log_level(self) -> str:
@@ -289,6 +294,152 @@ url = "sqlite:///trading_system.db"  # Database connection URL
 # Global configuration instance with lazy loading
 _config_instance: OptimizedConfig | None = None
 
+def get_gauss_config(config_file: str | Path | None = None):
+    """Load the plan's [gauss] TOML contract; reject unknown or unsafe combinations.
+
+    GAUSS_* environment keys override TOML. General trading ceilings apply as an
+    additional bound; broker URLs never select the session's execution mode.
+    """
+    from decimal import Decimal
+    from src.runtime.models import RuntimeConfig, RiskPolicy
+
+    path = Path(config_file or os.getenv('GAUSS_CONFIG', 'config.toml'))
+    if config_file is not None and not path.exists() and str(path) != 'config.toml':
+        raise ValueError(f'Gauss configuration file does not exist: {path}')
+    document = {}
+    if path.exists():
+        with path.open('rb') as stream:
+            document = tomllib.load(stream)
+    source = document.get('gauss', {})
+    if not isinstance(source, dict):
+        raise ValueError('[gauss] must be a TOML table')
+    values, policy = {}, {}
+    aliases = {
+        'mode': 'execution_mode', 'account_environment': 'environment',
+        'data.profile': 'data_profile', 'data.policy_version': 'data_policy_version',
+        'storage.payload_directory': 'payload_directory',
+        'storage.database_path': 'database_path',
+        'account.id': 'account_id', 'news.event_calendar_path': 'event_calendar_path',
+        'data.free_delayed.entitlement_boundary_buffer_seconds': 'entitlement_boundary_buffer',
+        'data.free_delayed.poll_interval_seconds': 'free_poll_interval_seconds',
+        'data.free_delayed.max_additional_lag_seconds': 'maximum_additional_lag_seconds',
+        'data.subscribed_realtime.stock_execution_quote_max_age_seconds': 'stock_quote_max_age_seconds',
+        'data.subscribed_realtime.option_execution_quote_max_age_seconds': 'option_quote_max_age_seconds',
+        'universe.scan_universe_limit': 'scan_universe_limit',
+        'universe.active_candidate_limit': 'active_candidate_limit',
+        'universe.reserve_candidate_limit': 'reserve_candidate_limit',
+        'universe.strategy_allowlist': 'strategy_allowlist',
+        'schedule.close_research_offset_minutes': 'research_offset_minutes',
+        'schedule.pre_review_interval_minutes': 'pre_review_interval_minutes',
+        'schedule.signal_timeframe': 'signal_timeframe',
+        'evaluation.capital_scenario_file': 'capital_scenario_file',
+        'research.paid_model_calls_enabled': 'paid_model_calls_enabled',
+        'research.max_parallel_jobs': 'research_max_parallel_jobs',
+        'research.model': 'research_model', 'research.pricing_id': 'research_pricing_id',
+        'research.max_output_tokens': 'research_max_output_tokens',
+        'research.max_retries': 'research_max_retries',
+    }
+    risk_aliases = {
+        'account.snapshot_max_age_seconds': 'account_max_age_seconds',
+        'schedule.pre_start_minutes_before_open': 'pre_minutes',
+        'schedule.entry_start_minutes_after_open': 'entry_start_minutes',
+        'schedule.entry_stop_minutes_before_close': 'entry_cutoff_minutes',
+        'schedule.close_attempt_minutes_before_close': 'closing_minutes',
+        'research.max_job_seconds': 'research_seconds',
+        'research.session_llm_budget_equity_fraction': 'research_equity_fraction',
+        'research.session_llm_absolute_cap_usd': 'research_cost_cap',
+        'risk.policy_id': 'id',
+    }
+    # These are fixed invariants, not switches an agent or a loose TOML key can disable.
+    invariants = {
+        'account.profile_source': 'broker_snapshot', 'account.require_currency_match': True,
+        'data.allow_silent_feed_fallback': False,
+        'data.require_endpoint_entitlement_checks': True,
+        'data.free_delayed.market_delay_seconds': 900,
+        'data.free_delayed.stock_history_feed': 'sip',
+        'data.free_delayed.options_policy': 'verified_history_or_indicative_research',
+        'data.free_delayed.allow_current_iex_in_signals': False,
+        'data.subscribed_realtime.stock_feed': 'sip',
+        'data.subscribed_realtime.option_feed': 'opra',
+        'data.subscribed_realtime.intentional_market_delay_seconds': 0,
+        'news.signal_alignment': 'profile_market_cutoff',
+        'news.current_safety_alerts_enabled': True,
+        'news.news_required_for_event_strategies': True,
+        'suitability.required_before_plan_publication': True,
+        'suitability.required_before_pre_validation': True,
+        'suitability.required_before_entry': True,
+        'suitability.allow_no_trade': True, 'suitability.allow_capital_band_shortcuts': False,
+        'suitability.ranking_objective': 'validated_net_expectancy_subject_to_risk',
+        'suitability.include_operating_costs': True, 'suitability.include_liquidity_capacity': True,
+        'evaluation.require_explicit_scenario_capital': True,
+        'evaluation.scenario_outputs_execution_eligible': False,
+        'risk.allow_uncovered_options': False, 'risk.allow_expiry_day_entries': False,
+        'risk.allow_free_delayed_live_entries': False,
+    }
+    def leaves(table, prefix=''):
+        for key, value in table.items():
+            name = f'{prefix}.{key}' if prefix else key
+            if isinstance(value, dict):
+                yield from leaves(value, name)
+            else:
+                yield name, value
+    shares = {}
+    for key, value in leaves(source):
+        if key in invariants:
+            if value != invariants[key] or isinstance(value, bool) != isinstance(invariants[key], bool):
+                raise ValueError(f'gauss.{key} must be {invariants[key]!r}')
+        elif key in aliases:
+            values[aliases[key]] = value
+        elif key in risk_aliases:
+            policy[risk_aliases[key]] = value
+        elif key == 'storage.database_url':
+            if not isinstance(value, str) or not value.startswith('sqlite:///'):
+                raise ValueError('Gauss storage requires a local sqlite:/// URL')
+            values['database_path'] = value.removeprefix('sqlite:///')
+        elif key.startswith(('risk.', 'policy.')) and key.split('.', 1)[1] in RiskPolicy.model_fields:
+            policy[key.split('.', 1)[1]] = value
+        elif key in {f'research.{role}_budget_share' for role in ('post', 'close', 'pre', 'live')}:
+            shares[key.split('.')[1].split('_')[0]] = Decimal(str(value))
+        elif key in RuntimeConfig.model_fields and key not in {'id', 'created_at', 'schema_version'}:
+            values[key] = value
+        else:
+            raise ValueError(f'Unknown Gauss configuration key: {key}')
+    if shares:
+        defaults = dict(zip(('post', 'close', 'pre', 'live'), ('.10', '.60', '.20', '.10')))
+        values['research_role_budget_shares'] = tuple(
+            shares.get(role, Decimal(defaults[role])) for role in defaults
+        )
+    env_fields = {
+        'GAUSS_ENABLED': 'enabled', 'GAUSS_ACCOUNT_ID': 'account_id',
+        'GAUSS_ENVIRONMENT': 'environment', 'GAUSS_MODE': 'execution_mode',
+        'GAUSS_DATA_PROFILE': 'data_profile', 'GAUSS_DATABASE_PATH': 'database_path',
+        'GAUSS_LIVE_TRADING_ENABLED': 'live_trading_enabled',
+        'GAUSS_EVENT_CALENDAR': 'event_calendar_path', 'GAUSS_POLL_SECONDS': 'poll_seconds',
+    }
+    for env_key, key in env_fields.items():
+        if env_key in os.environ:
+            values[key] = os.environ[env_key]
+    for env_key, key in (('GAUSS_ACCOUNT_ID_ALLOWLIST', 'account_id_allowlist'),
+                         ('GAUSS_STRATEGY_ALLOWLIST', 'strategy_allowlist'),
+                         ('GAUSS_SYMBOLS', 'symbols')):
+        if env_key in os.environ:
+            values[key] = tuple(item.strip() for item in os.environ[env_key].split(',') if item.strip())
+    limits = document.get('trading_limits', {})
+    ceilings = (
+        ('max_capital_allocation_pct', 'max_position_size', 'MAX_POSITION_SIZE', Decimal('.1')),
+        ('max_new_entry_groups_per_session', 'max_daily_trades', 'MAX_DAILY_TRADES', 50),
+        ('max_open_position_groups', 'max_open_positions', 'MAX_OPEN_POSITIONS', 10),
+    )
+    defaults = RiskPolicy()
+    for key, legacy, env_key, default in ceilings:
+        ceiling = Decimal(str(os.getenv(env_key, limits.get(legacy, default))))
+        if not ceiling.is_finite() or ceiling < 0:
+            raise ValueError(f'Invalid legacy trading ceiling: {legacy}')
+        strict = min(Decimal(str(policy.get(key, getattr(defaults, key)))), ceiling)
+        policy[key] = strict if key.endswith('_pct') else int(strict)
+    values['policy'] = RiskPolicy.model_validate(policy)
+    return RuntimeConfig.model_validate(values)
+
 def get_config() -> OptimizedConfig:
     """Get global configuration instance (singleton pattern)"""
     global _config_instance
@@ -324,6 +475,7 @@ __all__ = [
     "DEFAULT_ALPACA_BASE_URL",
     "LIVE_ALPACA_BASE_URL",
     "get_config",
+    "get_gauss_config",
     "has_alpaca_credentials",
     "get_alpaca_base_url",
     "is_paper_trading",

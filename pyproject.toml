@@ -36,7 +36,7 @@ dependencies = [
     "matplotlib>=3.8.0",
     "plotly>=5.17.0",
     "seaborn>=0.13.0",
-    "streamlit>=1.28.0",
+    "streamlit>=1.54.0",
     "yfinance>=0.2.20",
     "fredapi>=0.5.1",
     "finnhub-python>=2.4.20",
@@ -49,7 +49,8 @@ dependencies = [
     "aiohttp>=3.9.0",
     "websockets>=12.0",
     "pydantic>=2.4.0",
-    "httpx>=0.25.0"
+    "httpx>=0.25.0",
+    "pytz>=2023.3"
 ]
 
 [project.optional-dependencies]
@@ -83,28 +84,13 @@ Issues = "https://github.com/Magica-Chen/GaussWorldTrader/issues"
 [project.scripts]
 trading-cli = "main_cli:main"
 trading-dashboard = "dashboard:main"
+gauss-bot = "gauss_bot:main"
 
 [tool.setuptools]
-packages = [
-    "src",
-    "src.account",
-    "src.agent",
-    "src.analysis",
-    "src.backtest",
-    "src.data",
-    "src.llm",
-    "src.notify",
-    "src.strategy",
-    "src.strategy.crypto",
-    "src.strategy.option",
-    "src.strategy.stock",
-    "src.trade",
-    "src.trade.engine",
-    "src.trade.live",
-    "src.ui",
-    "src.utils",
-    "src.watchlist",
-]
+py-modules = ["main_cli", "dashboard", "live_script", "gauss_bot"]
+
+[tool.setuptools.packages.find]
+include = ["src", "src.*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.toml", "*.yaml", "*.yml", "*.json"]
@@ -133,6 +119,8 @@ extend-exclude = '''
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -153,11 +141,11 @@ ignore = [
 ]
 unfixable = ["B"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401", "F403", "F811"]
 "tests/**/*" = ["ARG", "FBT"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["src"]
 
 # MyPy configuration (Python 3.12 features)

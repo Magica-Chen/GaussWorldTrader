@@ -114,7 +114,7 @@ class MarketViewsMixin:
                         gauge=gauge_config
                     ))
                     fig.update_layout(height=300)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
                 with col2:
                     st.write("**Market Sentiment Indicators**")
@@ -179,14 +179,14 @@ class MarketViewsMixin:
                     yaxis_title="Performance (%)"
                 )
                 fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 st.write("**Sector Performance in Details**")
                 df = pd.DataFrame([{
                     'Sector': item['sector'], 'ETF Symbol': item['symbol'],
                     'Current Price': f"${item['current_price']:.2f}",
                     'Day Performance': f"{item['performance']:+.2f}%"
                 } for item in sector_data])
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width="stretch")
             else:
                 st.error("Unable to load any sector performance data")
         except Exception as e:
@@ -261,7 +261,7 @@ class MarketViewsMixin:
                     title="Bitcoin (BTC/USD) - 30 Day Chart", yaxis_title="Price (USD)",
                     xaxis_title="Date", height=400, showlegend=True
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 current_price = float(btc_data['close'].iloc[-1])
                 high_30d = float(btc_data['high'].max())
                 low_30d = float(btc_data['low'].min())

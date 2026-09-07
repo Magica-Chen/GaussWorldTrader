@@ -1,0 +1,59 @@
+# Synthetic research inputs only. These values are explicit test cases, not production
+# account tiers or a default starting balance. Replace them with intended scenarios.
+# Keep permissions fixed when comparing capital alone; the third case varies cash.
+execution_eligible = false
+assumptions = "USD; no leverage; whole shares; options disabled; mandate fixed"
+
+[[scenarios]]
+account_id = "synthetic-small-capital"
+environment = "scenario"
+hypothetical = true
+equity = "50.00"
+cash = "50.00"
+buying_power = "50.00"
+currency = "USD"
+observed_at = "2026-09-08T20:00:00Z"
+mandate_id = "operator-mandate-v1"
+fractional_allowed = false
+shorting_allowed = false
+options_level = 0
+margin_allowed = false
+reserved_capital = "0.00"
+exposure = "0.00"
+positions = []
+
+[[scenarios]]
+account_id = "synthetic-feasible-capital"
+environment = "scenario"
+hypothetical = true
+equity = "10000.00"
+cash = "10000.00"
+buying_power = "10000.00"
+currency = "USD"
+observed_at = "2026-09-08T20:00:00Z"
+mandate_id = "operator-mandate-v1"
+fractional_allowed = false
+shorting_allowed = false
+options_level = 0
+margin_allowed = false
+reserved_capital = "0.00"
+exposure = "0.00"
+positions = []
+
+[[scenarios]]
+account_id = "synthetic-cash-constraint"
+environment = "scenario"
+hypothetical = true
+equity = "10000.00"
+cash = "0.00"
+buying_power = "0.00"
+currency = "USD"
+observed_at = "2026-09-08T20:00:00Z"
+mandate_id = "operator-mandate-v1"
+fractional_allowed = false
+shorting_allowed = false
+options_level = 0
+margin_allowed = false
+reserved_capital = "0.00"
+exposure = "0.00"
+positions = []

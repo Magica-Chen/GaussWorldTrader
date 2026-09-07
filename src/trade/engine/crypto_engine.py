@@ -54,7 +54,7 @@ class TradingCryptoEngine(TradingEngine):
             side=OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL,
             time_in_force=TimeInForce.GTC if time_in_force == 'gtc' else TimeInForce.DAY
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Crypto market order placed: {side} {qty} of {symbol}")
@@ -74,7 +74,7 @@ class TradingCryptoEngine(TradingEngine):
             time_in_force=TimeInForce.GTC if time_in_force == 'gtc' else TimeInForce.DAY,
             limit_price=limit_price
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Crypto limit order placed: {side} {qty} of {symbol} at ${limit_price}")

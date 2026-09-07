@@ -1,0 +1,108 @@
+# Safe operational example; set the actual account ID in GAUSS_ACCOUNT_ID.
+# Run once: python gauss_bot.py --config examples/gauss.free-delayed.example.toml --once
+# Empty symbols auto-discovers tradable US equities for one-shot research.
+# Continuous execution still requires separately validated strategy approvals.
+[gauss]
+enabled = true
+mode = "shadow"
+account_environment = "paper"
+live_trading_enabled = false
+account_id_allowlist = []
+calendar_timezone = "America/New_York"
+display_timezone = "Europe/London"
+symbols = []
+
+[gauss.storage]
+database_url = "sqlite:///results/gauss/session.sqlite3"
+payload_directory = "results/gauss/evidence"
+
+[gauss.account]
+profile_source = "broker_snapshot"
+snapshot_max_age_seconds = 30
+require_currency_match = true
+
+[gauss.data]
+profile = "FREE_DELAYED"
+allow_silent_feed_fallback = false
+require_endpoint_entitlement_checks = true
+
+[gauss.data.free_delayed]
+market_delay_seconds = 900
+entitlement_boundary_buffer_seconds = 5
+poll_interval_seconds = 60
+max_additional_lag_seconds = 120
+stock_history_feed = "sip"
+options_policy = "verified_history_or_indicative_research"
+allow_current_iex_in_signals = false
+
+[gauss.data.subscribed_realtime]
+stock_feed = "sip"
+option_feed = "opra"
+intentional_market_delay_seconds = 0
+stock_execution_quote_max_age_seconds = 5
+option_execution_quote_max_age_seconds = 2
+
+[gauss.news]
+# Earnings and economic release dates use FINNHUB_API_KEY and FRED_API_KEY automatically.
+# Optional event_calendar_path overrides these feeds with a verified operator calendar.
+signal_alignment = "profile_market_cutoff"
+current_safety_alerts_enabled = true
+news_required_for_event_strategies = true
+
+[gauss.universe]
+scan_universe_limit = 200
+active_candidate_limit = 5
+reserve_candidate_limit = 5
+strategy_allowlist = ["momentum", "trend_following", "mean_reversion"]
+
+[gauss.schedule]
+close_research_offset_minutes = 45
+pre_start_minutes_before_open = 90
+pre_review_interval_minutes = 10
+entry_start_minutes_after_open = 5
+entry_stop_minutes_before_close = 30
+close_attempt_minutes_before_close = 15
+signal_timeframe = "5Min"
+
+[gauss.suitability]
+required_before_plan_publication = true
+required_before_pre_validation = true
+required_before_entry = true
+allow_no_trade = true
+allow_capital_band_shortcuts = false
+ranking_objective = "validated_net_expectancy_subject_to_risk"
+include_operating_costs = true
+include_liquidity_capacity = true
+
+[gauss.evaluation]
+capital_scenario_file = "examples/account_scenarios.example.toml"
+require_explicit_scenario_capital = true
+scenario_outputs_execution_eligible = false
+
+[gauss.risk]
+policy_id = "operator-mandate-v1"
+max_new_entry_groups_per_session = 3
+max_open_position_groups = 5
+max_entry_order_attempts_per_session = 6
+max_replacements_per_intent = 2
+max_capital_allocation_pct = "0.10"
+planned_loss_per_trade_pct = "0.01"
+max_option_structural_loss_pct = "0.01"
+daily_loss_pause_pct = "0.02"
+allow_leverage = false
+allow_uncovered_options = false
+allow_overnight_positions = false
+options_enabled = false
+allow_expiry_day_entries = false
+allow_free_delayed_live_entries = false
+
+[gauss.research]
+paid_model_calls_enabled = false
+max_parallel_jobs = 2
+max_job_seconds = 300
+session_llm_budget_equity_fraction = "0.0001"
+session_llm_absolute_cap_usd = "5.00"
+post_budget_share = "0.10"
+close_budget_share = "0.60"
+pre_budget_share = "0.20"
+live_budget_share = "0.10"

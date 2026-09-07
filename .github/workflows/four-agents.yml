@@ -1,0 +1,42 @@
+name: four-agent offline checks
+on:
+  push:
+    branches: [four-agents]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13']
+    env:
+      ALPACA_API_KEY: ''
+      ALPACA_SECRET_KEY: ''
+      FINNHUB_API_KEY: ''
+      FRED_API_KEY: ''
+      GAUSS_MODE: shadow
+      GAUSS_DATA_PROFILE: FREE_DELAYED
+      GAUSS_DATABASE_PATH: /tmp/gauss-ci/session.sqlite3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install '.[dev]' build
+      - name: Run explicit offline checks
+        run: >-
+          python -m pytest tests/test_four_agent*.py tests/test_execution_safety.py
+          tests/test_live_session_safety.py tests/test_gauss_existing_adapters.py
+          tests/test_runtime_operational.py tests/test_momentum_strategy.py
+          tests/runtime tests/ui
+      - name: Build distribution
+        run: python -m build --wheel --outdir /tmp/gauss-wheels
+      - name: Import installed wheel outside checkout
+        run: |
+          python -m venv --system-site-packages /tmp/gauss-wheel-env
+          /tmp/gauss-wheel-env/bin/python -m pip install --no-deps /tmp/gauss-wheels/*.whl
+          cd /tmp
+          /tmp/gauss-wheel-env/bin/python -c 'import src.runtime.service, src.agent.multi_agent.orchestrator, src.ui.four_agent_dashboard, gauss_bot, main_cli'

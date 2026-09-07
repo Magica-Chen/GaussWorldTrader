@@ -115,7 +115,7 @@ class AccountViewsMixin:
                     values=list(allocation_data.values())
                 )])
                 fig.update_layout(height=300)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
         with col2:
             st.write("**Portfolio Metrics**")
             total_pl = sum(
@@ -182,7 +182,7 @@ class AccountViewsMixin:
             title="Portfolio Performance (30 Days)",
             yaxis_title="Value ($)", height=400
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         if len(filtered_equity) > 1:
             total_return = (
                 (filtered_equity[-1] - filtered_equity[0])

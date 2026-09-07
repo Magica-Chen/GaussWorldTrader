@@ -175,12 +175,12 @@ class TradingViewsMixin:
                 title=f"Backtest Results - {symbol}",
                 yaxis_title="Portfolio Value ($)", height=400
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         trades_history = results.get('trades_history')
         if trades_history is not None and not trades_history.empty:
             st.write("**Trade History**")
-            st.dataframe(trades_history, use_container_width=True)
+            st.dataframe(trades_history, width="stretch")
 
     def render_strategy_comparison(self):
         """Render strategy comparison"""
@@ -306,7 +306,7 @@ class TradingViewsMixin:
         """Display strategy comparison results"""
         st.success("Comparison completed!")
         df = pd.DataFrame(comparison_results)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")
 
         valid = [r for r in comparison_results if 'Error' not in str(r['Total Return'])]
         if valid:
@@ -320,7 +320,7 @@ class TradingViewsMixin:
             )
             fig.update_layout(yaxis_title="Total Return (%)", height=400)
             fig.update_traces(textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     def render_trade_order_tab(self):
         """Trade: Order Entry, Watchlist, Orders History"""

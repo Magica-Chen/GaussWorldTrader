@@ -40,8 +40,10 @@ class MultiAgentOrchestrator:
         max_cost_per_run: float | None = None,
         finnhub_key: str | None = None,
         fred_key: str | None = None,
+        snapshot_reader: Any = None,
     ) -> None:
         self.logger = logging.getLogger(__name__)
+        self.snapshot_reader = snapshot_reader
         self.mode = mode.strip().lower()
         if self.mode not in {"llm", "fast"}:
             raise ValueError("mode must be either 'llm' or 'fast'")
@@ -69,16 +71,18 @@ class MultiAgentOrchestrator:
                 llm_model=llm_model,
                 finnhub_key=finnhub_key,
                 fred_key=fred_key,
+                snapshot_reader=snapshot_reader,
             )
             self.sentiment_agent = SentimentAnalystAgent(
                 self.llm,
                 finnhub_key=finnhub_key,
+                snapshot_reader=snapshot_reader,
             )
             self.decision_maker = DecisionMakerAgent(self.llm)
         self.fast_signal_agents = {
             "technical": TrendFollowingStrategy(),
             "fundamental": ValueStrategy(),
-            "sentiment": MomentumStrategy(),
+            "price_proxy": MomentumStrategy(),
         }
 
     async def evaluate_symbols(
@@ -202,7 +206,7 @@ class MultiAgentOrchestrator:
         scales = {
             "technical": 8.0,
             "fundamental": 12.0,
-            "sentiment": 20.0,
+            "price_proxy": 20.0,
         }
         reports = []
         for role, strategy in self.fast_signal_agents.items():

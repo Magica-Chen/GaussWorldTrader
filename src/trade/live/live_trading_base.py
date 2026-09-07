@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -13,7 +14,7 @@ from src.data import AlpacaDataProvider
 from src.utils.timezone_utils import now_et
 from src.account.position_manager import convert_crypto_symbol_for_display
 from src.account.account_manager import AccountManager
-from src.strategy.base import ActionPlan, SignalSnapshot
+from src.strategy.base import ActionPlan
 from src.trade.engine import ExecutionEngine
 
 if TYPE_CHECKING:
@@ -318,9 +319,14 @@ class LiveTradingEngine(ABC):
         }
 
         account_info = self.engine.get_account_info()
-        portfolio_value = float(
-            account_info.get("portfolio_value") or account_info.get("equity") or 100000
-        )
+        value = account_info.get("portfolio_value", account_info.get("equity"))
+        try:
+            portfolio_value = float(value)
+        except (ValueError, TypeError):
+            portfolio_value = 0.0
+        if not math.isfinite(portfolio_value) or portfolio_value <= 0:
+            self.logger.warning("New signals blocked: account equity is unavailable or invalid")
+            return None
 
         class _PortfolioProxy:
             def __init__(self, value: float) -> None:
@@ -358,7 +364,7 @@ class LiveTradingEngine(ABC):
         def _do_close() -> None:
             try:
                 self.engine.close_position(self._get_display_symbol())
-                self.logger.info("Closed position: %s", reason)
+                self.logger.info("Position close requested: %s; awaiting reconciliation", reason)
             except Exception as exc:
                 self.logger.exception("Failed to close position")
                 self._set_background_error("Failed to close position", exc)

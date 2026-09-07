@@ -74,7 +74,6 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         self.icon = icon
         self.configure_page()
         self.apply_styles()
-        self.initialize_modules()
 
     def configure_page(self):
         """Configure Streamlit page settings."""
@@ -265,7 +264,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                 mode='lines', name='Portfolio Value', line={"color": "blue", "width": 2}
             ))
             fig.update_layout(title="Portfolio Performance", yaxis_title="Value ($)", height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     def create_main_navigation(self):
         """Create main navigation tabs in the sidebar."""
@@ -274,22 +273,31 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             if logo_path.exists():
                 st.image(str(logo_path), width=150)
 
-            self.render_account_tier_sidebar()
-            st.divider()
 
             st.header("Navigation")
             selected_tab = st.radio(
                 "Choose a section:",
-                ["📊 Market Overview", "💼 Account Info", "🔍 Live Analysis", "👁️ Watchlist",
+                ["🧭 Gauss Session", "📊 Market Overview", "💼 Account Info", "🔍 Live Analysis", "👁️ Watchlist",
                  "📈 Strategy Backtest", "⚡ Trade & Order", "📰 News & Report"],
                 key="main_navigation"
             )
 
-            st.divider()
-            self.render_market_status_sidebar()
-            self.render_portfolio_quick_view()
+            if selected_tab == "🧭 Gauss Session":
+                from src.ui.four_agent_dashboard import render_gauss_session
 
-        if selected_tab == "📊 Market Overview":
+                st.caption("Service status and audited controls")
+            else:
+                self.initialize_modules()
+                self.render_account_tier_sidebar()
+
+            st.divider()
+            if selected_tab != "🧭 Gauss Session":
+                self.render_market_status_sidebar()
+                self.render_portfolio_quick_view()
+
+        if selected_tab == "🧭 Gauss Session":
+            render_gauss_session()
+        elif selected_tab == "📊 Market Overview":
             self.render_market_overview_tab()
         elif selected_tab == "💼 Account Info":
             self.render_account_info_tab()
@@ -368,7 +376,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                 data, error = self.load_market_data(symbol, days)
                 if data is not None and not data.empty:
                     fig = self.create_price_chart(symbol, data)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
                     ta = TechnicalAnalysis()
                     col_a, col_b, col_c = st.columns(3)
                     with col_a:
@@ -623,7 +631,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
             }
             for report in reports
         ]
-        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
         for report in reports:
             title = (
                 f"{report.get('agent_name', 'Agent')}: "
@@ -697,7 +705,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         with col2:
             self._drain_stream_queue(max_rows)
             if st.session_state.stream_messages:
-                st.dataframe(pd.DataFrame(st.session_state.stream_messages).tail(max_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(st.session_state.stream_messages).tail(max_rows), width="stretch")
             else:
                 st.info("No stream messages yet. Start the stream to receive data.")
 
@@ -957,7 +965,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                             })
                 if comparison_results:
                     df = pd.DataFrame(comparison_results)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width="stretch")
                     valid = [r for r in comparison_results if r['Total Return'] != 'Error']
                     if valid:
                         import plotly.express as px
@@ -968,7 +976,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
                                      text=[f"{r:.1f}%" for r in returns])
                         fig.update_layout(yaxis_title="Total Return (%)", height=400)
                         fig.update_traces(textposition="outside")
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
             else:
                 st.info("Configure strategies and click 'Run Comparison' to see results")
 
@@ -1088,7 +1096,7 @@ class Dashboard(MarketViewsMixin, AccountViewsMixin, TradingViewsMixin, Analysis
         with col2:
             self._drain_news_stream_queue(max_rows)
             if st.session_state.news_stream_messages:
-                st.dataframe(pd.DataFrame(st.session_state.news_stream_messages).tail(max_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(st.session_state.news_stream_messages).tail(max_rows), width="stretch")
             else:
                 st.info("No news messages yet. Start the stream.")
         if auto_refresh and st.session_state.news_stream_running:

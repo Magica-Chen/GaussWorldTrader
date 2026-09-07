@@ -83,7 +83,7 @@ class AnalysisViewsMixin:
                     line=dict(color='purple', width=1)
                 ))
                 fig.update_layout(title=f"{symbol} Price Chart", height=500, showlegend=True)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
                 self._display_ai_analysis(symbol, data)
             except Exception as e:
@@ -182,7 +182,7 @@ class AnalysisViewsMixin:
                 bars = provider.get_bars(symbol, "1Hour", start=start_date)
                 if not bars.empty:
                     st.write("**Recent Bars**")
-                    st.dataframe(bars.tail(20), use_container_width=True)
+                    st.dataframe(bars.tail(20), width="stretch")
         except Exception as e:
             st.error(f"Error loading stream data: {e}")
 

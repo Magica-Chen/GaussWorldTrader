@@ -1,11 +1,10 @@
 """Live options trading with expiration awareness."""
+
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
 import logging
 from typing import Any, List, Optional
 
-import pytz
 
 from src.watchlist import WatchlistManager
 from src.strategy.base import StrategyBase
@@ -14,14 +13,12 @@ from src.utils.asset_utils import merge_symbol_sources
 from src.utils.timezone_utils import format_duration
 
 from .live_trading_base import LiveTradingEngine, PositionState
+from .session_policy import SessionAwareTrading
 from .live_runner import run_live_engines
 from src.trade.engine import TradingOptionEngine
 
 
-EASTERN = pytz.timezone("US/Eastern")
-
-
-class LiveTradingOption(LiveTradingEngine):
+class LiveTradingOption(SessionAwareTrading, LiveTradingEngine):
     """Live trading engine for options.
 
     Features:
@@ -30,9 +27,6 @@ class LiveTradingOption(LiveTradingEngine):
     - Position rolling support
     - Underlying price monitoring
     """
-
-    MARKET_OPEN = time(9, 30)
-    MARKET_CLOSE = time(16, 0)
 
     def __init__(
         self,
@@ -49,6 +43,11 @@ class LiveTradingOption(LiveTradingEngine):
         allow_sell_to_open: bool = False,
         order_type: str = "auto",
     ) -> None:
+        if execute:
+            raise ValueError(
+                'Unattended option execution requires the Gauss session gateway and options '
+                'readiness gates. Use execute=False for legacy underlying research.'
+            )
         self.underlying_symbol = underlying_symbol.strip().upper()
         self.roll_days_before_expiry = roll_days_before_expiry
         self.strategy_name = strategy
@@ -86,67 +85,6 @@ class LiveTradingOption(LiveTradingEngine):
         """Subscribe to underlying stock trade stream."""
         self._stream.subscribe_trades(handler, symbol)
 
-    def _get_signal_interval_seconds(self) -> float:
-        """Return seconds until next signal check, respecting market hours."""
-        if not self._is_market_open():
-            return self._seconds_until_market_open()
-
-        interval_secs = self._seconds_until_next_interval()
-        now = datetime.now(EASTERN)
-        today_close = now.replace(
-            hour=self.MARKET_CLOSE.hour, minute=self.MARKET_CLOSE.minute,
-            second=0, microsecond=0
-        )
-        secs_to_close = max(0.0, (today_close - now).total_seconds())
-
-        if interval_secs > secs_to_close:
-            return self._seconds_until_market_open()
-
-        return interval_secs
-
-    def is_market_open(self) -> bool:
-        """Expose market open status for scripts."""
-        return self._is_market_open()
-
-    def seconds_until_market_open(self) -> float:
-        """Expose seconds until next market open for scripts."""
-        return self._seconds_until_market_open()
-
-    def _is_market_open(self) -> bool:
-        """Check if market is currently open."""
-        now = datetime.now(EASTERN)
-
-        if now.weekday() >= 5:
-            return False
-
-        current_time = now.time()
-        return self.MARKET_OPEN <= current_time <= self.MARKET_CLOSE
-
-    def _seconds_until_market_open(self) -> float:
-        """Calculate seconds until market opens."""
-        now = datetime.now(EASTERN)
-
-        days_ahead = 0
-        if now.weekday() == 5:
-            days_ahead = 2
-        elif now.weekday() == 6:
-            days_ahead = 1
-        elif now.time() > self.MARKET_CLOSE:
-            days_ahead = 1
-            if now.weekday() == 4:
-                days_ahead = 3
-
-        next_open = now.replace(
-            hour=self.MARKET_OPEN.hour, minute=self.MARKET_OPEN.minute,
-            second=0, microsecond=0
-        )
-        if days_ahead > 0:
-            next_open += timedelta(days=days_ahead)
-        elif now.time() >= self.MARKET_OPEN:
-            next_open += timedelta(days=1)
-
-        return max(1.0, (next_open - now).total_seconds())
-
     def _get_display_symbol(self) -> str:
         """Return underlying symbol for display."""
         return self.underlying_symbol
@@ -165,8 +103,7 @@ class LiveTradingOption(LiveTradingEngine):
         for pos in expiring:
             days_left = pos.get('days_to_expiration', 999)
             self.logger.warning(
-                "Position %s expires in %d days - consider rolling",
-                pos.get('symbol'), days_left
+                "Position %s expires in %d days - consider rolling", pos.get('symbol'), days_left
             )
 
     def _refresh_position_state(self) -> None:
@@ -175,30 +112,31 @@ class LiveTradingOption(LiveTradingEngine):
             super()._refresh_position_state()
             return
 
-        positions = self.engine.get_option_positions()
+        positions = [
+            p
+            for p in self.engine.get_option_positions()
+            if p.get('underlying') == self.underlying_symbol and float(p.get('qty', 0)) != 0
+        ]
 
         with self._lock:
+            self.option_legs = {p['symbol']: dict(p) for p in positions}
             if not positions:
                 self.position = PositionState()
                 return
 
-            total_value = sum(float(p.get('market_value', 0)) for p in positions)
             total_qty = sum(float(p.get('qty', 0)) for p in positions)
-
-            if total_qty == 0:
-                self.position = PositionState()
-                return
-
-            side = "long" if total_qty > 0 else "short"
-            avg_cost = sum(float(p.get('cost_basis', 0)) for p in positions) / abs(total_qty)
+            gross_qty = sum(abs(float(p['qty'])) for p in positions)
+            side = "mixed" if len(positions) > 1 else ("long" if total_qty > 0 else "short")
 
             self.position = PositionState(
-                qty=total_qty,
+                qty=gross_qty,
                 side=side,
-                entry_price=avg_cost,
-                stop_loss=self.position.stop_loss,
-                take_profit=self.position.take_profit,
+                entry_price=None,
             )
+
+    def _monitor_position(self, price: float) -> None:
+        """Underlying trades are signal evidence; contract premiums are managed by Gauss."""
+        return
 
 
 def get_default_option_symbols() -> List[str]:
@@ -302,15 +240,16 @@ def run_option_trading(
 
     if engines and not engines[0].is_market_open():
         remaining = engines[0].seconds_until_market_open()
-        logging.warning(
-            "NOT in market period. Market opens in %s", format_duration(remaining)
-        )
+        logging.warning("NOT in market period. Market opens in %s", format_duration(remaining))
         return
 
     for engine in engines:
         engine.logger.info(
             "Live options trading on %s (execute=%s, auto_exit=%s, roll_days=%d)",
-            engine.underlying_symbol, execute, auto_exit, roll_days,
+            engine.underlying_symbol,
+            execute,
+            auto_exit,
+            roll_days,
         )
 
     if len(engines) == 1:

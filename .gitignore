@@ -70,7 +70,24 @@ logs/
 # Trading data and results
 results/
 archive/
-tests/
+tests/*
+!tests/conftest.py
+!tests/test_four_agent*.py
+!tests/test_runtime_operational.py
+!tests/test_execution_safety.py
+!tests/test_gauss_existing_adapters.py
+!tests/test_live_session_safety.py
+!tests/test_momentum_strategy.py
+!tests/fixtures/
+tests/fixtures/*
+!tests/fixtures/gauss_session_day.json
+!tests/runtime/
+tests/runtime/*
+!tests/runtime/test_session_cli.py
+!tests/ui/
+tests/ui/*
+!tests/ui/test_four_agent_dashboard.py
+!tests/ui/test_session*.py
 backtest_results/
 
 # OS generated files

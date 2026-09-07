@@ -45,7 +45,7 @@ class UIComponents:
 
         if df_data:
             df = pd.DataFrame(df_data)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width="stretch")
         else:
             st.info("No valid positions to display")
 
@@ -73,7 +73,7 @@ class UIComponents:
 
         if df_data:
             df = pd.DataFrame(df_data)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width="stretch")
         else:
             st.info("No valid orders to display")
 
@@ -119,7 +119,7 @@ class UIComponents:
             preview_data['Limit Price'] = f"${limit_price:.2f}"
 
         preview_df = pd.DataFrame([preview_data])
-        st.dataframe(preview_df, use_container_width=True, hide_index=True)
+        st.dataframe(preview_df, width="stretch", hide_index=True)
 
     @staticmethod
     def _execute_order(symbol, side, order_type, qty, limit_price=None):
@@ -159,7 +159,7 @@ class UIComponents:
         entries = manager.get_watchlist_entries()
         if entries:
             df = pd.DataFrame(entries)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width="stretch")
         else:
             st.info("Watchlist is empty")
 
@@ -217,6 +217,6 @@ class UIComponents:
         if title:
             st.write(f"**{title}**")
         if data is not None and not data.empty:
-            st.dataframe(data, use_container_width=True)
+            st.dataframe(data, width="stretch")
         else:
             st.info("No data available")

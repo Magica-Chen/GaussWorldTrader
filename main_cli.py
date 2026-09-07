@@ -10,16 +10,29 @@ from pathlib import Path
 
 import typer
 
-from src.account.account_manager import AccountManager
-from src.backtest import Backtester
-from src.data import AlpacaDataProvider
-from src.settings import get_alpaca_base_url
-from src.strategy import get_strategy_registry
-from src.trade.engine import ExecutionEngine, TradingStockEngine
-from src.utils.timezone_utils import now_et
-from src.watchlist import WatchlistManager
-
 app = typer.Typer(add_completion=False)
+
+
+from src.runtime.cli import app as session_app
+
+app.add_typer(session_app, name="session")
+
+
+@app.callback()
+def load_legacy_modules(ctx: typer.Context):
+    """Keep session operations independent from legacy broker and numerical dependencies."""
+    if ctx.invoked_subcommand == "session":
+        return
+    global AccountManager, Backtester, AlpacaDataProvider, get_alpaca_base_url
+    global get_strategy_registry, ExecutionEngine, TradingStockEngine, now_et, WatchlistManager
+    from src.account.account_manager import AccountManager
+    from src.backtest import Backtester
+    from src.data import AlpacaDataProvider
+    from src.settings import get_alpaca_base_url
+    from src.strategy import get_strategy_registry
+    from src.trade.engine import ExecutionEngine, TradingStockEngine
+    from src.utils.timezone_utils import now_et
+    from src.watchlist import WatchlistManager
 
 
 def _configure_numba_cache() -> None:

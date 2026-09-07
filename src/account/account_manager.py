@@ -40,7 +40,7 @@ class AccountManager:
             self.base_url = "https://paper-api.alpaca.markets"
         else:
             self.base_url = "https://api.alpaca.markets"
-        
+
         self.logger = logging.getLogger(__name__)
 
         if not self.api_key or not self.secret_key:
@@ -64,6 +64,23 @@ class AccountManager:
         allow_empty: bool = False,
     ) -> Any:
         """Perform an Alpaca request and raise on any transport or API failure."""
+        if method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+            from urllib.parse import urlparse
+            from src.runtime.store import account_owned
+            from src.settings import get_config
+
+            environment = {"paper-api.alpaca.markets": "paper", "api.alpaca.markets": "live"}.get(
+                urlparse(self.base_url).hostname
+            )
+            account_id = self.get_account().get("id")
+            if not environment or not account_id:
+                raise AccountAPIError("Verified account identity is required for account changes")
+            if account_owned(
+                str(account_id), environment, get_config().session_runtime.database_path
+            ):
+                raise AccountAPIError(
+                    "The Gauss session runtime owns this account; use its audited controls"
+                )
         url = f"{self.base_url}{path}"
         try:
             response = requests.request(
@@ -239,31 +256,31 @@ class AccountManager:
         summary = f"""
 🌍 GAUSS WORLD TRADER - ACCOUNT SUMMARY
 ======================================
-Account ID: {status.get('account_id', 'N/A')}
-Status: {status.get('status', 'N/A')}
+Account ID: {status.get("account_id", "N/A")}
+Status: {status.get("status", "N/A")}
 Market Status: {market_status}
 
 FINANCIAL OVERVIEW:
 ------------------
-• Portfolio Value: ${status.get('portfolio_value', 0):,.2f}
-• Cash Available: ${status.get('cash', 0):,.2f} ({status.get('cash_percentage', 0):.1f}%)
-• Buying Power: ${status.get('buying_power', 0):,.2f}
-• Day Trading BP: ${status.get('day_trading_buying_power', 0):,.2f}
+• Portfolio Value: ${status.get("portfolio_value", 0):,.2f}
+• Cash Available: ${status.get("cash", 0):,.2f} ({status.get("cash_percentage", 0):.1f}%)
+• Buying Power: ${status.get("buying_power", 0):,.2f}
+• Day Trading BP: ${status.get("day_trading_buying_power", 0):,.2f}
 
 PERFORMANCE:
 -----------
-• Current Equity: ${status.get('equity', 0):,.2f}
-• Previous Equity: ${status.get('last_equity', 0):,.2f}
-• Daily Change: ${status.get('equity_change', 0):,.2f} ({status.get('equity_change_percentage', 0):+.2f}%)
+• Current Equity: ${status.get("equity", 0):,.2f}
+• Previous Equity: ${status.get("last_equity", 0):,.2f}
+• Daily Change: ${status.get("equity_change", 0):,.2f} ({status.get("equity_change_percentage", 0):+.2f}%)
 
 ACCOUNT STATUS:
 --------------
-• Trading Blocked: {status.get('trading_blocked', False)}
-• Transfers Blocked: {status.get('transfers_blocked', False)}
-• Pattern Day Trader: {status.get('pattern_day_trader', False)}
-• Account Multiplier: {status.get('multiplier', 'N/A')}
+• Trading Blocked: {status.get("trading_blocked", False)}
+• Transfers Blocked: {status.get("transfers_blocked", False)}
+• Pattern Day Trader: {status.get("pattern_day_trader", False)}
+• Account Multiplier: {status.get("multiplier", "N/A")}
 
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Using: {"Paper Trading" if "paper" in self.base_url else "Live Trading"}
 """
 

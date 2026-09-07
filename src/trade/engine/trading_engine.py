@@ -4,6 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, TYPE_CHECKING
 import logging
+import math
 
 if TYPE_CHECKING:
     from src.notify import NotificationService
@@ -57,8 +58,28 @@ class TradingEngine(ABC):
 
     def validate_order(self, symbol: str, qty: float, side: str) -> None:
         """Validate order before submission. Override in subclasses for asset-specific rules."""
-        if qty <= 0:
+        if not math.isfinite(qty) or qty <= 0:
             raise ValueError(f"Order quantity must be positive, got {qty}")
+        if side.lower() not in {"buy", "sell"}:
+            raise ValueError("Order side must be buy or sell")
+
+    def _assert_account_available(self) -> None:
+        """Refuse legacy writes while the session runtime owns this account."""
+        from src.runtime.store import account_owned
+        from src.settings import get_config
+
+        config = get_config().session_runtime
+        account = self.api.get_account()
+        account_id = str(account.id)
+        environment = "paper" if self.paper_trading else "live"
+        if account_owned(account_id, environment, config.database_path):
+            raise RuntimeError(
+                "The Gauss session runtime owns this account; use its audited controls"
+            )
+
+    def _submit_order(self, order_request):
+        self._assert_account_available()
+        return self.api.submit_order(order_request)
 
     @abstractmethod
     def place_market_order(self, symbol: str, qty: float, side: str = 'buy',
@@ -85,7 +106,7 @@ class TradingEngine(ABC):
             time_in_force=TimeInForce.GTC if time_in_force == 'gtc' else TimeInForce.DAY,
             stop_price=stop_price
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = {
             'id': order.id,
@@ -104,8 +125,9 @@ class TradingEngine(ABC):
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
+        self._assert_account_available()
         self.api.cancel_order_by_id(order_id)
-        self.logger.info(f"Order {order_id} cancelled successfully")
+        self.logger.info(f"Cancellation requested for order {order_id}")
         return True
 
     def get_order_status(self, order_id: str) -> Dict[str, Any]:
@@ -147,6 +169,8 @@ class TradingEngine(ABC):
     def get_account_info(self) -> Dict[str, Any]:
         """Get account information."""
         account = self.api.get_account()
+        daytrade_count = getattr(account, 'daytrade_count', None)
+        daytrade_count = int(daytrade_count) if daytrade_count is not None else None
         return {
             'account_id': account.id,
             'multiplier': float(getattr(account, 'multiplier', 1) or 1),
@@ -160,8 +184,8 @@ class TradingEngine(ABC):
             'cash': float(account.cash),
             'portfolio_value': float(account.portfolio_value),
             'equity': float(account.equity),
-            'daytrade_count': int(getattr(account, 'daytrade_count', 0)),
-            'day_trade_count': int(getattr(account, 'daytrade_count', 0)),
+            'daytrade_count': daytrade_count,
+            'day_trade_count': daytrade_count,
             'pattern_day_trader': getattr(account, 'pattern_day_trader', False),
             'trading_blocked': getattr(account, 'trading_blocked', False),
             'transfers_blocked': getattr(account, 'transfers_blocked', False),

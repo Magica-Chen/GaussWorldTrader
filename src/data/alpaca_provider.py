@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 import logging
 import re
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 
 import pandas as pd
 from src.settings import get_config, has_alpaca_credentials, is_paper_trading
-from src.utils.timezone_utils import EASTERN, now_et
+from src.utils.timezone_utils import now_et
 
 from alpaca.data.historical import (
     StockHistoricalDataClient,
@@ -22,17 +22,13 @@ from alpaca.data.live import (
 from alpaca.data.requests import (
     StockBarsRequest,
     StockLatestQuoteRequest,
-    StockLatestTradeRequest,
     CryptoBarsRequest,
     CryptoLatestQuoteRequest,
-    CryptoLatestTradeRequest,
     OptionBarsRequest,
     OptionLatestQuoteRequest,
-    OptionLatestTradeRequest,
-    OptionSnapshotRequest,
     OptionChainRequest
 )
-from alpaca.data.enums import CryptoFeed, DataFeed
+from alpaca.data.enums import CryptoFeed, DataFeed, OptionsFeed
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetPortfolioHistoryRequest
@@ -120,12 +116,13 @@ class AlpacaDataProvider:
             feed=CryptoFeed.US,
         )
 
-    def create_option_stream(self, raw_data: bool = False):
+    def create_option_stream(self, raw_data: bool = False, feed: str = 'indicative'):
         """Create a real-time option data stream (quotes/trades/bars)."""
         return OptionDataStream(
             api_key=self.settings.alpaca.api_key,
             secret_key=self.settings.alpaca.secret_key or "",
             raw_data=raw_data,
+            feed=OptionsFeed(feed),
         )
 
     def create_news_stream(self, raw_data: bool = False):
@@ -178,9 +175,21 @@ class AlpacaDataProvider:
             start = now_et() - timedelta(days=365)
         if end is None:
             end = now_et()
+        start = pd.Timestamp(start)
+        end = pd.Timestamp(end)
+        if start.tzinfo is None:
+            start = start.tz_localize('UTC')
+        if end.tzinfo is None:
+            end = end.tz_localize('UTC')
         
         tf = self._parse_timeframe(timeframe)
-        feed = "sip" if self.is_pro_tier else "iex"
+        profile = self.settings.session_runtime.data_profile
+        feed = "sip"
+        if profile == 'FREE_DELAYED':
+            cutoff = now_et() - timedelta(seconds=900 + self.settings.session_runtime.entitlement_boundary_buffer)
+            end = min(end, cutoff)
+        if start >= end:
+            return pd.DataFrame()
 
         request = StockBarsRequest(
             symbol_or_symbols=symbol,
@@ -192,7 +201,9 @@ class AlpacaDataProvider:
         )
 
         bars = self.stock_historical_client.get_stock_bars(request)
-        return self._process_stock_bars(bars, symbol)
+        result = self._process_stock_bars(bars, symbol)
+        result.attrs.update(data_profile=str(profile), feed='sip', request_cutoff=end.isoformat())
+        return result
     
     def get_stock_latest_quote(self, symbol: str) -> Dict[str, Any]:
         """Get latest quote for a stock"""
@@ -240,9 +251,9 @@ class AlpacaDataProvider:
         bars = self.option_historical_client.get_option_bars(request)
         return self._process_option_bars(bars, symbol)
     
-    def get_option_latest_quote(self, symbol: str) -> Dict[str, Any]:
+    def get_option_latest_quote(self, symbol: str, feed: str | None = None) -> Dict[str, Any]:
         """Get latest quote for an option"""
-        feed = "opra" if self.is_pro_tier else "indicative"
+        feed = feed or ('opra' if self.settings.session_runtime.data_profile == 'SUBSCRIBED_REALTIME' else 'indicative')
 
         request = OptionLatestQuoteRequest(
             symbol_or_symbols=symbol,
@@ -266,7 +277,7 @@ class AlpacaDataProvider:
     
     def get_options_chain(self, underlying_symbol: str) -> pd.DataFrame:
         """Get options chain for an underlying symbol"""
-        feed = "opra" if self.is_pro_tier else "indicative"
+        feed = 'opra' if self.settings.session_runtime.data_profile == 'SUBSCRIBED_REALTIME' else 'indicative'
 
         request = OptionChainRequest(
             underlying_symbol=underlying_symbol,

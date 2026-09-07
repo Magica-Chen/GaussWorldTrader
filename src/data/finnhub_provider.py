@@ -24,6 +24,7 @@ class FinnhubProvider:
         if not self.api_key:
             raise ValueError("Finnhub API key not provided")
         self.client = finnhub.Client(api_key=self.api_key)
+        self.client.DEFAULT_TIMEOUT = 20
 
     def _unwrap(self, payload: Any, action: str) -> Any:
         if isinstance(payload, dict) and "error" in payload:

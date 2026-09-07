@@ -190,7 +190,7 @@ class TradingOptionEngine(TradingEngine):
             limit_price=limit_price,
             legs=legs,
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         order_dict["order_class"] = self._enum_value(getattr(order, "order_class", None))
@@ -237,7 +237,7 @@ class TradingOptionEngine(TradingEngine):
             side=OrderSide.BUY if side.lower() == 'buy' else OrderSide.SELL,
             time_in_force=TimeInForce.DAY if time_in_force == 'day' else TimeInForce.GTC
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         self.logger.info(f"Option market order placed: {side} {int(qty)} contracts of {symbol}")
@@ -265,7 +265,7 @@ class TradingOptionEngine(TradingEngine):
             time_in_force=TimeInForce.DAY if time_in_force == 'day' else TimeInForce.GTC,
             limit_price=limit_price
         )
-        order = self.api.submit_order(order_request)
+        order = self._submit_order(order_request)
 
         order_dict = self._build_order_dict(order)
         self.logger.info(

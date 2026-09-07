@@ -29,7 +29,7 @@ class FREDProvider:
             self.logger.warning("FRED API key not provided")
             self.client = None
         elif Fred is None:
-            self.logger.error("fredapi library not installed. Install with: pip install fredapi")
+            self.logger.debug("fredapi unavailable for series queries; REST release calendar remains available")
             self.client = None
         else:
             self.client = Fred(api_key=self.api_key)
@@ -42,6 +42,36 @@ class FREDProvider:
         if self.client is None:
             raise FREDProviderError("FRED client is not initialized")
         return self.client
+
+    def get_release_dates(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """Read scheduled release dates, including releases with no published data yet."""
+        import requests
+
+        if not self.api_key:
+            raise FREDProviderError("FRED API key not provided")
+        rows = []
+        with requests.Session() as session:
+            for offset in range(0, 10000, 1000):
+                response = session.get(
+                    'https://api.stlouisfed.org/fred/releases/dates',
+                    params={'api_key': self.api_key, 'file_type': 'json',
+                            'realtime_start': start_date, 'realtime_end': end_date,
+                            'include_release_dates_with_no_data': 'true',
+                            'sort_order': 'asc', 'limit': 1000, 'offset': offset},
+                    timeout=20,
+                )
+                if response.status_code != 200:
+                    raise FREDProviderError(f"Release calendar HTTP {response.status_code}")
+                payload = response.json()
+                page = payload.get('release_dates')
+                if not isinstance(page, list) or not isinstance(payload.get('count'), int):
+                    raise FREDProviderError("Malformed release calendar")
+                rows.extend(page)
+                if len(rows) >= payload['count']:
+                    return rows
+                if not page:
+                    raise FREDProviderError("Incomplete release calendar")
+        raise FREDProviderError("Release calendar exceeds pagination limit")
     
     def get_series_data(
         self,
