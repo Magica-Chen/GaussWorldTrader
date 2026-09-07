@@ -1,5 +1,15 @@
 <div align="center">
   <img src="assets/logo3.png" width="600" alt="Gauss World Trader logo">
+  <p>
+    <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=for-the-badge" alt="Platform">
+    <img src="https://img.shields.io/badge/Trading-Alpaca-yellow?style=for-the-badge" alt="Alpaca">
+    <a href="https://join.slack.com/t/gaussianprocessmodels/shared_invite/zt-5acinu03-qvIOXiqSX0tvQmwPL2D7Nw">
+      <img src="https://img.shields.io/badge/Slack-Join%20the%20Community-4A154B?style=for-the-badge&logo=slack&logoColor=white"
+           alt="Join Gauss World Slack">
+    </a>
+  </p>
   <p><strong>Market research, strategy backtesting, and supervised trading with Alpaca.</strong></p>
   <p>Python 3.12+ · Streamlit · Stocks, crypto, and options · MIT license</p>
   <p><a href="https://magica-chen.github.io/GaussWorldTrader/">Homepage</a> ·
@@ -292,3 +302,5 @@ features. Released under the [MIT license](LICENSE).
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Magica-Chen/GaussWorldTrader&type=date&legend=top-left&sealed_token=le_z-DP3k2WiP-E55WxggBHzY1VQ3-ooXdzNv8a9FUy7p04ZRhduWmHSO4KMTd32cJWUGPSuuS5YnFximwu7MZDK3UxL_L7NAnmf3SLp48hb6cwZwBoaN36p7sFPcgoB4SeMCsVa-1F1cCzW416beGfblcRVDZ9pvzVHfhJ0B3YwiGm9IlbUUGF4m00z" />
  </picture>
 </a>
+
+---
