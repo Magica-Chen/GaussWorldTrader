@@ -99,6 +99,15 @@ class SessionClient:
         finally:
             store.close()
 
+    def usage(self, session_id=None):
+        from .usage import token_usage_summary
+
+        store = self._store()
+        try:
+            return token_usage_summary(store, self._scope(store), session_id)
+        finally:
+            store.close()
+
     def health(self):
         return self.status().get(
             "health",
@@ -184,6 +193,11 @@ class SessionClient:
             result["account"] = store.projection("account", scope) if scope else {}
             result["costs"] = store.list("cost_ledger", scope) if scope else []
             from .research import research_cost_summary
+            from .usage import token_usage_summary
+
+            result["token_usage"] = token_usage_summary(
+                store, scope, session_id if session_id != "latest" else None
+            )
 
             result["research_costs"] = (
                 research_cost_summary(store, scope, session_id if session_id != "latest" else None)

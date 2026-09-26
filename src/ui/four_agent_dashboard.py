@@ -173,6 +173,26 @@ def render_gauss_session(client=None):
     overview[1].metric("Environment", str(status.get("environment", "Unknown")).title())
     overview[2].metric("Plans recorded", str(len(plans)))
     overview[3].metric("Entries", "Paused" if status.get("entries_paused") else "Review readiness")
+    usage = report.get("token_usage")
+    if usage:
+        st.subheader("Codex token usage")
+        totals, allowance = usage["totals"], usage["allowance"]
+        counters = st.columns(4)
+        counters[0].metric("Recorded input tokens", f"{totals['input_tokens']:,}")
+        counters[1].metric("Recorded output tokens", f"{totals['output_tokens']:,}")
+        counters[2].metric("Recorded total tokens", f"{totals['total_tokens']:,}")
+        remaining = allowance["remaining_percent"]
+        counters[3].metric("Codex allowance remaining", "Unknown" if remaining is None else f"{remaining:g}%")
+        st.caption(usage["note"])
+        if allowance["stale"]:
+            st.warning("Allowance data is stale or unavailable; the displayed percentage is not a fresh check.")
+        if allowance["monitor_only"]:
+            st.warning("Analysis and new order actions are stopped; monitoring continues.")
+        st.caption(f"Calls: {totals['calls']} · Failed: {totals['failed']} · "
+                   f"Pending/unresolved: {totals['pending']} · Unknown usage: {totals['unknown_usage_calls']}")
+        if usage["by_role"]:
+            st.dataframe([{"stage": role, **values} for role, values in usage["by_role"].items()],
+                         hide_index=True, use_container_width=True)
     if str(mode).lower() == "shadow":
         st.info("SHADOW MODE — decisions are observations; broker submission is disabled.")
     else:

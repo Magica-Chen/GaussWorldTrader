@@ -101,3 +101,63 @@ The user service restarts after an unexpected process exit. Normal stop requests
 supervision while unresolved exposure remains, so `systemctl stop` can wait until that
 exposure is explicitly handled. The account lease also prevents a second trader from
 owning the same paper account. See [operations](FOUR_AGENT_OPERATIONS.md) for full controls.
+
+## Token monitor
+
+The monitor reads the existing ledger without starting models or changing trading.
+The dashboard's Gauss Session page displays the same totals on refresh.
+
+```bash
+python main_cli.py session usage --watch
+python main_cli.py session usage --json
+python main_cli.py session usage --session US_EQUITIES:2026-09-28
+```
+
+Input/output totals cover recorded calls by this bot and account, grouped by stage
+and session. Failed or unresolved calls with missing counts remain explicitly unknown.
+These totals do not include unrelated Codex conversations or setup checks in other
+ledgers. The account-wide allowance percentage comes from the runtime's quota checks,
+not a token-to-percentage estimate. Values older than 120 seconds are labelled stale.
+Ctrl+C closes the terminal monitor without affecting the trader.
+
+## Start and stop from the terminal
+
+```bash
+cd ~/GaussWorldTrader
+conda activate myalpacatrading
+
+# Start the installed background service (safe if already running).
+systemctl --user start gauss-paper.service
+systemctl --user status gauss-paper.service --no-pager
+python main_cli.py session status
+
+# Resume entries after a prior pause, once current readiness has been checked.
+python main_cli.py session resume-entries --reason "Reviewed current readiness"
+
+# Pause only new entries; monitoring and holding management continue.
+python main_cli.py session pause-entries --reason "Operator pause"
+
+# Request a full, graceful stop without blocking the terminal.
+systemctl --user stop --no-block gauss-paper.service
+journalctl --user -u gauss-paper.service -n 20 --no-pager
+```
+
+A start does not erase a persisted entry pause. A graceful stop requests cancellation
+of pending entries where permitted, then reconciles. If positions or unresolved orders
+remain, the service keeps supervising them and reports `management_continues`; it does
+not automatically liquidate the account. Stopping under the Codex quota lock does not
+override the prohibition on broker actions.
+
+To explicitly end supervision despite remaining holdings, first request the graceful
+stop above and wait for `management_continues` in the log. Only then acknowledge:
+
+```bash
+systemctl --user kill --kill-whom=main --signal=SIGINT gauss-paper.service
+systemctl --user status gauss-paper.service --no-pager
+```
+
+That acknowledgement ends monitoring; it does not sell remaining holdings or guarantee
+cancellation of all broker orders. Confirm the unit becomes `inactive`. Start it again
+with `systemctl --user start gauss-paper.service`, inspect status, and resume entries
+when appropriate. The authenticated application CLI also accepts `session stop
+--reason "..." --confirm-account ACCOUNT_ID`; its account ID comes from `session status`.

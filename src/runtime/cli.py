@@ -104,6 +104,38 @@ def status(config: Path | None = typer.Option(None)):
 
 
 @app.command()
+def usage(
+    config: Path | None = typer.Option(None),
+    session: str | None = typer.Option(None, help="Exact session ID; omit for all recorded calls."),
+    watch: bool = typer.Option(False, help="Refresh until Ctrl+C; does not control trading."),
+    interval: float = typer.Option(5, min=1, max=60, help="Refresh interval in seconds."),
+    json_output: bool = typer.Option(False, "--json", help="Print a single machine-readable snapshot."),
+):
+    """Monitor recorded bot tokens and the separate account-wide Codex allowance."""
+    if watch and json_output:
+        raise typer.BadParameter("Use --watch or --json, not both.")
+    from rich.console import Console
+    from rich.live import Live
+    from .usage import usage_panel
+
+    client = client_for(config)
+    if json_output:
+        emit(client.usage(session))
+    elif not watch:
+        Console().print(usage_panel(client.usage(session)))
+    else:
+        import time
+
+        try:
+            with Live(usage_panel(client.usage(session)), auto_refresh=False) as live:
+                while True:
+                    time.sleep(interval)
+                    live.update(usage_panel(client.usage(session)), refresh=True)
+        except KeyboardInterrupt:
+            typer.echo("Token monitor closed; the trading service is unchanged.")
+
+
+@app.command()
 def plans(config: Path | None = typer.Option(None), session: str = typer.Option("latest")):
     client = client_for(config)
     emit(client.plans() if session == "latest" else client.report(session).get("plans", []))

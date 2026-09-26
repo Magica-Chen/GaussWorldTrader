@@ -65,6 +65,7 @@ Run commands from the repository root with your Python environment activated.
 | One-shot market research | `python gauss_bot.py --config examples/gauss.free-delayed.example.toml --once` | Discovers symbols, screens strategies, writes a next-session report, then exits |
 | Continuous Gauss session | `python gauss_bot.py --config examples/gauss.free-delayed.example.toml` | Runs the four session roles and supervises account exposure; defaults to shadow execution |
 | Codex paper session | `python gauss_bot.py --config examples/gauss.paper-codex.example.toml` | Requires scoped validated or paper-trial approvals; uses subscription AI in all four stages, paper execution and Slack notifications |
+| Token monitor | `python main_cli.py session usage --watch` | Displays recorded bot tokens, per-stage usage and the separate Codex subscription allowance; reads the existing session ledger |
 | Web dashboard | `python dashboard.py` | Opens the Streamlit server at `http://localhost:3721` |
 | Interactive trading setup | `python live_script.py` | Configures stock/crypto execution and options research |
 | General CLI | `python main_cli.py --help` | Signals, backtests, account information, market streams, and session commands |
@@ -188,6 +189,79 @@ cancel every broker order. Entry pauses persist across restarts.
 An abrupt exit can leave a database lease for up to 120 seconds after its last renewal.
 A blocked restart reports the lease expiry and exits. Keep the database intact and
 retry after expiry once the previous process has stopped.
+
+### Monitor Codex usage
+
+The Gauss Session dashboard shows input/output token totals, calls by stage, and
+the latest Codex allowance. For a live terminal view:
+
+```bash
+python main_cli.py session usage --watch
+python main_cli.py session usage --json
+python main_cli.py session usage --session US_EQUITIES:2026-09-28
+```
+
+Use `--config PATH` when your default configuration does not point to the running
+service. `--session` filters recorded calls by an exact session ID; omitting it
+shows all recorded calls for the selected account. Ctrl+C closes the monitor while
+the trading service continues running.
+
+Token totals cover this bot's recorded calls. Failed or unresolved calls with missing
+counts are labelled unknown. The subscription allowance is account-wide, including
+other Codex activity, and is not calculated from the bot's token totals. Quota readings
+older than 120 seconds are labelled stale. At 5% or less remaining, the service sends
+a Slack alert when configured and stops analysis and all new broker actions, including
+exits and cancellations, while reconciliation and monitoring continue. Resuming after
+that threshold requires a fresh allowance above 5% and an authenticated resume command.
+
+### Start, pause and stop the background service
+
+These commands apply to the installed Linux/WSL user service, `gauss-paper.service`.
+The [service template](examples/gauss-paper.service) requires host-specific interpreter
+paths and a private deployment configuration. The current host uses the
+`myalpacatrading` Conda environment. New installations should follow the
+[operations guide](docs/FOUR_AGENT_OPERATIONS.md) and prepare scoped approvals first.
+
+```bash
+cd ~/GaussWorldTrader
+conda activate myalpacatrading
+
+# Start the installed service; this is safe when it is already running.
+systemctl --user start gauss-paper.service
+systemctl --user status gauss-paper.service --no-pager
+python main_cli.py session status
+
+# Watch service activity.
+journalctl --user -u gauss-paper.service -f
+
+# Pause new entries while retaining monitoring and holding management.
+python main_cli.py session pause-entries --reason "Operator pause"
+
+# Resume after reviewing current readiness; other risk gates remain active.
+python main_cli.py session resume-entries --reason "Reviewed current readiness"
+
+# Request a graceful stop without blocking the terminal.
+systemctl --user stop --no-block gauss-paper.service
+journalctl --user -u gauss-paper.service -n 20 --no-pager
+```
+
+Application controls read `GAUSS_CONTROL_TOKEN` from the local environment or `.env`.
+Starting the service does not clear a persisted entry pause. Do not launch a second
+`gauss_bot.py` process for the same account while the service owns it.
+
+**A stop does not automatically sell holdings.** If positions or unresolved orders
+remain, graceful shutdown continues supervision and logs `management_continues`.
+To explicitly end supervision with remaining exposure, first request the graceful
+stop above, wait for that notice from the current stop request, then acknowledge:
+
+```bash
+systemctl --user kill --kill-whom=main --signal=SIGINT gauss-paper.service
+systemctl --user status gauss-paper.service --no-pager
+```
+
+Confirm the service becomes `inactive`. Remaining holdings and broker orders can
+still exist; this acknowledgement ends their monitoring. See the
+[paper trial operating guide](docs/PAPER_TRIAL.md) for the trial limits and controls.
 
 ## Dashboard and interactive trading
 
