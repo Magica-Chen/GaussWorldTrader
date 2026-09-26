@@ -1,0 +1,22 @@
+[Unit]
+Description=Gauss World Trader paper session
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/GaussWorldTrader
+# Adjust the interpreter and Codex executable path for the deployment host.
+Environment=PATH=%h/.nvm/versions/node/v24.7.0/bin:%h/miniconda3/envs/myalpacatrading/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/miniconda3/envs/myalpacatrading/bin/python %h/GaussWorldTrader/gauss_bot.py --config %h/GaussWorldTrader/results/gauss/paper-deployment.toml --output json
+Restart=on-failure
+# An abrupt stop can leave the account lease alive for 120 seconds.
+RestartSec=130
+# The runtime retains supervision while exposure remains; stopping is explicit.
+TimeoutStopSec=infinity
+KillSignal=SIGTERM
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -6,7 +6,7 @@ import asyncio
 import json
 from dataclasses import asdict
 from datetime import timedelta
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_CEILING
 from uuid import uuid4
 
 from .evidence import SnapshotDataReader, evaluate_rules
@@ -22,6 +22,7 @@ from .models import (
 )
 from .store import digest
 from .options import opening_legs, quote_checks
+from .research import requires_ai, review_stage, supported
 
 
 class PostGauss:
@@ -41,7 +42,9 @@ class PostGauss:
             }
         )
         service.store.put("account_profiles", account, service.scope)
-        snapshot = service.evidence.freeze(session.id, account, now, approvals)
+        snapshot = service.evidence.freeze(
+            session.id, account, now, approvals, market_cutoff=session.close
+        )
         reader = SnapshotDataReader(service.store, snapshot)
         candidates, rejections, suitability_ids = [], [], []
         metadata = {}
@@ -56,6 +59,8 @@ class PostGauss:
                 continue
             alternatives, rationales = [], {}
             for approval in approvals:
+                if approval.symbols and symbol not in approval.symbols:
+                    continue
                 selector = approval.option_selector
                 if approval.asset_type == "option" and selector is None:
                     rejections.append({"symbol": symbol, "reason": "OPTION_SELECTOR_REQUIRED"})
@@ -180,6 +185,11 @@ class PostGauss:
                         instrument=instrument,
                         entry_price=price,
                         stop_price=stop,
+                        take_profit_price=(
+                            Decimal(str(action.take_profit))
+                            if action.take_profit and Decimal(str(action.take_profit)) > price
+                            else None
+                        ),
                         expected_net_value=approval.validated_net_expectancy,
                         evidence_ids=tuple(e.id for e in reader.market(symbol)),
                     )
@@ -209,6 +219,27 @@ class PostGauss:
             report = service.suitability.assess(account, [], service.config.data_profile, approvals)
             service.store.put("suitability_reports", report, service.scope)
             suitability_ids.append(report.id)
+        ai_review = None
+        if requires_ai(service.config):
+            ai_review = review_stage(
+                service,
+                snapshot,
+                account,
+                self.name,
+                session.id,
+                {
+                    "symbols": list(service.config.symbols),
+                    "proposed_action": "retain these feasible candidates for conditional planning",
+                    "candidates": [service.store.get("candidates", key) for key in candidates],
+                    "rejections": rejections,
+                },
+                now,
+            )
+            if not supported(ai_review):
+                rejections.append(
+                    {"reason": "POST_AI_SUPPORT_REQUIRED", "research_job_id": ai_review.job_id}
+                )
+                candidates = []
         review = {
             "id": uuid4().hex,
             "session_id": session.id,
@@ -223,6 +254,7 @@ class PostGauss:
             "outcome": "CANDIDATES" if candidates else "NO_TRADE",
             "reconciliation_time": service.last_reconciliation,
             "cost": "0",
+            "ai_review": ai_review.model_dump(mode="json") if ai_review else None,
         }
         service.store.put("session_reviews", review, service.scope)
         return [review["id"], snapshot.id, *candidates, *suitability_ids]
@@ -236,8 +268,21 @@ class CloseGauss:
         from .research import ResearchJobRunner
 
         grouped = {}
+        reviewed_candidates = None
+        if requires_ai(service.config):
+            reviewed_candidates = {
+                candidate_id
+                for review in service.store.list("session_reviews", service.scope)
+                if review.get("session_id") == session.id
+                and review.get("ai_review")
+                and review["ai_review"]["state"] == "COMPLETED"
+                and (review["ai_review"].get("annotation") or {}).get("outcome") == "SUPPORT"
+                for candidate_id in review.get("candidates", [])
+            }
         for row in service.store.list("candidates", service.scope):
             candidate = Candidate.model_validate(row)
+            if reviewed_candidates is not None and candidate.id not in reviewed_candidates:
+                continue
             snapshot = service.store.get("snapshots", candidate.snapshot_id)
             if snapshot["target_session_id"] == session.id:
                 grouped.setdefault((candidate.symbol, candidate.snapshot_id), []).append(candidate)
@@ -291,12 +336,34 @@ class CloseGauss:
                 max_output_tokens=getattr(service.config, "research_max_output_tokens", 1024),
                 max_retries=getattr(service.config, "research_max_retries", 0),
                 budget_account=service.account_profile,
+                decision_context={
+                    "symbols": [symbol],
+                    "proposed_action": "publish conditional entry plan",
+                    "candidates": [c.model_dump(mode="json") for c in candidates],
+                    "selected_alternative_id": report.selected_alternative_id,
+                    "suitability": {
+                        "outcome": report.outcome,
+                        "objective": report.objective,
+                        "alternatives": [
+                            item.model_dump(
+                                mode="json", exclude={"id", "created_at", "schema_version"}
+                            )
+                            for item in report.alternatives
+                        ],
+                        "ranking_scores": [
+                            (key, str(value)) for key, value in report.ranking_scores
+                        ],
+                        "uncertainty": list(report.uncertainty),
+                    },
+                },
             )
             counter = [n.id for n in reader.news(symbol) if n.blocking]
             analysis_veto = annotation.annotation is not None and annotation.annotation.outcome in {
                 "COUNTER_EVIDENCE",
                 "EXPERIMENT",
             }
+            if requires_ai(service.config) and not supported(annotation):
+                analysis_veto = True
             research = {
                 "id": uuid4().hex,
                 "session_id": session.id,
@@ -307,18 +374,24 @@ class CloseGauss:
                 "data_profile": str(service.config.data_profile),
                 "created_at": now.isoformat(),
                 "analysis": {
-                    key: asdict(value)
-                    if hasattr(value, "__dataclass_fields__")
-                    else [asdict(v) if hasattr(v, "__dataclass_fields__") else v for v in value]
-                    if isinstance(value, list)
-                    else value
+                    key: (
+                        asdict(value)
+                        if hasattr(value, "__dataclass_fields__")
+                        else (
+                            [asdict(v) if hasattr(v, "__dataclass_fields__") else v for v in value]
+                            if isinstance(value, list)
+                            else value
+                        )
+                    )
                     for key, value in analysis.items()
                 },
                 "annotation": annotation.model_dump(mode="json"),
                 "counter_evidence": counter,
-                "outcome": "PLAN"
-                if report.selected_alternative_id and not counter and not analysis_veto
-                else "NO_TRADE",
+                "outcome": (
+                    "PLAN"
+                    if report.selected_alternative_id and not counter and not analysis_veto
+                    else "NO_TRADE"
+                ),
                 "cost": str(annotation.cost_usd),
             }
             service.store.put("research_reports", research, service.scope)
@@ -341,7 +414,9 @@ class CloseGauss:
                 continue
             price = alternative.entry_price
             tick = max(item.tick_size for item in alternative.instruments)
-            bound = (price * Decimal("1.001") / tick).to_integral_value(rounding=ROUND_DOWN) * tick
+            bound = (price * (1 + approval.entry_bound_pct) / tick).to_integral_value(
+                rounding=ROUND_DOWN
+            ) * tick
             trigger = alternative.underlying_entry_price or price
             stop = alternative.underlying_stop_price or alternative.stop_price
             bearish = bool(approval.option_selector and "put" in approval.option_selector.structure)
@@ -493,9 +568,11 @@ class PreGauss:
                             quotes,
                             now,
                             max_age=max_age,
-                            max_skew=approval.option_selector.maximum_quote_skew_seconds
-                            if approval.option_selector
-                            else Decimal("1"),
+                            max_skew=(
+                                approval.option_selector.maximum_quote_skew_seconds
+                                if approval.option_selector
+                                else Decimal("1")
+                            ),
                             max_spread=service.config.policy.max_quote_spread_pct,
                         )
                         if issue:
@@ -513,6 +590,16 @@ class PreGauss:
                     reasons.append("PRICE_INVALIDATION")
                 if reasons:
                     outcome = "DEFERRED" if outcome != "INVALIDATED" else outcome
+            entry_consumed = service.store.projection(
+                "orders", digest([plan.id, plan.version, "initial-entry"])[:32]
+            )
+            if outcome == "ELIGIBLE" and requires_ai(service.config) and not entry_consumed:
+                review = service.request_ai_review(plan, session, self.name, now)
+                if not supported(review):
+                    outcome = "DEFERRED"
+                    reasons.append(
+                        "PRE_AI_PENDING" if review is None else "PRE_AI_SUPPORT_REQUIRED"
+                    )
             validation = ValidationRecord(
                 created_at=now,
                 plan_id=plan.id,
@@ -587,6 +674,29 @@ class LiveGauss:
                 )
                 continue
             price = plan.max_buy_price
+            if plan.alternative.instrument.asset_type == "stock":
+                approval_row = service.store.get("strategy_approvals", plan.approval_id)
+                if not approval_row:
+                    continue
+                approval = StrategyApproval.model_validate(approval_row)
+                if approval.requires_current_quote:
+                    quote = service.evidence.current_quote(
+                        plan.alternative.instrument.symbol,
+                        now,
+                        approval.required_feed,
+                        service.config.stock_quote_max_age_seconds,
+                    )
+                    if quote is None:
+                        continue
+                    tick = plan.alternative.instrument.tick_size
+                    price = (quote.ask / tick).to_integral_value(rounding=ROUND_CEILING) * tick
+                    if price > plan.max_buy_price:
+                        # Wait for a fresh in-bound quote without consuming the initial intent.
+                        continue
+            if requires_ai(service.config):
+                review = service.request_ai_review(plan, session, self.name, now)
+                if not supported(review):
+                    continue
             intent = OrderIntent(
                 created_at=now,
                 id=digest([plan.id, plan.version, "initial-entry"])[:32],

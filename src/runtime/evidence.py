@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta, datetime, timezone
 from decimal import Decimal
 from .models import DataContext, DataProfile, MarketEvent, NewsEvent, ResearchSnapshot
-from .store import digest
+from .store import digest, utc_json_time
 
 
 class EvidenceClock:
@@ -34,6 +34,9 @@ class EvidenceClock:
             and event.received_at <= wall_time
             and event.available_at <= wall_time
             and (not isinstance(event, MarketEvent) or event.complete)
+            # Current IEX is an explicitly selected operational venue quote. It
+            # never becomes consolidated strategy evidence, even after aging.
+            and (not isinstance(event, MarketEvent) or event.feed != "iex")
         )
 
     def additional_lag(self, event, wall_time):
@@ -47,31 +50,37 @@ class EvidenceService:
 
     def ingest_market(self, event):
         event = MarketEvent.model_validate(event)
-        key = digest(
-            [
-                event.source,
-                event.symbol,
-                event.source_version,
-                event.event_type,
-                event.effective_event_time.isoformat(),
-                event.price,
-                event.open_price,
-                event.high_price,
-                event.low_price,
-                event.volume,
-                event.bid,
-                event.ask,
-                event.bid_size,
-                event.ask_size,
-                event.complete,
-                event.quality_class,
-            ]
-        )
-        existing = self.store.get("market_events", key)
-        if existing:
-            return key
-        event = event.model_copy(update={"id": key})
-        self.store.put("market_events", event, self.scope)
+        identity = [
+            event.source,
+            event.symbol,
+            event.source_version,
+            event.feed,
+            event.event_type,
+            event.effective_event_time.isoformat(),
+            event.price,
+            event.open_price,
+            event.high_price,
+            event.low_price,
+            event.volume,
+            event.bid,
+            event.ask,
+            event.bid_size,
+            event.ask_size,
+            event.complete,
+            event.quality_class,
+        ]
+        if event.event_type == "quote":
+            # Poll receipt timestamps are not quote revisions. Preserve the first
+            # observed availability while retaining changed prices/sizes at the
+            # same exchange timestamp as distinct corrections in this account.
+            identity[2] = None
+            identity.insert(0, self.scope)
+        key = digest(identity)
+        with self.store.transaction():
+            if self.store.get("market_events", key):
+                return key
+            event = event.model_copy(update={"id": key})
+            self.store.put("market_events", event, self.scope)
         return key
 
     def ingest_news(self, event):
@@ -86,9 +95,18 @@ class EvidenceService:
         return key
 
     def market(self, now, symbol=None, event_type=None):
+        # High-volume operational quotes must not evict delayed historical bars
+        # from the bounded strategy read before clock eligibility is evaluated.
+        with self.store.lock:
+            rows = self.store.db.execute(
+                "SELECT body FROM records WHERE kind='market_events' AND scope=? "
+                "AND json_extract(body, '$.feed') != 'iex' "
+                "ORDER BY sequence DESC LIMIT 100000", (self.scope,),
+            ).fetchall()
+        import json
+
         events = [
-            MarketEvent.model_validate(row)
-            for row in self.store.list("market_events", self.scope, 100000)
+            MarketEvent.model_validate(json.loads(row["body"])) for row in rows
         ]
         result = [
             e
@@ -157,10 +175,30 @@ class EvidenceService:
             blockers=blockers,
         )
 
-    def freeze(self, session_id, account, now, approvals=()):
+    def freeze(self, session_id, account, now, approvals=(), *, market_cutoff=None):
         context = self.context(now, self.config.symbols)
-        evidence_ids = tuple(e.id for e in self.market(now))
-        news_ids = tuple(e.id for e in self.news(now))
+        from .models import TradingSession
+
+        sessions = tuple(
+            TradingSession.model_validate(row) for row in self.store.list("sessions", self.scope)
+        )
+        market = self.market(now)
+        news = self.news(now)
+        if market_cutoff is not None:
+            cutoff = min(market_cutoff, context.signal_as_of)
+            market = [event for event in market if event.effective_event_time <= cutoff
+                      and any(session.open < event.effective_event_time <= session.close
+                              and (event.interval_start is None or event.interval_start >= session.open)
+                              for session in sessions)]
+            news = [event for event in news if max(event.published_at, event.updated_at) <= cutoff]
+            watermarks = {}
+            for event in market:
+                watermarks[event.symbol] = max(watermarks.get(event.symbol, event.effective_event_time),
+                                               event.effective_event_time)
+            context = context.model_copy(update={"signal_as_of": cutoff,
+                                                 "watermarks": tuple(sorted(watermarks.items()))})
+        evidence_ids = tuple(e.id for e in market)
+        news_ids = tuple(e.id for e in news)
         manifest = [
             evidence_ids,
             news_ids,
@@ -168,11 +206,6 @@ class EvidenceService:
             context.model_dump(mode="json"),
             tuple(a.id for a in approvals),
         ]
-        from .models import TradingSession
-
-        sessions = tuple(
-            TradingSession.model_validate(row) for row in self.store.list("sessions", self.scope)
-        )
         manifest.extend(
             [
                 self.config.signal_timeframe,
@@ -195,27 +228,32 @@ class EvidenceService:
         return snapshot
 
     def current_quote(self, symbol, now, feed, max_age=5):
-        rows = [
-            MarketEvent.model_validate(row)
-            for row in self.store.list("market_events", self.scope, 100000)
-        ]
-        quotes = [
-            q
-            for q in rows
-            if q.symbol == symbol
-            and q.event_type == "quote"
-            and q.feed == feed
-            and q.quality_class == "genuine"
-            and q.complete
-            and q.bid is not None
-            and q.bid > 0
-            and q.ask is not None
-            and q.ask >= q.bid
-            and q.available_at <= now
-            and q.received_at <= now
-            and 0 <= (now - q.effective_event_time).total_seconds() <= max_age
-        ]
-        return max(quotes, key=lambda q: q.effective_event_time) if quotes else None
+        if max_age < 0:
+            return None
+        if now.utcoffset() is None:
+            raise ValueError("quote observation time must be timezone aware")
+        now = now.astimezone(timezone.utc)
+        upper = now.replace(tzinfo=None).isoformat(timespec="microseconds")
+        lower = (now - timedelta(seconds=max_age)).replace(tzinfo=None).isoformat(
+            timespec="microseconds"
+        )
+        event_time = utc_json_time("effective_event_time")
+        with self.store.lock:
+            row = self.store.db.execute(
+                "SELECT body FROM records WHERE scope=? AND kind='market_events' "
+                "AND json_extract(body, '$.event_type')='quote' "
+                "AND json_extract(body, '$.symbol')=? AND json_extract(body, '$.feed')=? "
+                f"AND {event_time}>=? AND {event_time}<=? "
+                f"AND {utc_json_time('available_at')}<=? "
+                f"AND {utc_json_time('received_at')}<=? "
+                "AND json_extract(body, '$.quality_class')='genuine' "
+                "AND json_extract(body, '$.complete')=1 "
+                "AND CAST(json_extract(body, '$.bid') AS REAL)>0 "
+                "AND CAST(json_extract(body, '$.ask') AS REAL)>=CAST(json_extract(body, '$.bid') AS REAL) "
+                f"ORDER BY {event_time} DESC, sequence DESC LIMIT 1",
+                (self.scope, symbol, feed, lower, upper, upper, upper),
+            ).fetchone()
+        return MarketEvent.model_validate_json(row["body"]) if row else None
 
 
 class SnapshotDataReader:

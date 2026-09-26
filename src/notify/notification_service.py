@@ -48,7 +48,7 @@ class EmailNotificationProvider(NotificationProvider):
         msg["From"] = self.gmail_address
         msg["To"] = self.gmail_address
 
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
             server.starttls()
             server.login(self.gmail_address, self.gmail_app_password)
             server.sendmail(

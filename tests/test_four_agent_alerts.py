@@ -1,5 +1,6 @@
 """Offline overload and durable incident channels; no external notifier is configured."""
 import asyncio
+import threading
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from queue import Queue
@@ -80,6 +81,9 @@ def test_stream_queue_overflow_is_visible_without_dropping_holdings(service_fact
 
     stream = Stream()
     adapter = AlpacaMarket.__new__(AlpacaMarket)
+    adapter._stream_lock = threading.RLock()
+    adapter.config = RuntimeConfig(data_profile='SUBSCRIBED_REALTIME')
+    adapter.health = {}
     adapter.stream = stream
     adapter.subscribed = {'ALREADY_SUBSCRIBED'}  # No background stream thread is started.
     adapter.events = Queue(maxsize=1)

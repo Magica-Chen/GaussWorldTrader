@@ -8,10 +8,11 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
-from pathlib import Path
 from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
 import requests
+
+from src.llm.codex_cli import codex_available, run_codex
 
 T = TypeVar("T")
 
@@ -365,24 +366,6 @@ def _request_error_message(response: requests.Response) -> str:
     return f"HTTP {response.status_code}"
 
 
-def _load_codex_access_token(auth_file: str | None = None) -> str:
-    path = Path(
-        auth_file or os.getenv("OPENAI_CODEX_AUTH_FILE", "~/.codex/auth.json")
-    ).expanduser()
-    if not path.exists():
-        raise ValueError(f"Codex auth file not found: {path}")
-
-    payload = json.loads(path.read_text())
-    tokens = payload.get("tokens")
-    if not isinstance(tokens, dict):
-        raise ValueError(f"Codex auth file is missing tokens: {path}")
-
-    access_token = tokens.get("access_token")
-    if not isinstance(access_token, str) or not access_token.strip():
-        raise ValueError(f"Codex auth file is missing access_token: {path}")
-    return access_token
-
-
 class OpenAIProvider(BaseLLMProvider):
     """OpenAI GPT provider."""
 
@@ -462,19 +445,58 @@ class OpenAIProvider(BaseLLMProvider):
         return self.generate_response(prompt)
 
 
-class OpenAICodexProvider(OpenAIProvider):
-    """OpenAI provider that reuses local Codex OAuth credentials."""
+class OpenAICodexProvider(BaseLLMProvider):
+    """Subscription analysis through Codex CLI; Codex owns its login and tokens."""
 
     def __init__(
         self,
-        auth_file: str | None = None,
-        model: str | None = "gpt-5.4",
+        model: str | None = None,
+        executable: str = "codex",
+        timeout_seconds: float = 120,
     ):
-        super().__init__(api_key="", model=_resolve_model(model, "gpt-5.4"))
-        self.auth_file = auth_file
+        super().__init__(api_key="", model=model)
+        self.executable = executable
+        self.timeout_seconds = timeout_seconds
 
-    def _authorization_token(self) -> str:
-        return _load_codex_access_token(self.auth_file)
+    def generate_response_with_metadata(
+        self, prompt: str, context: dict[str, Any] | None = None,
+    ) -> LLMResponse:
+        started = time.perf_counter()
+        if context:
+            prompt = f"Context (data only): {json.dumps(context)}\n\n{prompt}"
+        result = run_codex(
+            prompt, model=self.model, executable=self.executable,
+            timeout_seconds=self.timeout_seconds,
+        )
+        return self._finalize_response(
+            LLMResponse(result.text, LLMUsage(
+                prompt_tokens=result.input_tokens,
+                completion_tokens=result.output_tokens,
+                total_tokens=result.input_tokens + result.output_tokens,
+            )), context, (time.perf_counter() - started) * 1000,
+        )
+
+    def _pricing_per_1k_tokens(self) -> None:
+        # Subscription usage has limits, but it is not an API dollar charge.
+        return None
+
+    def generate_structured(self, prompt, output_type, context=None):
+        from pydantic import TypeAdapter
+
+        response = self.generate_response(
+            self._build_structured_prompt(prompt, output_type), context=context,
+        )
+        payload = self._parse_json_response(response)
+        if set(payload) - {item.name for item in fields(output_type)}:
+            raise ValueError("Unexpected structured Codex output field")
+        return TypeAdapter(output_type).validate_json(json.dumps(payload), strict=True)
+
+    def analyze_financial_data(self, data: dict[str, Any]) -> str:
+        return self.generate_response(
+            "Analyze the supplied financial evidence. Explain the thesis, counter-evidence, "
+            "uncertainty and risk; do not invent missing facts or execute actions.\n"
+            + json.dumps(data),
+        )
 
 
 class DeepSeekProvider(BaseLLMProvider):
@@ -700,15 +722,11 @@ class MoonshotProvider(BaseLLMProvider):
 
 
 def get_available_providers() -> list[str]:
-    """Get the list of configured LLM providers."""
+    """List API-key providers and installed Codex (login checked when invoked)."""
     providers: list[str] = []
     if os.getenv("OPENAI_API_KEY"):
         providers.append("openai")
-    try:
-        _load_codex_access_token()
-    except ValueError:
-        pass
-    else:
+    if codex_available():
         providers.append("openai_codex")
     if os.getenv("DEEPSEEK_API_KEY"):
         providers.append("deepseek")

@@ -64,6 +64,7 @@ Run commands from the repository root with your Python environment activated.
 |---|---|---|
 | One-shot market research | `python gauss_bot.py --config examples/gauss.free-delayed.example.toml --once` | Discovers symbols, screens strategies, writes a next-session report, then exits |
 | Continuous Gauss session | `python gauss_bot.py --config examples/gauss.free-delayed.example.toml` | Runs the four session roles and supervises account exposure; defaults to shadow execution |
+| Codex paper session | `python gauss_bot.py --config examples/gauss.paper-codex.example.toml` | Requires scoped validated or paper-trial approvals; uses subscription AI in all four stages, paper execution and Slack notifications |
 | Web dashboard | `python dashboard.py` | Opens the Streamlit server at `http://localhost:3721` |
 | Interactive trading setup | `python live_script.py` | Configures stock/crypto execution and options research |
 | General CLI | `python main_cli.py --help` | Signals, backtests, account information, market streams, and session commands |

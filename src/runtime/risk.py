@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-from decimal import Decimal
+from datetime import datetime, timedelta
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from uuid import uuid4
 
 from .models import (
@@ -74,6 +74,23 @@ def validate_structure(legs, now, policy, purpose="open"):
     return None
 
 
+def approval_execution_reasons(approval, alternative, config):
+    """Restrict explicit trial authority at risk, submission and replacement boundaries."""
+    reasons = []
+    if approval.symbols and alternative.signal_symbol not in approval.symbols:
+        reasons.append("STRATEGY_SYMBOL_NOT_APPROVED")
+    if approval.evidence_level == "paper_trial":
+        if (
+            config.environment != "paper"
+            or approval.environment != "paper"
+            or config.execution_mode == ExecutionMode.LIVE
+        ):
+            reasons.append("PAPER_TRIAL_PAPER_ONLY")
+        if config.research_backend != "codex_cli":
+            reasons.append("PAPER_TRIAL_CODEX_REQUIRED")
+    return reasons
+
+
 class RiskGate:
     def __init__(self, store, config, scope, evidence, calendar):
         self.store, self.config, self.scope = store, config, scope
@@ -120,18 +137,24 @@ class RiskGate:
             if structure_issue:
                 reasons.append(structure_issue)
             tick = intent.legs[0].instrument.tick_size
-            if intent.limit_price % tick:
-                reasons.append("INVALID_PRICE_TICK")
-            if (
-                intent.maximum_buy_price is not None
-                and intent.limit_price > intent.maximum_buy_price
-            ):
-                reasons.append("BUY_PRICE_BOUND_EXCEEDED")
-            if (
-                intent.minimum_sell_price is not None
-                and intent.limit_price < intent.minimum_sell_price
-            ):
-                reasons.append("SELL_PRICE_BOUND_EXCEEDED")
+            if intent.order_type == "market":
+                if self.config.stock_exit_order_type != "market":
+                    reasons.append("MARKET_STOCK_EXIT_POLICY_DISABLED")
+                if self.config.environment != "paper":
+                    reasons.append("MARKET_STOCK_EXIT_PAPER_ONLY")
+            else:
+                if intent.limit_price % tick:
+                    reasons.append("INVALID_PRICE_TICK")
+                if (
+                    intent.maximum_buy_price is not None
+                    and intent.limit_price > intent.maximum_buy_price
+                ):
+                    reasons.append("BUY_PRICE_BOUND_EXCEEDED")
+                if (
+                    intent.minimum_sell_price is not None
+                    and intent.limit_price < intent.minimum_sell_price
+                ):
+                    reasons.append("SELL_PRICE_BOUND_EXCEEDED")
             if (
                 intent.purpose == "open"
                 and len(intent.legs) > 1
@@ -194,7 +217,11 @@ class RiskGate:
                         quantity = min(quantity, intent.requested_quantity)
                 quotes = []
                 for leg in intent.legs:
-                    feed = "opra" if leg.instrument.asset_type == "option" else "sip"
+                    feed = (
+                        "opra"
+                        if leg.instrument.asset_type == "option"
+                        else self.config.stock_execution_feed
+                    )
                     max_age = (
                         self.config.option_quote_max_age_seconds
                         if leg.instrument.asset_type == "option"
@@ -225,6 +252,17 @@ class RiskGate:
                     expected = "credit" if net > 0 else "debit"
                     if net == 0 or getattr(intent, "limit_effect", "debit") != expected:
                         reasons.append("CLOSE_DEBIT_CREDIT_EFFECT_MISMATCH")
+                elif intent.order_type == "market":
+                    quote = quotes[0]
+                    if (
+                        quote.bid is None
+                        or quote.bid <= 0
+                        or (quote.ask - quote.bid) / quote.ask > policy.max_quote_spread_pct
+                    ):
+                        reasons.append("MARKET_EXIT_QUOTE_SPREAD_INVALID")
+                    executable_price = quote.bid if intent.legs[0].side == "sell" else quote.ask
+                    if intent.reference_price != executable_price:
+                        reasons.append("MARKET_EXIT_REFERENCE_QUOTE_CHANGED")
             else:
                 if not entry_ready:
                     reasons.append("RUNTIME_NOT_READY")
@@ -297,6 +335,13 @@ class RiskGate:
                     if plan.strategy_id not in self.config.strategy_allowlist:
                         reasons.append("STRATEGY_NOT_IN_MANDATE")
                     if approval:
+                        reasons.extend(
+                            approval_execution_reasons(
+                                approval,
+                                plan.alternative,
+                                self.config,
+                            )
+                        )
                         if approval.requires_news and not news_ready:
                             reasons.append("NEWS_COVERAGE_UNAVAILABLE")
                         if approval.requires_event_calendar and not event_calendar_ready:
@@ -339,9 +384,11 @@ class RiskGate:
                                     quotes,
                                     now,
                                     max_age=max_age,
-                                    max_skew=approval.option_selector.maximum_quote_skew_seconds
-                                    if approval.option_selector
-                                    else Decimal("1"),
+                                    max_skew=(
+                                        approval.option_selector.maximum_quote_skew_seconds
+                                        if approval.option_selector
+                                        else Decimal("1")
+                                    ),
                                     max_spread=policy.max_quote_spread_pct,
                                 )
                                 if error:
@@ -434,9 +481,11 @@ class RiskGate:
                     loss = (
                         sizing.planned_loss
                         if sizing.quantity == quantity
-                        else sizing.planned_loss * quantity / sizing.quantity
-                        if sizing.quantity
-                        else Decimal("0")
+                        else (
+                            sizing.planned_loss * quantity / sizing.quantity
+                            if sizing.quantity
+                            else Decimal("0")
+                        )
                     )
             if quantity <= 0:
                 reasons.append("NO_FEASIBLE_SIZE")
@@ -487,6 +536,17 @@ class ExecutionGateway:
             evidence,
         )
 
+    def _execution_block(self, order_id=None, intent_id=None):
+        control = self.store.projection("automation_control", self.scope)
+        if control and control.get("monitor_only"):
+            return {
+                "id": order_id,
+                "intent_id": intent_id,
+                "state": "MONITOR_ONLY",
+                "reasons": [control.get("reason") or "AUTOMATION_MONITOR_ONLY"],
+            }
+        return None
+
     def _armed_for_plan(self, plan):
         arm = self.store.projection("arming", self.scope)
         if (
@@ -506,7 +566,79 @@ class ExecutionGateway:
             for item in arm.get("approved_strategy_versions", ())
         )
 
+    def _market_exit_authority(self, intent, decision, now):
+        """Recheck current reconciled authority inside the final submission transaction."""
+        reasons = []
+        accounts = [
+            value
+            for kind in ("account", "operational_account")
+            if (value := self.store.projection(kind, self.scope)) is not None
+        ]
+        if not accounts:
+            return ["MARKET_EXIT_RECONCILIATION_REQUIRED"]
+        current = max(accounts, key=lambda value: datetime.fromisoformat(value["observed_at"]))
+        if current["id"] != decision.account_profile_id:
+            reasons.append("MARKET_EXIT_ACCOUNT_CHANGED")
+        if (
+            current.get("account_id") != intent.account_id
+            or current.get("environment") != intent.environment
+            or not 0
+            <= (now - datetime.fromisoformat(current["observed_at"])).total_seconds()
+            <= self.config.policy.account_max_age_seconds
+        ):
+            reasons.append("MARKET_EXIT_RECONCILIATION_REQUIRED")
+        leg = intent.legs[0]
+        held = next(
+            (
+                position
+                for position in current.get("positions", ())
+                if position["symbol"] == leg.instrument.symbol
+            ),
+            None,
+        )
+        if held is None:
+            reasons.append("MARKET_EXIT_CURRENT_HOLDING_REQUIRED")
+        else:
+            quantity = Decimal(held["quantity"])
+            if (
+                abs(quantity) < decision.approved_quantity
+                or leg.side == "sell"
+                and quantity <= 0
+                or leg.side == "buy"
+                and quantity >= 0
+                or held["account_id"] != intent.account_id
+                or held["environment"] != intent.environment
+                or not 0
+                <= (now - datetime.fromisoformat(held["reconciled_at"])).total_seconds()
+                <= self.config.policy.account_max_age_seconds
+            ):
+                reasons.append("MARKET_EXIT_CURRENT_HOLDING_REQUIRED")
+        sessions = [
+            TradingSession.model_validate(row) for row in self.store.list("sessions", self.scope)
+        ]
+        if not any(session.open <= now < session.close for session in sessions):
+            reasons.append("MARKET_EXIT_SESSION_CLOSED_OR_UNAVAILABLE")
+        quote = self.evidence.current_quote(
+            leg.instrument.symbol,
+            now,
+            self.config.stock_execution_feed,
+            self.config.stock_quote_max_age_seconds,
+        )
+        if (
+            quote is None
+            or quote.bid is None
+            or quote.bid <= 0
+            or (quote.ask - quote.bid) / quote.ask > self.config.policy.max_quote_spread_pct
+        ):
+            reasons.append("MARKET_EXIT_CURRENT_QUOTE_REQUIRED")
+        elif intent.reference_price != (quote.bid if leg.side == "sell" else quote.ask):
+            reasons.append("MARKET_EXIT_REFERENCE_QUOTE_CHANGED")
+        return reasons
+
     def submit(self, intent, decision, now):
+        blocked = self._execution_block(intent.id, intent.id)
+        if blocked:
+            return blocked
         with self.store.transaction():
             recorded_intent = self.store.get("order_intents", intent.id)
             recorded_decision = self.store.get("risk_decisions", intent.id)
@@ -546,6 +678,11 @@ class ExecutionGateway:
                 "state": state,
                 "filled_quantity": "0",
                 "quantity": str(decision.approved_quantity),
+                "order_type": intent.order_type,
+                "limit_price": str(intent.limit_price) if intent.limit_price is not None else None,
+                "reference_price": (
+                    str(intent.reference_price) if intent.reference_price is not None else None
+                ),
                 "created_at": now.isoformat(),
                 "decision_time": now.isoformat(),
                 "session_id": (self.store.get("plans", intent.plan_id) or {}).get(
@@ -554,9 +691,20 @@ class ExecutionGateway:
                 "signal_as_of": (self.store.get("plans", intent.plan_id) or {}).get("signal_as_of"),
             }
             reasons = []
+            if intent.order_type == "market":
+                if self.config.stock_exit_order_type != "market":
+                    reasons.append("MARKET_STOCK_EXIT_POLICY_DISABLED")
+                if self.config.environment != "paper":
+                    reasons.append("MARKET_STOCK_EXIT_PAPER_ONLY")
+                reasons.extend(self._market_exit_authority(intent, decision, now))
             if now >= decision.expires_at:
                 reasons.append("RISK_APPROVAL_EXPIRED")
             if intent.purpose == "open":
+                plan = SessionPlan.model_validate(self.store.get("plans", intent.plan_id))
+                approval = StrategyApproval.model_validate(
+                    self.store.get("strategy_approvals", plan.approval_id)
+                )
+                reasons.extend(approval_execution_reasons(approval, plan.alternative, self.config))
                 projection = self.store.projection("plan_state", intent.plan_id)
                 if not projection or projection["state"] != "ELIGIBLE":
                     reasons.append("PLAN_NO_LONGER_ELIGIBLE")
@@ -578,6 +726,18 @@ class ExecutionGateway:
                 )
                 return row
         # Once SUBMITTING is durable, crashes/timeouts are unknown until broker reconciliation.
+        blocked = self._execution_block(intent.id, intent.id)
+        if blocked:
+            # No network call occurred: this is a definite local rejection, not an
+            # unknown broker result. Existing holdings remain under reconciliation.
+            row.update(state="REJECTED", delivery_state="NOT_SENT", reasons=blocked["reasons"])
+            with self.store.transaction():
+                self.store.project("orders", intent.id, row, self.scope)
+                self.store.db.execute(
+                    "UPDATE reservations SET state=? WHERE intent_id=? AND first_fill=0",
+                    ("RELEASED", intent.id),
+                )
+            return row
         try:
             broker_order = self.broker.submit(
                 intent, decision.approved_quantity, row["client_order_id"]
@@ -605,6 +765,9 @@ class ExecutionGateway:
         return row
 
     def cancel_entries(self, now, plan_id=None):
+        blocked = self._execution_block()
+        if blocked:
+            return [blocked]
         result = []
         for row in self.store.projected("orders", self.scope):
             if plan_id is not None and row.get("plan_id") != plan_id:
@@ -616,39 +779,197 @@ class ExecutionGateway:
             if not row.get("broker_id"):
                 result.append({"intent_id": row["intent_id"], "state": "UNKNOWN_RECONCILE_FIRST"})
                 continue
-            row.pop("_revision", None)
-            row.update(state="CANCEL_PENDING", cancel_requested_at=now.isoformat())
+            result.append(self._cancel_order(row, now, "ENTRY_CANCELLATION"))
+        return result
+
+    def _cancel_order(self, row, now, reason):
+        """Record cancellation before delivery; only reconciliation confirms terminal state."""
+        blocked = self._execution_block(row["id"], row["intent_id"])
+        if blocked:
+            return blocked
+        row = {key: value for key, value in row.items() if key != "_revision"}
+        original = dict(row)
+        row.update(state="CANCEL_PENDING", cancel_requested_at=now.isoformat())
+        with self.store.transaction():
+            self.store.project("orders", row["id"], row, self.scope)
+            self.store.put(
+                "order_controls",
+                {
+                    "id": uuid4().hex,
+                    "order_id": row["id"],
+                    "intent_id": row["intent_id"],
+                    "action": "CANCEL_REQUESTED",
+                    "reason": reason,
+                    "created_at": now.isoformat(),
+                },
+                self.scope,
+            )
+        blocked = self._execution_block(row["id"], row["intent_id"])
+        if blocked:
             with self.store.transaction():
-                self.store.project("orders", row["id"], row, self.scope)
+                self.store.project("orders", row["id"], original, self.scope)
                 self.store.put(
                     "order_controls",
                     {
                         "id": uuid4().hex,
                         "order_id": row["id"],
                         "intent_id": row["intent_id"],
-                        "action": "CANCEL_REQUESTED",
+                        "action": "CANCEL_NOT_SENT",
+                        "reasons": blocked["reasons"],
                         "created_at": now.isoformat(),
                     },
                     self.scope,
                 )
+            return blocked
+        try:
+            self.broker.cancel(row["broker_id"])
+        except Exception as exc:
+            row["cancel_error"] = type(exc).__name__
+            self.store.project("orders", row["id"], row, self.scope)
+            self.store.put(
+                "incidents",
+                {
+                    "id": uuid4().hex,
+                    "reason": "CANCELLATION_UNCONFIRMED",
+                    "order_id": row["id"],
+                    "intent_id": row["intent_id"],
+                    "created_at": now.isoformat(),
+                },
+                self.scope,
+            )
+        return row
+
+    def maintain_orders(self, now, *, account, entry_ready, news_ready, event_calendar_ready):
+        """Reprice confirmed stock orders within their immutable bounds, then cancel stale work.
+
+        Cancellation retains reservations and exposure until broker confirmation. A close
+        cancelled at its deadline can be reconsidered by supervision using the remaining
+        holding and a new current quote. Unknown/replacement/cancellation states wait for
+        reconciliation, including other unresolved members of the same order family.
+        """
+        blocked = self._execution_block()
+        if blocked:
+            return [blocked]
+        if self.config.execution_mode in {ExecutionMode.REPLAY, ExecutionMode.SHADOW}:
+            return []
+        rows = self.store.projected("orders", self.scope)
+        results = []
+        for row in rows:
+            if row["state"] not in {"OPEN", "PARTIALLY_FILLED"} or not row.get("broker_id"):
+                continue
+            if (
+                row.get("account_id") != self.config.account_id
+                or row.get("environment") != self.config.environment
+            ):
+                continue
+            family = [item for item in rows if item["intent_id"] == row["intent_id"]]
+            if (
+                any(
+                    item["state"] not in TERMINAL_ORDERS | {"OPEN", "PARTIALLY_FILLED"}
+                    for item in family
+                )
+                or sum(item["state"] not in TERMINAL_ORDERS for item in family) != 1
+            ):
+                continue
+            original = OrderIntent.model_validate(self.store.get("order_intents", row["intent_id"]))
+            if original.order_type != "limit":
+                age = (now - datetime.fromisoformat(row["created_at"])).total_seconds()
+                incident_id = digest([row["id"], "MARKET_EXIT_UNFILLED"])
+                if age >= self.config.order_cancel_seconds and not self.store.get(
+                    "incidents", incident_id
+                ):
+                    self.store.put(
+                        "incidents",
+                        {
+                            "id": incident_id,
+                            "reason": "MARKET_EXIT_UNFILLED",
+                            "order_id": row["id"],
+                            "intent_id": original.id,
+                            "group_id": original.group_id,
+                            "created_at": now.isoformat(),
+                        },
+                        self.scope,
+                    )
+                continue
+            if len(original.legs) != 1 or original.legs[0].instrument.asset_type != "stock":
+                continue
+            root = next(item for item in family if item["id"] == original.id)
+            age = (now - datetime.fromisoformat(root["created_at"])).total_seconds()
+            if age >= self.config.order_cancel_seconds:
+                results.append(self._cancel_order(row, now, "ORDER_MAINTENANCE_DEADLINE"))
+                continue
+            elapsed = (now - datetime.fromisoformat(row["created_at"])).total_seconds()
+            if elapsed < self.config.order_reprice_seconds:
+                continue
+            if len(family) - 1 >= self.config.policy.max_replacements_per_intent:
+                continue
+            leg = original.legs[0]
+            quote = self.evidence.current_quote(
+                leg.instrument.symbol,
+                now,
+                self.config.stock_execution_feed,
+                self.config.stock_quote_max_age_seconds,
+            )
+            if (
+                not quote
+                or quote.bid is None
+                or quote.bid <= 0
+                or (quote.ask - quote.bid) / quote.ask > self.config.policy.max_quote_spread_pct
+            ):
+                continue
+            tick = leg.instrument.tick_size
+            old_price = Decimal(row.get("limit_price", str(original.limit_price)))
+            if leg.side == "buy":
+                if original.maximum_buy_price is None or old_price >= quote.ask:
+                    continue
+                price = min(
+                    (quote.ask / tick).to_integral_value(rounding=ROUND_CEILING) * tick,
+                    (original.maximum_buy_price / tick).to_integral_value(rounding=ROUND_FLOOR)
+                    * tick,
+                )
+                if price <= old_price:
+                    continue
+            else:
+                if original.minimum_sell_price is None or old_price <= quote.bid:
+                    continue
+                price = max(
+                    (quote.bid / tick).to_integral_value(rounding=ROUND_FLOOR) * tick,
+                    (original.minimum_sell_price / tick).to_integral_value(rounding=ROUND_CEILING)
+                    * tick,
+                )
+                if price <= 0 or price >= old_price:
+                    continue
             try:
-                self.broker.cancel(row["broker_id"])
-            except Exception as exc:
-                row["cancel_error"] = type(exc).__name__
-                self.store.project("orders", row["id"], row, self.scope)
-                self.store.put(
-                    "incidents",
-                    {
-                        "id": uuid4().hex,
-                        "reason": "CANCELLATION_UNCONFIRMED",
-                        "order_id": row["id"],
-                        "intent_id": row["intent_id"],
-                        "created_at": now.isoformat(),
-                    },
-                    self.scope,
+                results.append(
+                    self.replace(
+                        row["id"],
+                        price,
+                        now,
+                        account=account,
+                        entry_ready=entry_ready,
+                        news_ready=news_ready,
+                        event_calendar_ready=event_calendar_ready,
+                    )
                 )
-            result.append(row)
-        return result
+            except ValueError as exc:
+                # A failed current authority check is a deferral, never permission to retry
+                # with weaker checks or a fresh intent. The age deadline still applies.
+                key = digest([row["id"], "maintenance", str(exc)])
+                incident = self.store.get("incidents", key)
+                if incident is None:
+                    self.store.put(
+                        "incidents",
+                        {
+                            "id": key,
+                            "reason": "ORDER_MAINTENANCE_DEFERRED",
+                            "detail": str(exc),
+                            "order_id": row["id"],
+                            "intent_id": original.id,
+                            "created_at": now.isoformat(),
+                        },
+                        self.scope,
+                    )
+        return results
 
     def replace(
         self, order_id, limit_price, now, *, account, entry_ready, news_ready, event_calendar_ready
@@ -658,6 +979,9 @@ class ExecutionGateway:
         Every child remains attached to the original reservation and group. A pending
         or unknown replacement must be reconciled before any further attempt.
         """
+        blocked = self._execution_block(order_id)
+        if blocked:
+            return blocked
         account = (
             AccountOperationalState.model_validate(account)
             if isinstance(account, AccountOperationalState)
@@ -677,6 +1001,8 @@ class ExecutionGateway:
                 raise ValueError("REPLACEMENT_ORDER_SCOPE_MISMATCH")
             root_id = parent["intent_id"]
             original = OrderIntent.model_validate(self.store.get("order_intents", root_id))
+            if original.order_type != "limit":
+                raise ValueError("MARKET_ORDER_REPLACEMENT_NOT_ALLOWED")
             original_decision = RiskDecision.model_validate(
                 self.store.get("risk_decisions", root_id)
             )
@@ -717,9 +1043,11 @@ class ExecutionGateway:
             ):
                 raise ValueError("REPLACEMENT_ACCOUNT_STALE")
             current_account = self.store.projection(
-                "operational_account"
-                if isinstance(account, AccountOperationalState)
-                else "account",
+                (
+                    "operational_account"
+                    if isinstance(account, AccountOperationalState)
+                    else "account"
+                ),
                 self.scope,
             )
             if current_account is None or current_account["id"] != account.id:
@@ -772,10 +1100,18 @@ class ExecutionGateway:
                     or approval.environment != account.environment
                     or approval.strategy_id != plan.strategy_id
                     or approval.strategy_version != plan.strategy_version
+                    or approval.strategy_id not in self.config.strategy_allowlist
                     or self.config.data_profile not in approval.profiles
                     or self.config.execution_mode not in approval.execution_modes
                 ):
                     raise ValueError("REPLACEMENT_STRATEGY_APPROVAL_INVALID")
+                approval_reasons = approval_execution_reasons(
+                    approval,
+                    plan.alternative,
+                    self.config,
+                )
+                if approval_reasons:
+                    raise ValueError("REPLACEMENT_" + approval_reasons[0])
                 if price > plan.max_buy_price:
                     raise ValueError("REPLACEMENT_PLAN_PRICE_BOUND_EXCEEDED")
                 if self.config.execution_mode == ExecutionMode.LIVE:
@@ -859,8 +1195,19 @@ class ExecutionGateway:
                     ):
                         raise ValueError("REPLACEMENT_CURRENT_QUOTE_REQUIRED")
             else:
+                sessions = [
+                    TradingSession.model_validate(row)
+                    for row in self.store.list("sessions", self.scope)
+                ]
+                if not any(session.open <= now < session.close for session in sessions):
+                    raise ValueError("REPLACEMENT_EXIT_SESSION_CLOSED")
                 group = self.store.projection("position_groups", original.group_id)
-                if not group or group["state"] == "CLOSED":
+                if (
+                    not group
+                    or group["state"] == "CLOSED"
+                    or group.get("account_id") != original.account_id
+                    or group.get("environment") != original.environment
+                ):
                     raise ValueError("REPLACEMENT_MANAGED_EXPOSURE_REQUIRED")
                 held = next(
                     (leg for leg in account.positions if leg.symbol == instrument.symbol), None
@@ -871,20 +1218,39 @@ class ExecutionGateway:
                 remaining = original_decision.approved_quantity - total_filled
                 if held is None or remaining <= 0 or abs(held.quantity) < remaining:
                     raise ValueError("REPLACEMENT_CLOSE_EXCEEDS_CURRENT_HOLDING")
+                if (
+                    held.account_id != account.account_id
+                    or held.environment != account.environment
+                    or not 0
+                    <= (now - held.reconciled_at).total_seconds()
+                    <= policy.account_max_age_seconds
+                ):
+                    raise ValueError("REPLACEMENT_CLOSE_HOLDING_RECONCILIATION_STALE")
                 if (original.legs[0].side == "sell" and held.quantity <= 0) or (
                     original.legs[0].side == "buy" and held.quantity >= 0
                 ):
                     raise ValueError("REPLACEMENT_CLOSE_SIDE_INVALID")
-                feed = "opra" if instrument.asset_type == "option" else "sip"
+                feed = (
+                    "opra"
+                    if instrument.asset_type == "option"
+                    else self.config.stock_execution_feed
+                )
                 quote = self.evidence.current_quote(
                     instrument.symbol,
                     now,
                     feed,
-                    self.config.option_quote_max_age_seconds
-                    if instrument.asset_type == "option"
-                    else self.config.stock_quote_max_age_seconds,
+                    (
+                        self.config.option_quote_max_age_seconds
+                        if instrument.asset_type == "option"
+                        else self.config.stock_quote_max_age_seconds
+                    ),
                 )
-                if not quote:
+                if (
+                    not quote
+                    or quote.bid is None
+                    or quote.bid <= 0
+                    or (quote.ask - quote.bid) / quote.ask > policy.max_quote_spread_pct
+                ):
                     raise ValueError("REPLACEMENT_EXIT_QUOTE_REQUIRED")
             child_id = digest([root_id, order_id, attempts + 1, str(price)])[:32]
             child = {
@@ -896,9 +1262,11 @@ class ExecutionGateway:
             child.update(
                 id=child_id,
                 client_order_id="gauss-" + child_id,
-                state="SHADOW"
-                if self.config.execution_mode in {ExecutionMode.SHADOW, ExecutionMode.REPLAY}
-                else "SUBMITTING",
+                state=(
+                    "SHADOW"
+                    if self.config.execution_mode in {ExecutionMode.SHADOW, ExecutionMode.REPLAY}
+                    else "SUBMITTING"
+                ),
                 filled_quantity="0",
                 limit_price=str(price),
                 replacement_number=attempts + 1,
@@ -932,8 +1300,16 @@ class ExecutionGateway:
             if not parent.get("broker_id"):
                 raise ValueError("REPLACEMENT_BROKER_ID_UNRECONCILED")
             parent.pop("_revision", None)
+            original_parent = dict(parent)
             parent.update(state="REPLACE_PENDING", pending_replacement=child_id)
             self.store.project("orders", order_id, parent, self.scope)
+        blocked = self._execution_block(child_id, root_id)
+        if blocked:
+            child.update(state="REJECTED", delivery_state="NOT_SENT", reasons=blocked["reasons"])
+            with self.store.transaction():
+                self.store.project("orders", order_id, original_parent, self.scope)
+                self.store.project("orders", child_id, child, self.scope)
+            return child
         try:
             result = self.broker.replace(
                 parent["broker_id"], limit_price=price, client_order_id=child["client_order_id"]
@@ -1210,9 +1586,7 @@ class Reconciler:
                 state = (
                     "OPEN"
                     if any(leg.quantity for leg in legs)
-                    else "PENDING_ENTRY"
-                    if unresolved
-                    else "CLOSED"
+                    else "PENDING_ENTRY" if unresolved else "CLOSED"
                 )
                 if state == "OPEN" and any(row["state"] == "PARTIALLY_FILLED" for row in family):
                     state = "PARTIALLY_OPEN"
@@ -1241,7 +1615,10 @@ class Reconciler:
                     unresolved_orders=unresolved,
                     stop_price=(previous or {}).get("stop_price")
                     or plan.get("alternative", {}).get("stop_price"),
+                    take_profit=(previous or {}).get("take_profit")
+                    or plan.get("alternative", {}).get("take_profit_price"),
                     close_at=(previous or {}).get("close_at") or plan.get("close_at"),
+                    retire_before_research=(previous or {}).get("retire_before_research", False),
                 )
                 self.store.project(
                     "position_groups", group.id, group.model_dump(mode="json"), self.scope
@@ -1295,14 +1672,15 @@ class Reconciler:
                     environment=account.environment,
                     exit_policy_id=previous.get("exit_policy_id", "manual-adoption-required"),
                     legs=(position,),
-                    state="EXIT_PENDING"
-                    if unresolved
-                    else "OPEN"
-                    if adopted
-                    else "RECONCILIATION_REQUIRED",
+                    state=(
+                        "EXIT_PENDING"
+                        if unresolved
+                        else "OPEN" if adopted else "RECONCILIATION_REQUIRED"
+                    ),
                     unresolved_orders=unresolved,
                     stop_price=previous.get("stop_price"),
                     close_at=previous.get("close_at"),
+                    retire_before_research=previous.get("retire_before_research", False),
                 )
                 self.store.project(
                     "position_groups", group.id, group.model_dump(mode="json"), self.scope
@@ -1334,9 +1712,11 @@ class Reconciler:
                     (
                         max(
                             abs(position.cost_basis),
-                            abs(position.market_value)
-                            if getattr(position, "market_value", None) is not None
-                            else Decimal(0),
+                            (
+                                abs(position.market_value)
+                                if getattr(position, "market_value", None) is not None
+                                else Decimal(0)
+                            ),
                         )
                         for position in positions
                     ),

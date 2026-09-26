@@ -10,10 +10,12 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from pathlib import Path
+from queue import Empty
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from .calendar import SessionCalendar
 from .evidence import EvidenceService
@@ -164,6 +166,7 @@ class SessionClient:
                     "incidents",
                     "session_reviews",
                     "research_reports",
+                    "ai_decisions",
                     "strategy_approvals",
                     "model_pricing",
                     "data_capabilities",
@@ -368,11 +371,18 @@ class SessionService(SessionClient):
             max_workers=self.config.research_max_parallel_jobs, thread_name_prefix="gauss-research"
         )
         self._collection_pool = ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="gauss-collector"
+            max_workers=3, thread_name_prefix="gauss-collector"
         )
         self._research_futures = {}
+        self._ai_futures = {}
+        self._quota_future = None
+        self._quota_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gauss-quota")
+        self._quota_checked_at = None
+        self.notifications = None
         self._collection_future = None
         self._news_future = None
+        self._quote_future = None
+        self._last_quote_collection = None
         self._last_collection = None
         self._wire()
 
@@ -391,11 +401,52 @@ class SessionService(SessionClient):
     def entries_ready(self):
         return bool(
             not self.entries_paused
+            and not self.monitor_only
             and self.state == "READY"
             and self.price_ready
             and self.account_profile is not None
             and self.health_state["reconciliation"] == "HEALTHY"
+            and self._research_holdings_ready()
+            and not (self.notifications and self.notifications.status().get("missing_channels"))
         )
+
+    @property
+    def monitor_only(self):
+        control = self.store.projection("automation_control", self.scope) or {}
+        return bool(
+            control.get("monitor_only")
+            or (self.config.research_backend == "codex_cli" and not self._quota_checked_at)
+        )
+
+    def _refresh_codex_quota(self, now):
+        if self.config.research_backend != "codex_cli":
+            return
+        from .research import record_codex_quota
+        from src.llm.codex_cli import read_codex_usage
+
+        if self._quota_future is not None and self._quota_future.done():
+            try:
+                record_codex_quota(self.store, self.scope, self._quota_future.result(), now=now)
+            except Exception as exc:
+                record_codex_quota(
+                    self.store,
+                    self.scope,
+                    reason=getattr(exc, "reason", "CODEX_QUOTA_UNAVAILABLE"),
+                    now=now,
+                )
+            self._quota_future = None
+            self._quota_checked_at = now
+        stale = (
+            self._quota_checked_at is None or (now - self._quota_checked_at).total_seconds() > 120
+        )
+        if stale:
+            record_codex_quota(self.store, self.scope, reason="CODEX_QUOTA_UNAVAILABLE", now=now)
+        if self._quota_future is None and (
+            self._quota_checked_at is None or (now - self._quota_checked_at).total_seconds() >= 60
+        ):
+            self._quota_future = self._quota_pool.submit(
+                read_codex_usage, executable=self.config.codex_executable, timeout_seconds=15
+            )
 
     def _start(self, now):
         if self.broker is None:
@@ -431,6 +482,13 @@ class SessionService(SessionClient):
             raise ValueError("ACCOUNT_NOT_IN_ALLOWLIST")
         self.store.acquire_lease(self.scope, self.owner, utc_now(), seconds=120)
         self._owns_lease = True
+        if self.config.notification_channels:
+            from .notifications import RuntimeNotifications
+
+            self.notifications = RuntimeNotifications(
+                self.config.database_path, self.scope, channels=self.config.notification_channels
+            )
+            self.notifications.start()
         previous = self.store.projection("runtime", self.scope)
         self.entries_paused = previous.get("entries_paused", False) if previous else False
         self.state = "RECONCILING"
@@ -481,6 +539,14 @@ class SessionService(SessionClient):
     def _reconcile(self, now):
         try:
             account = self.reconciler.reconcile(now)
+            # Stream events are wake-up hints; REST above is the authoritative ledger.
+            events = getattr(self.broker, "events", None)
+            if events is not None:
+                while True:
+                    try:
+                        events.get_nowait()
+                    except Empty:
+                        break
             self.operational_profile = account
             if isinstance(account, AccountOperationalState):
                 self.account_profile = None
@@ -492,7 +558,6 @@ class SessionService(SessionClient):
                 self._incident("ACCOUNT_FINANCIALS_UNAVAILABLE_OPERATIONS_CONTINUE", now)
                 return
             self.health_state["account_financials"] = "HEALTHY"
-            # Session reference is immutable; external cashflows are subtracted from equity change.
             try:
                 session = self.calendar.current_or_next(now)
                 self.calendar_ready = True
@@ -504,27 +569,7 @@ class SessionService(SessionClient):
                 self.state = "MANAGE_ONLY"
                 self.entries_paused = True
                 return
-            reference_id = f"{self.scope}:{session.id}"
-            reference = self.store.get("pnl_reference", reference_id)
-            if reference is None:
-                reference = {
-                    "id": reference_id,
-                    "equity": str(account.equity),
-                    "created_at": now.isoformat(),
-                    "activity_ids": [a["id"] for a in self.store.list("activities", self.scope)],
-                }
-                self.store.put("pnl_reference", reference, self.scope)
-            cashflows = Decimal("0")
-            for activity in self.store.list("activities", self.scope):
-                if activity["id"] in reference["activity_ids"]:
-                    continue
-                if activity.get("activity_type") in {"CSD", "CSW", "ACATC", "ACATS"}:
-                    cashflows += Decimal(str(activity.get("net_amount", "0")))
-            pnl = (
-                account.daily_pnl
-                if account.daily_pnl is not None
-                else account.equity - Decimal(reference["equity"]) - cashflows
-            )
+            pnl = self._daily_trading_pnl(account, now)
             account = account.model_copy(update={"id": uuid4().hex, "daily_pnl": pnl})
             self.store.put("account_profiles", account, self.scope)
             self.store.project("account", self.scope, account.model_dump(mode="json"), self.scope)
@@ -551,6 +596,50 @@ class SessionService(SessionClient):
             if isinstance(exc, ImportError):
                 details["detail"] = str(exc)
             self._incident("RECONCILIATION_FAILED", now, **details)
+
+    def _daily_trading_pnl(self, account, now):
+        if account.daily_pnl is not None:
+            return account.daily_pnl
+        trading_date = now.astimezone(ZoneInfo("America/New_York")).date()
+        session = next(
+            (
+                item
+                for item in self.calendar.sessions.values()
+                if item.open.astimezone(ZoneInfo("America/New_York")).date() == trading_date
+            ),
+            None,
+        )
+        if session is None:
+            return None
+        # Never erase losses incurred before startup or seed Monday's baseline on Friday.
+        reference_id = f"{self.scope}:{session.id}:broker-close-v2"
+        reference = self.store.get("pnl_reference", reference_id)
+        if reference is None:
+            if account.previous_close_equity is None:
+                return None
+            reference = {
+                "id": reference_id,
+                "equity": str(account.previous_close_equity),
+                "created_at": now.isoformat(),
+                "source": "broker_previous_close_equity",
+                "trading_date": trading_date.isoformat(),
+            }
+            self.store.put("pnl_reference", reference, self.scope)
+        cashflows = Decimal("0")
+        for activity in self.store.list("activities", self.scope):
+            if activity.get("activity_type") not in {"CSD", "CSW", "ACATC", "ACATS"}:
+                continue
+            try:
+                activity_date = date.fromisoformat(str(activity["date"])[:10])
+                if activity_date != trading_date:
+                    continue
+                amount = Decimal(str(activity["net_amount"]))
+                if not amount.is_finite():
+                    return None
+                cashflows += amount
+            except (KeyError, ValueError, ArithmeticError):
+                return None
+        return account.equity - Decimal(reference["equity"]) - cashflows
 
     def _market_symbols(self):
         holdings = [
@@ -630,9 +719,11 @@ class SessionService(SessionClient):
             ),
             (
                 "HELD_STOCK_QUOTES",
-                lambda: self.market.collect_quotes(tuple(holdings), now)
-                if holdings and hasattr(self.market, "collect_quotes")
-                else [],
+                lambda: (
+                    self.market.collect_quotes(tuple(holdings), now)
+                    if holdings and hasattr(self.market, "collect_quotes")
+                    else []
+                ),
             ),
         ):
             try:
@@ -1013,6 +1104,8 @@ class SessionService(SessionClient):
                     )
 
     def _supervise(self, now, flatten=False):
+        if self.monitor_only:
+            return
         supervision_account = self.account_profile or self.operational_profile
         if not supervision_account:
             return
@@ -1022,13 +1115,22 @@ class SessionService(SessionClient):
                 continue
             if group.exit_policy_id == "manual-adoption-required" and not flatten:
                 continue
+            if any(
+                order.get("group_id") == group.id
+                and order.get("purpose") == "close"
+                and order["state"] not in TERMINAL_ORDERS | {"SHADOW"}
+                for order in self.store.projected("orders", self.scope)
+            ):
+                continue
             if self.health_state["reconciliation"] != "HEALTHY":
                 self._incident("EXIT_NEEDS_RECONCILIATION", now, group_id=group.id)
                 continue
             quotes = {}
             trigger = flatten or (group.close_at is not None and now >= group.close_at)
+            urgent = trigger
+            trigger_reason = "operator flatten" if flatten else "session closing deadline"
             for leg in group.legs:
-                feed = "opra" if leg.asset_type == "option" else "sip"
+                feed = "opra" if leg.asset_type == "option" else self.config.stock_execution_feed
                 max_age = (
                     self.config.option_quote_max_age_seconds
                     if leg.asset_type == "option"
@@ -1040,11 +1142,29 @@ class SessionService(SessionClient):
                     if (
                         group.stop_price
                         and leg.asset_type == "stock"
-                        and quote.bid <= group.stop_price
+                        and (
+                            (leg.quantity > 0 and quote.bid <= group.stop_price)
+                            or (leg.quantity < 0 and quote.ask >= group.stop_price)
+                        )
                     ):
                         trigger = True
+                        urgent = True
+                        trigger_reason = "stock stop loss"
+                    if (
+                        group.take_profit is not None
+                        and leg.asset_type == "stock"
+                        and (
+                            (leg.quantity > 0 and quote.bid >= group.take_profit)
+                            or (leg.quantity < 0 and quote.ask <= group.take_profit)
+                        )
+                    ):
+                        trigger = True
+                        if not urgent:
+                            trigger_reason = "stock take profit"
                 if self.evidence.blockers(leg.symbol, now):
                     trigger = True
+                    urgent = True
+                    trigger_reason = "blocking market event"
             if group.plan_id:
                 plan = self.store.get("plans", group.plan_id)
                 if plan:
@@ -1054,6 +1174,8 @@ class SessionService(SessionClient):
                     )
                     if self.evidence.blockers(symbol, now):
                         trigger = True
+                        urgent = True
+                        trigger_reason = "blocking market event"
             if (
                 group.legs
                 and all(leg.asset_type == "option" for leg in group.legs)
@@ -1101,6 +1223,28 @@ class SessionService(SessionClient):
                 if limit <= 0:
                     self._incident("EXIT_PRICE_BELOW_VALID_TICK", now, group_id=group.id)
                     continue
+                floor = abs(net) if net > 0 else None
+                ceiling = abs(net) if net < 0 else None
+                if len(legs) == 1 and legs[0].instrument.asset_type == "stock":
+                    slippage = self.config.order_exit_slippage_pct
+                    if floor is not None:
+                        floor = max(
+                            tick,
+                            (limit * (1 - slippage) / tick).to_integral_value(
+                                rounding=ROUND_CEILING
+                            )
+                            * tick,
+                        )
+                    if ceiling is not None:
+                        ceiling = (limit * (1 + slippage) / tick).to_integral_value(
+                            rounding=ROUND_FLOOR
+                        ) * tick
+                market_exit = (
+                    urgent
+                    and len(legs) == 1
+                    and legs[0].instrument.asset_type == "stock"
+                    and self.config.stock_exit_order_type == "market"
+                )
                 intent = OrderIntent(
                     created_at=now,
                     account_id=self.config.account_id,
@@ -1108,12 +1252,14 @@ class SessionService(SessionClient):
                     purpose="close",
                     group_id=group.id,
                     legs=tuple(legs),
-                    limit_price=limit,
-                    minimum_sell_price=abs(net) if net > 0 else None,
-                    maximum_buy_price=abs(net) if net < 0 else None,
+                    order_type="market" if market_exit else "limit",
+                    limit_price=None if market_exit else limit,
+                    reference_price=abs(net) if market_exit else None,
+                    minimum_sell_price=None if market_exit else floor,
+                    maximum_buy_price=None if market_exit else ceiling,
                     limit_effect="credit" if net > 0 else "debit",
                     expires_at=now + timedelta(seconds=10),
-                    reason="Confirmed holding exit policy",
+                    reason="Confirmed holding exit policy: " + trigger_reason,
                 )
                 decision = self.risk.approve(
                     intent,
@@ -1191,6 +1337,29 @@ class SessionService(SessionClient):
                         for g in self.store.projected("position_groups", self.scope)
                     ):
                         raise RuntimeError("unmanaged exposure requires adoption")
+                    control = self.store.projection("automation_control", self.scope)
+                    if control and control.get("monitor_only"):
+                        remaining = control.get("remaining_percent")
+                        checked = datetime.fromisoformat(control["checked_at"])
+                        if (
+                            remaining is None
+                            or remaining <= 5
+                            or (now - checked).total_seconds() > 120
+                        ):
+                            raise RuntimeError(
+                                "verified Codex allowance above 5% required to resume"
+                            )
+                        self.store.project(
+                            "automation_control",
+                            self.scope,
+                            {
+                                **control,
+                                "monitor_only": False,
+                                "quota_latched": False,
+                                "reason": None,
+                            },
+                            self.scope,
+                        )
                     self.entries_paused = False
                     self.state = "READY"
                 elif action == "cancel_pending_entries":
@@ -1287,8 +1456,18 @@ class SessionService(SessionClient):
                     )
                 elif action == "adopt_position":
                     row = self.store.projection("position_groups", payload["group_id"])
-                    if not row or row.get("exit_policy_id") != "manual-adoption-required":
+                    if (
+                        not row
+                        or row.get("exit_policy_id") != "manual-adoption-required"
+                        or row.get("account_id") != self.config.account_id
+                        or row.get("environment") != self.config.environment
+                    ):
                         raise ValueError("unmanaged position required")
+                    retire = payload.get("retire_before_research", False)
+                    if not isinstance(retire, bool):
+                        raise ValueError("retire_before_research requires a boolean")
+                    if retire and self.config.environment != "paper":
+                        raise ValueError("retire_before_research requires a paper account")
                     stop = Decimal(payload["stop_price"])
                     close_at = datetime.fromisoformat(payload["close_at"])
                     if stop <= 0 or close_at.tzinfo is None:
@@ -1299,6 +1478,7 @@ class SessionService(SessionClient):
                         stop_price=str(stop),
                         close_at=close_at.isoformat(),
                         state="OPEN",
+                        retire_before_research=retire,
                     )
                     self.store.project("position_groups", row["id"], row, self.scope)
                 self.store.project(
@@ -1379,7 +1559,109 @@ class SessionService(SessionClient):
             except Exception as exc:
                 self._finish_role(run, error=exc)
             del self._research_futures[key]
-        self.health_state["model_workers"] = "RUNNING" if self._research_futures else "IDLE"
+        for key, future in list(self._ai_futures.items()):
+            if future.done():
+                try:
+                    future.result()
+                except Exception as exc:
+                    self._incident("AI_REVIEW_FAILED", self.clock(), error=type(exc).__name__)
+                del self._ai_futures[key]
+        self.health_state["model_workers"] = (
+            "RUNNING" if self._research_futures or self._ai_futures else "IDLE"
+        )
+
+    def request_ai_review(self, plan, session, role, now):
+        """Queue Pre/Live analysis without delaying reconciliation or protective exits.
+
+        Only results for this plan, policy, news set and review interval are reusable.
+        Entry triggers, current quotes and account risk are checked again by the caller.
+        """
+        from .research import ResearchOutcome, review_stage, supported
+
+        if self.monitor_only:
+            return None
+
+        news_ids = sorted(
+            n.id
+            for n in self.evidence.news(now)
+            if not n.symbols or plan.alternative.signal_symbol in n.symbols
+        )
+        interval = self.config.ai_review_interval_seconds
+        bucket = int(now.timestamp() // interval)
+        key = digest(
+            [
+                self.scope,
+                role,
+                session.id,
+                plan.id,
+                plan.version,
+                self.config.data_profile,
+                self.config.data_policy_version,
+                self.config.policy.model_dump(mode="json"),
+                bucket,
+                news_ids,
+            ]
+        )
+        cached = self.store.projection("ai_reviews", key)
+        if cached:
+            return ResearchOutcome.model_validate(cached["result"])
+        if key in self._ai_futures or (
+            len(self._ai_futures) + len(self._research_futures)
+            >= self.config.research_max_parallel_jobs
+        ):
+            return None
+        account = self.account_profile.model_copy(
+            update={
+                "id": uuid4().hex,
+                "created_at": now,
+                "reserved_capital": self.account_profile.reserved_capital + self.reserved_capital(),
+            },
+            deep=True,
+        )
+        self.store.put("account_profiles", account, self.scope)
+        snapshot = self.evidence.freeze(session.id, account, now, self.approvals(now))
+        view = copy.copy(self)
+        view.account_profile = account
+        view.config = self.config.model_copy(deep=True)
+        view.broker = view.market = view.gateway = view.risk = view.reconciler = None
+        context = {
+            "symbols": [plan.alternative.signal_symbol],
+            "proposed_action": (
+                "revalidate conditional plan"
+                if role == "PreGauss"
+                else "enter after the observed trigger using a bounded limit order"
+            ),
+            "plan": plan.model_dump(mode="json"),
+            "order_policy": "bounded_limit",
+            "review_expires_at": datetime.fromtimestamp(
+                (bucket + 1) * interval, timezone.utc
+            ).isoformat(),
+        }
+
+        def work():
+            outcome = review_stage(view, snapshot, account, role, session.id, context, now)
+            record = {
+                "id": key,
+                "role": role,
+                "plan_id": plan.id,
+                "symbol": plan.alternative.signal_symbol,
+                "session_id": session.id,
+                "created_at": now.isoformat(),
+                "completed_at": self.clock().isoformat(),
+                "expires_at": context["review_expires_at"],
+                "outcome": "SUPPORT" if supported(outcome) else "NO_TRADE",
+                "summary": (
+                    outcome.annotation.summary if outcome.annotation else ", ".join(outcome.reasons)
+                ),
+                "result": outcome.model_dump(mode="json"),
+            }
+            with self.store.transaction():
+                self.store.project("ai_reviews", key, record, self.scope)
+                self.store.put("ai_decisions", record, self.scope)
+            return outcome
+
+        self._ai_futures[key] = self._research_pool.submit(work)
+        return None
 
     def _observe_post(self, session, now):
         if not self.operational_profile:
@@ -1406,17 +1688,17 @@ class SessionService(SessionClient):
                 "signal_as_of": context.signal_as_of.isoformat(),
                 "watermarks": {symbol: stamp.isoformat() for symbol, stamp in context.watermarks},
                 "broker_reconciled_at": self.last_reconciliation,
-                "trading_pnl": str(self.account_profile.daily_pnl)
-                if self.account_profile
-                else None,
+                "trading_pnl": (
+                    str(self.account_profile.daily_pnl) if self.account_profile else None
+                ),
                 "cash": str(self.account_profile.cash) if self.account_profile else None,
                 "exposure": str(self.account_profile.exposure) if self.account_profile else None,
                 "current_safety_news_ids": [
                     event.id for event in self.evidence.news(now, safety=True)
                 ],
-                "suitability_report_id": latest_suitability[0]["id"]
-                if latest_suitability
-                else None,
+                "suitability_report_id": (
+                    latest_suitability[0]["id"] if latest_suitability else None
+                ),
                 "outcome": "OBSERVATION",
                 "candidate_authority": False,
                 "market_reaction_observed_through": context.signal_as_of.isoformat(),
@@ -1424,7 +1706,23 @@ class SessionService(SessionClient):
             self.scope,
         )
 
+    def _research_holdings_ready(self):
+        """Wait for broker-confirmed retirement before claiming the first research jobs."""
+        for row in self.store.projected("position_groups", self.scope):
+            group = PositionGroup.model_validate(
+                {key: value for key, value in row.items() if key != "_revision"}
+            )
+            if not group.flat and (
+                group.exit_policy_id == "manual-adoption-required" or group.retire_before_research
+            ):
+                return False
+        return True
+
     def _run_role(self, role, session, now, job_key):
+        if self.monitor_only:
+            return
+        if role in {"PostGauss", "CloseGauss"} and not self._research_holdings_ready():
+            return
         inputs = digest(
             [
                 job_key,
@@ -1437,7 +1735,8 @@ class SessionService(SessionClient):
         job_id = f"{self.scope}:{role}:{job_key}:{self.config.data_policy_version}"
         if role in {"PostGauss", "CloseGauss"} and (
             job_id in self._research_futures
-            or len(self._research_futures) >= self.config.research_max_parallel_jobs
+            or len(self._research_futures) + len(self._ai_futures)
+            >= self.config.research_max_parallel_jobs
         ):
             return
         if not self.store.claim_job(
@@ -1481,6 +1780,19 @@ class SessionService(SessionClient):
         if self._news_future and self._news_future.done():
             self._news_future.result()
             self._news_future = None
+        if self._quote_future and self._quote_future.done():
+            self._quote_future.result()
+            self._quote_future = None
+        if (
+            hasattr(self.market, "collect_quotes")
+            and self._quote_future is None
+            and (
+                self._last_quote_collection is None
+                or (now - self._last_quote_collection).total_seconds() >= self.config.poll_seconds
+            )
+        ):
+            self._last_quote_collection = now
+            self._quote_future = self._collection_pool.submit(self._collect_execution_quotes, now)
         interval = (
             self.config.free_poll_interval_seconds
             if self.config.data_profile == DataProfile.FREE_DELAYED
@@ -1494,6 +1806,15 @@ class SessionService(SessionClient):
             self._collection_future = self._collection_pool.submit(self._collect, now)
         if hasattr(self.market, "collect_news") and self._news_future is None:
             self._news_future = self._collection_pool.submit(self._collect_news, now)
+
+    def _collect_execution_quotes(self, now):
+        try:
+            for event in self.market.collect_quotes(self._market_symbols(), now):
+                self.evidence.ingest_market(event)
+            self.health_state["execution_quotes"] = "HEALTHY"
+        except Exception as exc:
+            self.health_state["execution_quotes"] = "FAILED"
+            self._incident("EXECUTION_QUOTE_COLLECTION_FAILED", now, error=type(exc).__name__)
 
     def _collect_news(self, now):
         try:
@@ -1528,15 +1849,25 @@ class SessionService(SessionClient):
         if not getattr(self, "_last_probe", None) or (now - self._last_probe).total_seconds() > 240:
             self._probe(now)
         self._drain_research()
+        self._refresh_codex_quota(now)
         self._schedule_collection(now)
         if self.market and hasattr(self.market, "events"):
             while not self.market.events.empty():
                 self.evidence.ingest_market(self.market.events.get_nowait())
         self._recover_market_gaps(now)
         self._refresh_event_calendar(now)
-        self._safety_events(now)
-        self._cancel_invalidated_entries(now)
+        if not self.monitor_only:
+            self._safety_events(now)
+            self._cancel_invalidated_entries(now)
         self._commands(now)
+        if not self.monitor_only and self.health_state["reconciliation"] == "HEALTHY":
+            self.gateway.maintain_orders(
+                now,
+                account=self.account_profile or self.operational_profile,
+                entry_ready=self.entries_ready,
+                news_ready=self.news_ready,
+                event_calendar_ready=self.event_calendar_ready,
+            )
         self._supervise(now)
         if self.account_profile is not None and self.calendar_ready:
             current = self.calendar.current_or_next(now)
@@ -1549,7 +1880,11 @@ class SessionService(SessionClient):
                 raise ValueError("unknown role")
             self._force_role = None
             # Market completeness belongs to each symbol and actual close, not current age alone.
-            post_ready = bool(previous and self.evidence.clock.signal_as_of(now) >= previous.close)
+            post_ready = bool(
+                previous
+                and self.evidence.clock.signal_as_of(now) >= previous.close
+                and self._research_holdings_ready()
+            )
             if post_ready and self.config.symbols:
                 for symbol in self.config.symbols:
                     bars = self.evidence.market(now, symbol, "bar")
@@ -1585,7 +1920,12 @@ class SessionService(SessionClient):
                 None,
                 "PreGauss",
             }:
-                bucket = int(now.timestamp() // (self.config.pre_review_interval_minutes * 60))
+                from .research import requires_ai
+
+                pre_interval = self.config.pre_review_interval_minutes * 60
+                if requires_ai(self.config):
+                    pre_interval = min(pre_interval, self.config.poll_seconds)
+                bucket = int(now.timestamp() // pre_interval)
                 self._run_role("PreGauss", current, now, f"{current.id}:{bucket}")
             if schedule["entry_start"] <= now < schedule["entry_cutoff"] and requested in {
                 None,
@@ -1598,6 +1938,13 @@ class SessionService(SessionClient):
                     f"{current.id}:{int(now.timestamp() // self.config.poll_seconds)}",
                 )
         self._publish(now)
+        if self.notifications:
+            try:
+                self.notifications.capture()
+                self.health_state["notifications"] = "RUNNING"
+            except Exception as exc:
+                self.health_state["notifications"] = "FAILED"
+                self._incident("NOTIFICATION_CAPTURE_FAILED", now, error=type(exc).__name__)
         if self._closing:
             self._closing = False
             self.request_shutdown()
@@ -1613,6 +1960,12 @@ class SessionService(SessionClient):
             schedule = {}
         context = self.evidence.context(now, self.config.symbols)
         blockers = []
+        notification_status = self.notifications.status() if self.notifications else None
+        if notification_status and notification_status.get("missing_channels"):
+            blockers.append("NOTIFICATION_CHANNEL_UNAVAILABLE")
+        control = self.store.projection("automation_control", self.scope)
+        if self.monitor_only:
+            blockers.append((control or {}).get("reason") or "CODEX_QUOTA_UNAVAILABLE")
         if not self.calendar_ready:
             blockers.append("SESSION_CALENDAR_UNAVAILABLE")
         if not self.price_ready:
@@ -1647,6 +2000,8 @@ class SessionService(SessionClient):
             "updated_at": now.isoformat(),
             "last_reconciliation": self.last_reconciliation,
             "health": self.health_state,
+            "automation_control": control,
+            "notifications": notification_status,
             "account_financials_ready": self.account_profile is not None,
             "readiness": blockers,
             "supervision": "RUNNING" if not self._closed else "ENDED",
@@ -1670,6 +2025,7 @@ class SessionService(SessionClient):
             # do not publish state, cancel orders, or record an account shutdown.
             self._closed = True
             self._research_pool.shutdown(wait=True, cancel_futures=True)
+            self._quota_pool.shutdown(wait=True, cancel_futures=True)
             self._collection_pool.shutdown(wait=True, cancel_futures=True)
             if self.market:
                 self.market.close()
@@ -1705,9 +2061,11 @@ class SessionService(SessionClient):
                 "reason": "Supervision continues until exposure resolves or shutdown is explicitly acknowledged.",
             }
         self._incident(
-            "SUPERVISION_ENDING_ACKNOWLEDGED"
-            if groups or orders or self.health_state["reconciliation"] == "FAILED"
-            else "CLEAN_SHUTDOWN",
+            (
+                "SUPERVISION_ENDING_ACKNOWLEDGED"
+                if groups or orders or self.health_state["reconciliation"] == "FAILED"
+                else "CLEAN_SHUTDOWN"
+            ),
             now,
             remaining_groups=len(groups),
             unresolved_orders=len(orders),
@@ -1717,8 +2075,12 @@ class SessionService(SessionClient):
         self._closed = True
         self._publish(now)
         self._research_pool.shutdown(wait=True, cancel_futures=True)
+        self._quota_pool.shutdown(wait=True, cancel_futures=True)
         self._collection_pool.shutdown(wait=True, cancel_futures=True)
         self._drain_research()
+        if self.notifications:
+            self.notifications.capture()
+            self.notifications.close()
         if self.market:
             self.market.close()
         if self.event_calendar and hasattr(self.event_calendar, "close"):
@@ -1801,8 +2163,9 @@ def build_service(config=None):
     market = AlpacaMarket(credentials.api_key, credentials.secret_key, config)
     from .events import configured_event_calendar
 
-    return SessionService(config, broker=broker, market=market,
-                          event_calendar=configured_event_calendar(config))
+    return SessionService(
+        config, broker=broker, market=market, event_calendar=configured_event_calendar(config)
+    )
 
 
 def doctor(config=None):

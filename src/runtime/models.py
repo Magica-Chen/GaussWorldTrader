@@ -82,6 +82,11 @@ class RuntimeConfig(Record):
     calendar_timezone: Literal["America/New_York"] = "America/New_York"
     display_timezone: str = "Europe/London"
     paid_model_calls_enabled: bool = False
+    research_backend: Literal["deterministic", "openai_api", "codex_cli"] = "deterministic"
+    codex_executable: str = "codex"
+    codex_max_calls_per_session: int = Field(default=80, ge=1, le=1000)
+    ai_review_interval_seconds: int = Field(default=600, ge=30, le=3600)
+    notification_channels: tuple[Literal["slack", "email"], ...] = ()
     research_model: str | None = None
     research_pricing_id: str | None = None
     research_max_output_tokens: int = Field(default=1024, ge=16, le=8192)
@@ -103,6 +108,8 @@ class RuntimeConfig(Record):
     market_requests_per_minute: int = Field(default=120, ge=2)
     news_reserved_requests_per_minute: int = Field(default=20, ge=1)
     stock_quote_max_age_seconds: int = Field(default=5, gt=0)
+    stock_execution_feed: Literal["sip", "iex"] = "sip"
+    stock_exit_order_type: Literal["limit", "market"] = "limit"
     option_quote_max_age_seconds: int = Field(default=2, gt=0)
     capital_scenario_file: str | None = None
     payload_directory: str = "results/gauss/evidence"
@@ -115,6 +122,9 @@ class RuntimeConfig(Record):
     deployment_version: str = "four-agents-v1"
     symbols: tuple[str, ...] = ()
     poll_seconds: float = Field(default=10, ge=1)
+    order_reprice_seconds: int = Field(default=30, ge=1)
+    order_cancel_seconds: int = Field(default=120, ge=1)
+    order_exit_slippage_pct: Decimal = Field(default=Decimal(".005"), ge=0, le=Decimal(".05"))
     entitlement_boundary_buffer: int = Field(default=2, ge=0)
     maximum_additional_lag_seconds: int = Field(default=180, ge=0)
     policy: RiskPolicy = Field(default_factory=RiskPolicy)
@@ -126,6 +136,14 @@ class RuntimeConfig(Record):
         from zoneinfo import ZoneInfo
 
         ZoneInfo(self.display_timezone)
+        if self.order_cancel_seconds < self.order_reprice_seconds:
+            raise ValueError("order cancellation deadline must follow repricing interval")
+        if self.research_backend == "openai_api" and (
+            not self.paid_model_calls_enabled or not self.research_model
+        ):
+            raise ValueError("openai_api research requires explicit model and paid calls enabled")
+        if self.research_backend == "codex_cli" and self.paid_model_calls_enabled:
+            raise ValueError("Codex subscription analysis cannot enable paid API calls")
         if self.news_reserved_requests_per_minute >= self.market_requests_per_minute:
             raise ValueError("news request reserve must be below the total market request budget")
         if (
@@ -277,6 +295,7 @@ class PositionGroup(Record):
     stop_price: Decimal | None = None
     take_profit: Decimal | None = None
     close_at: datetime | None = None
+    retire_before_research: bool = False
 
     @property
     def flat(self):
@@ -313,6 +332,7 @@ class AccountProfile(Record):
     out_of_scope_exposure: Decimal = Field(default=Decimal("0"), ge=0)
     out_of_scope_symbols: tuple[str, ...] = ()
     daily_pnl: Decimal | None = None
+    previous_close_equity: Decimal | None = Field(default=None, gt=0)
     positions: tuple[PositionLeg, ...] = ()
     mandate_id: str
 
@@ -351,7 +371,7 @@ class StrategyApproval(Record):
     profiles: tuple[DataProfile, ...]
     execution_modes: tuple[ExecutionMode, ...] = (ExecutionMode.SHADOW, ExecutionMode.REPLAY)
     asset_type: Literal["stock", "option"] = "stock"
-    required_feed: Literal["sip", "opra"] = "sip"
+    required_feed: Literal["sip", "iex", "opra"] = "sip"
     requires_current_quote: bool = True
     maximum_signal_latency_seconds: int = Field(gt=0)
     minimum_history: int = Field(default=30, ge=2)
@@ -359,9 +379,38 @@ class StrategyApproval(Record):
     requires_event_calendar: bool = True
     validation_reference: str
     validated_net_expectancy: Decimal | None = None
+    evidence_level: Literal["validated", "paper_trial"] = "validated"
+    symbols: tuple[str, ...] = ()
+    entry_bound_pct: Decimal = Field(default=Decimal(".001"), gt=0, le=Decimal(".01"))
     parameter_json: str = "{}"
     expiry: datetime
     option_selector: OptionSelector | None = None
+
+    @model_validator(mode="after")
+    def evidence_scope(self):
+        if any(not symbol.strip() or symbol != symbol.strip() for symbol in self.symbols):
+            raise ValueError(
+                "approval symbols must be nonempty and contain no surrounding whitespace"
+            )
+        if len(set(self.symbols)) != len(self.symbols):
+            raise ValueError("approval symbols must be unique")
+        if self.evidence_level == "paper_trial":
+            if self.environment != "paper":
+                raise ValueError("paper trial requires paper environment")
+            if self.asset_type != "stock" or self.option_selector is not None:
+                raise ValueError("paper trial supports stock only")
+            if not self.symbols:
+                raise ValueError("paper trial requires explicit symbols")
+            if not self.execution_modes or any(
+                mode not in (ExecutionMode.PAPER, ExecutionMode.SHADOW, ExecutionMode.REPLAY)
+                for mode in self.execution_modes
+            ):
+                raise ValueError("paper trial requires paper, shadow, or replay execution modes")
+            if self.validated_net_expectancy is not None:
+                raise ValueError("paper trial expectancy must remain unknown")
+            if not self.validation_reference.strip():
+                raise ValueError("paper trial requires a concrete validation reference")
+        return self
 
 
 class Instrument(Record):
@@ -386,6 +435,7 @@ class Alternative(Record):
     instrument: Instrument
     entry_price: Decimal = Field(gt=0)
     stop_price: Decimal = Field(gt=0)
+    take_profit_price: Decimal | None = Field(default=None, gt=0)
     expected_net_value: Decimal | None = None
     evidence_ids: tuple[str, ...] = ()
     estimated_fees: Decimal = Field(default=Decimal("0"), ge=0)
@@ -415,6 +465,7 @@ class SizingResult(Record):
     reasons: tuple[str, ...] = ()
     binding_limit: str = ""
     minimum_equity_bound: Decimal | None = None
+    evidence_level: Literal["validated", "paper_trial"] | None = None
 
 
 class AccountSuitabilityReport(Record):
@@ -540,7 +591,9 @@ class OrderIntent(Record):
     group_id: str | None = None
     legs: tuple[OrderLeg, ...]
     requested_quantity: Decimal | None = Field(default=None, gt=0)
-    limit_price: Decimal = Field(gt=0)
+    order_type: Literal["limit", "market"] = "limit"
+    limit_price: Decimal | None = Field(default=None, gt=0)
+    reference_price: Decimal | None = Field(default=None, gt=0)
     limit_effect: Literal["debit", "credit"] = "debit"
     maximum_buy_price: Decimal | None = Field(default=None, gt=0)
     minimum_sell_price: Decimal | None = Field(default=None, ge=0)
@@ -555,6 +608,21 @@ class OrderIntent(Record):
             raise ValueError("entry requires plan")
         if self.purpose == "close" and not self.group_id:
             raise ValueError("exit requires managed group")
+        if self.order_type == "limit":
+            if self.limit_price is None or self.reference_price is not None:
+                raise ValueError("limit orders require limit_price and no market reference_price")
+        elif (
+            self.purpose != "close"
+            or len(self.legs) != 1
+            or self.legs[0].instrument.asset_type != "stock"
+            or self.reference_price is None
+            or self.limit_price is not None
+            or self.maximum_buy_price is not None
+            or self.minimum_sell_price is not None
+        ):
+            raise ValueError(
+                "market orders require a single stock close and reference price, without price bounds"
+            )
         for leg in self.legs:
             if not leg.position_intent.startswith(leg.side + "_to_"):
                 raise ValueError("side and position intent disagree")

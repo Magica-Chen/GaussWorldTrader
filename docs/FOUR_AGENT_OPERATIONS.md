@@ -11,6 +11,14 @@ Offline runs require an explicit synthetic account fixture. Stock and options re
 share the session controller; options entries remain subject to their separate policy,
 permission, contract and quote gates.
 
+For subscription-backed automatic paper execution, use
+`examples/gauss.paper-codex.example.toml`. It selects the paper account, Codex CLI,
+Slack, delayed SIP strategy observations and explicitly selected current IEX stock
+execution quotes. IEX is a single-exchange feed: its quotes remain labelled IEX and
+never become consolidated SIP evidence or enter the delayed strategy snapshot.
+Startup checks endpoint access; an unavailable feed does not select another feed.
+The example requires scoped validated-strategy or explicit paper-trial approval records.
+
 ## Configuration and startup
 
 Use the existing TOML settings loader's `[gauss]` section and the profile examples in
@@ -42,6 +50,71 @@ The two data profiles use the same role implementations:
 A subscribed label does not establish entitlement. Indicative options remain labelled
 indicative at every age. Changing profile invalidates incompatible plan readiness and
 requires reassessment. Closing deadlines always follow the actual exchange session.
+
+## Codex subscription analysis
+
+Install Codex CLI and sign in with `codex login`. `codex login status` must report
+ChatGPT authentication. Set `[gauss.research].backend = "codex_cli"` and leave
+`paid_model_calls_enabled = false`. An optional `model` selects an available Codex
+model; omission uses the CLI default. `codex_executable` can provide the absolute
+binary path for a host service. The application invokes `codex exec`; it does not
+extract login tokens or send them to the OpenAI API.
+
+PostGauss reviews candidate quality; CloseGauss challenges each symbol's conditional
+plan; PreGauss reviews current support before eligibility; LiveGauss reviews a
+triggered entry. A successful SUPPORT result is required at each stage. Missing,
+invalid, stale, unsupported or failed analysis leaves entries blocked. The runtime
+retains deterministic sizing, permissions, account, market-clock and quote checks.
+Codex never receives broker clients or credentials. Calls use bounded structured
+output, a neutral working directory and disabled tools. Pre/Live analysis runs in
+background workers, so broker reconciliation and position monitoring continue.
+
+Reviews are reused only for their plan, policy, relevant news and configured review
+interval. The local `max_calls_per_session` cap counts failed attempts too. Token and
+call usage is recorded separately from API dollar costs; a subscription is not an
+API pricing schedule. The supported
+[Codex non-interactive interface](https://learn.chatgpt.com/docs/non-interactive-mode)
+and [authentication documentation](https://learn.chatgpt.com/docs/auth) describe this
+login and automation path.
+
+The service reads the actual Codex allowance through the app-server
+`account/rateLimits/read` interface. At **5% or less remaining in any reported window**,
+it persists a monitoring-only stop and sends Slack an incident notification. It stops
+new model analysis and all broker submissions, replacements and cancellations,
+including protective exit submissions. Previously accepted orders can still fill at
+the broker; their reconciliation and notifications continue. Unknown or stale quota
+also blocks automation. After allowance is restored, an authenticated resume command
+and fresh readiness checks are required to release a threshold stop. Local token
+counts are never presented as a subscription percentage.
+
+## Order policies and notifications
+
+An explicit `paper_trial` approval permits bounded forward testing with unknown
+expectancy. It requires a paper stock account, named symbols, recorded provenance,
+expiry and conservative policy limits. Suitability labels its ranking as fractional
+planned loss; it cannot satisfy live-trading authorization. See the current
+[paper trial contract](PAPER_TRIAL.md) for scope and historical evidence.
+
+Entries and profit-taking use bounded limit orders. Pending stock limits may reprice
+within their original bounds; after the configured deadline the runtime requests
+cancellation and waits for broker confirmation before releasing reservations or
+retrying an exit. Unknown outcomes retain their stable IDs and exposure.
+
+With `execution.stock_exit_order_type = "market"`, paper stock stop-loss, session
+deadline, blocking-event and operator-flatten exits use market orders. These require
+confirmed holdings, an open regular session and fresh genuine quotes. The quote is
+an estimate, not a guaranteed fill price; actual fills can slip. Option exits and
+stock profit targets retain limits. This market-exit policy is restricted to the
+paper environment. All order actions honor the Codex monitoring-only stop.
+
+Set `[gauss.notifications].channels = ["slack"]` for Slack only, or select `"email"`
+as well. Each selected channel also needs its existing enabled flag and credentials
+in `.env`. The runtime records decisions, broker-acknowledged submissions, partial
+and final fills, and incidents in a durable delivery queue. A separate worker retries
+failed deliveries without holding a trading database transaction. Duplicate broker
+updates do not create duplicate fill alerts. Delivery is at least once: a process
+crash after a webhook accepts a message but before its receipt is stored may cause
+that message to be retried. Notification state is visible in session status.
 
 ## Routine operation
 
@@ -203,7 +276,8 @@ supported and tested for that deployment.
 Critical incidents commit to the database before best-effort stderr delivery. CLI and
 dashboard readers retain incident visibility when console delivery fails. Configure
 the host supervisor to retain stderr and monitor the durable health/incident state.
-No outbound email/Slack notification was sent during implementation or validation.
+The notification queue has offline delivery tests; verify the selected channel with
+an explicitly labelled setup message before unattended deployment.
 
 `src.runtime.operations.backup_state` uses SQLite's online backup API, includes committed
 WAL state and creates a SHA-256 manifest. When research payload files are used, pass the

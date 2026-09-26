@@ -96,6 +96,8 @@ class AlpacaBroker:
             account_id=str(value.id),
             environment=self.environment,
             equity=Decimal(value.equity),
+            previous_close_equity=Decimal(value.last_equity)
+            if getattr(value, "last_equity", None) is not None else None,
             cash=Decimal(value.cash),
             buying_power=Decimal(value.buying_power),
             options_buying_power=Decimal(value.options_buying_power)
@@ -193,17 +195,26 @@ class AlpacaBroker:
             raise
 
     def submit(self, intent, quantity, client_id):
-        from alpaca.trading.requests import LimitOrderRequest, OptionLegRequest
-        from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce, PositionIntent
+        from alpaca.trading.enums import OrderClass, OrderSide, PositionIntent, TimeInForce
+        from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest, OptionLegRequest
 
+        from .models import OrderIntent
+
+        intent = OrderIntent.model_validate(intent)
         first = intent.legs[0]
         options = first.instrument.asset_type == "option"
         fields = {
             "qty": float(quantity),
             "time_in_force": TimeInForce.DAY,
             "client_order_id": client_id,
-            "limit_price": float(intent.limit_price),
         }
+        if intent.order_type == "market":
+            if self.environment != "paper":
+                raise ValueError("MARKET_STOCK_EXIT_PAPER_ONLY")
+            # The reference quote is evidence for the risk gate, never a broker price bound.
+            fields.update(symbol=first.instrument.symbol, side=OrderSide(first.side))
+            return raw(self.client.submit_order(MarketOrderRequest(**fields)))
+        fields["limit_price"] = float(intent.limit_price)
         if len(intent.legs) > 1:
             fields["limit_price"] *= -1 if intent.limit_effect == "credit" else 1
             fields.update(
@@ -449,6 +460,7 @@ class AlpacaMarket:
         self.option_stream = None
         self.subscribed = set()
         self.option_subscribed = set()
+        self._stream_lock = threading.RLock()
         self.cursors = {}
         self.news_cursor = None
         self.health = {
@@ -487,14 +499,17 @@ class AlpacaMarket:
             if symbols
             else []
         )
-        if self.config.data_profile == DataProfile.SUBSCRIBED_REALTIME and symbols:
+        execution_feed = self.config.stock_execution_feed
+        if symbols and (
+            self.config.data_profile == DataProfile.SUBSCRIBED_REALTIME or execution_feed == "iex"
+        ):
             probes.append(
                 (
                     "stock_latest",
-                    "sip",
+                    execution_feed,
                     lambda: self.stock.get_stock_latest_quote(
                         StockLatestQuoteRequest(
-                            symbol_or_symbols=list(symbols[:1]), feed=DataFeed.SIP
+                            symbol_or_symbols=list(symbols[:1]), feed=DataFeed(execution_feed)
                         )
                     ),
                 )
@@ -504,7 +519,8 @@ class AlpacaMarket:
                 fn()
                 outcome, details = (
                     "AVAILABLE",
-                    "Endpoint access verified; symbol freshness checked separately.",
+                    "Endpoint access verified; symbol freshness checked separately."
+                    + (" IEX is a venue quote, not consolidated NBBO." if feed == "iex" else ""),
                 )
             except Exception as exc:
                 outcome, details = "UNAVAILABLE", type(exc).__name__
@@ -581,14 +597,20 @@ class AlpacaMarket:
         from alpaca.data.requests import StockLatestQuoteRequest
         from alpaca.data.enums import DataFeed
 
-        if self.config.data_profile != DataProfile.SUBSCRIBED_REALTIME or not symbols:
+        feed = self.config.stock_execution_feed
+        if not symbols or (self.config.data_profile != DataProfile.SUBSCRIBED_REALTIME and feed != "iex"):
             return []
-        values = self.stock.get_stock_latest_quote(
-            StockLatestQuoteRequest(symbol_or_symbols=list(symbols), feed=DataFeed.SIP)
-        )
+        try:
+            values = self.stock.get_stock_latest_quote(
+                StockLatestQuoteRequest(symbol_or_symbols=list(symbols), feed=DataFeed(feed))
+            )
+        except Exception:
+            self.health["execution_quotes"] = "UNAVAILABLE"
+            raise
         quotes = [
-            self.quote(value, utc_now(), "sip") for value in values.values() if value.ask_price > 0
+            self.quote(value, utc_now(), feed) for value in values.values() if value.ask_price > 0
         ]
+        self.health["execution_quotes"] = "HEALTHY" if quotes else "NO_QUOTES"
         if self.event_sink:
             for event in quotes:
                 self.event_sink(event)
@@ -611,7 +633,10 @@ class AlpacaMarket:
                 self.event_sink(event)
         # Current quotes are persisted before a long/paginated historical request.
         events.extend(self.collect_quotes(symbols, now))
-        if self.config.data_profile == DataProfile.SUBSCRIBED_REALTIME and symbols:
+        if symbols and (
+            self.config.data_profile == DataProfile.SUBSCRIBED_REALTIME
+            or self.config.stock_execution_feed == "iex"
+        ):
             self.start_stream(symbols)
         universe = tuple(dict.fromkeys(symbols))
         offset = getattr(self, "_history_rotation", 0) % max(1, len(universe))
@@ -621,8 +646,10 @@ class AlpacaMarket:
             start = min(
                 self.cursors.get(symbol, cutoff - timedelta(days=5)) for symbol in batch
             ) - timedelta(minutes=2)
-            # The SDK follows pagination. A completed batch is durable before the
-            # next request, and the rotation resumes at an unfinished batch.
+            # Leave the total limit unset: the SDK already uses 10,000-row pages.
+            # A total cap truncates alphabetically earlier symbols and starves the
+            # rest of a bootstrap batch. Each page retains the shared request budget
+            # and HTTP timeout; completed batches persist before the next batch.
             response = self.stock.get_stock_bars(
                 StockBarsRequest(
                     symbol_or_symbols=list(batch),
@@ -630,7 +657,6 @@ class AlpacaMarket:
                     start=start,
                     end=cutoff,
                     feed=DataFeed.SIP,
-                    limit=10000,
                 )
             )
             received = utc_now()
@@ -714,11 +740,21 @@ class AlpacaMarket:
         return news
 
     def start_stream(self, symbols):
+        # Collection and operational quote polling can request subscriptions at
+        # the same time. One process still owns exactly one stock stream.
+        with self._stream_lock:
+            self._start_stock_stream(symbols)
+
+    def _start_stock_stream(self, symbols):
         from alpaca.data.live import StockDataStream
         from alpaca.data.enums import DataFeed
 
+        feed = self.config.stock_execution_feed
+        if not symbols or (self.config.data_profile != DataProfile.SUBSCRIBED_REALTIME and feed != "iex"):
+            return
+        quote_only = feed == "iex"
         if self.stream is None:
-            self.stream = StockDataStream(self.key, self.secret, feed=DataFeed.SIP)
+            self.stream = StockDataStream(self.key, self.secret, feed=DataFeed(feed))
         added = set(symbols) - self.subscribed
         if not added:
             return
@@ -726,12 +762,16 @@ class AlpacaMarket:
         async def handler(value):
             try:
                 event = (
-                    self.quote(value, utc_now(), "sip")
+                    self.quote(value, utc_now(), feed)
                     if hasattr(value, "bid_price")
                     else self.bar(value, utc_now())
                 )
                 self.events.put_nowait(event)
+                self.health["execution_quotes"] = "HEALTHY"
             except Full:
+                if quote_only:
+                    self.health["execution_quotes"] = "QUEUE_OVERFLOW"
+                    return
                 self.gaps.append(
                     {
                         "symbol": value.symbol,
@@ -740,12 +780,16 @@ class AlpacaMarket:
                     }
                 )
             except ValueError:
+                if quote_only:
+                    self.health["execution_quotes"] = "INVALID_QUOTE"
+                    return
                 self.gaps.append(
                     {"symbol": value.symbol, "reason": "INVALID_QUOTE", "at": utc_now().isoformat()}
                 )
 
         self.stream.subscribe_quotes(handler, *sorted(added))
-        self.stream.subscribe_bars(handler, *sorted(added))
+        if not quote_only:
+            self.stream.subscribe_bars(handler, *sorted(added))
         first = not self.subscribed
         self.subscribed.update(added)
         if first:
@@ -754,11 +798,14 @@ class AlpacaMarket:
                 try:
                     self.stream.run()
                 except Exception:
-                    self.health["price_data"] = "STREAM_DISCONNECTED_REST_RECOVERY"
-                    self.gaps.append({"reason": "STREAM_DISCONNECTED", "at": utc_now().isoformat()})
+                    self.health["execution_quotes"] = "STREAM_DISCONNECTED_REST_RECOVERY"
+                    if not quote_only:
+                        self.health["price_data"] = "STREAM_DISCONNECTED_REST_RECOVERY"
+                        self.gaps.append({"reason": "STREAM_DISCONNECTED", "at": utc_now().isoformat()})
                 finally:
-                    self.stream = None
-                    self.subscribed.clear()
+                    with self._stream_lock:
+                        self.stream = None
+                        self.subscribed.clear()
 
             threading.Thread(target=run, name="gauss-stock-stream", daemon=True).start()
 

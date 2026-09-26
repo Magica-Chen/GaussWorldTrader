@@ -1,0 +1,61 @@
+# Automatic PAPER orders only; credentials remain in .env.
+# Strategy approvals and current account/data readiness are verified separately.
+[gauss]
+enabled = true
+mode = "paper"
+account_environment = "paper"
+live_trading_enabled = false
+symbols = ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "TLT"]
+display_timezone = "Europe/London"
+poll_seconds = 5
+
+[gauss.storage]
+database_path = "results/gauss/paper-codex.sqlite3"
+payload_directory = "results/gauss/evidence"
+
+[gauss.data]
+profile = "FREE_DELAYED"
+# Explicit operational feed; IEX quotes never enter delayed SIP strategy evidence.
+stock_execution_feed = "iex"
+
+[gauss.data.free_delayed]
+entitlement_boundary_buffer_seconds = 5
+poll_interval_seconds = 60
+max_additional_lag_seconds = 120
+
+[gauss.universe]
+scan_universe_limit = 8
+active_candidate_limit = 3
+strategy_allowlist = ["momentum", "trend_following", "mean_reversion"]
+
+[gauss.risk]
+policy_id = "paper-codex-mandate-v1"
+max_new_entry_groups_per_session = 3
+max_open_position_groups = 5
+max_entry_order_attempts_per_session = 6
+max_replacements_per_intent = 2
+max_capital_allocation_pct = "0.02"
+max_portfolio_allocation_pct = "0.10"
+planned_loss_per_trade_pct = "0.001"
+daily_loss_pause_pct = "0.01"
+max_quote_spread_pct = "0.003"
+allow_leverage = false
+allow_overnight_positions = false
+options_enabled = false
+
+[gauss.execution]
+stock_exit_order_type = "market"
+reprice_seconds = 30
+cancel_seconds = 120
+exit_slippage_pct = "0.005"
+
+[gauss.research]
+backend = "codex_cli"
+paid_model_calls_enabled = false
+max_parallel_jobs = 2
+max_job_seconds = 120
+max_calls_per_session = 500
+review_interval_seconds = 600
+
+[gauss.notifications]
+channels = ["slack"]

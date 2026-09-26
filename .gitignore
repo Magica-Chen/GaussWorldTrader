@@ -74,6 +74,9 @@ tests/*
 !tests/conftest.py
 !tests/test_four_agent*.py
 !tests/test_runtime_operational.py
+!tests/test_runtime_notifications.py
+!tests/test_codex_cli.py
+!tests/test_validation_history.py
 !tests/test_execution_safety.py
 !tests/test_gauss_existing_adapters.py
 !tests/test_live_session_safety.py

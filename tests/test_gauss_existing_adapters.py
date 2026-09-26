@@ -163,3 +163,132 @@ def test_options_only_default_configuration_never_offers_execution(monkeypatch):
     monkeypatch.setattr(live_script.Confirm, 'ask', lambda message, **kw: prompts.append(message) or True)
     assert live_script.configure_parameters(config, None).execute is False
     assert prompts == ['Use default parameters?']
+
+
+def operational_market(feed="iex", profile="FREE_DELAYED"):
+    from queue import Queue
+    import threading
+    from src.runtime.broker import AlpacaMarket
+    from src.runtime.models import RuntimeConfig
+
+    market = AlpacaMarket.__new__(AlpacaMarket)
+    market.config = RuntimeConfig(data_profile=profile, stock_execution_feed=feed)
+    market.stock = Mock()
+    market.events = Queue()
+    market.gaps, market.cursors, market.health = [], {}, {}
+    market.event_sink = None
+    market.stream, market.subscribed = None, set()
+    market._stream_lock = threading.RLock()
+    market.key, market.secret = "offline-key", "offline-secret"
+    return market
+
+
+def test_explicit_iex_operational_quotes_do_not_change_delayed_sip_history(monkeypatch):
+    now = datetime(2026, 9, 28, 15, tzinfo=timezone.utc)
+    market = operational_market()
+    market.stock.get_stock_latest_quote.return_value = {
+        "TEST": SimpleNamespace(symbol="TEST", timestamp=now, bid_price=100, ask_price=101,
+                                bid_size=10, ask_size=10),
+    }
+    market.stock.get_stock_bars.return_value = SimpleNamespace(data={})
+    market.start_stream = Mock()
+    monkeypatch.setattr("src.runtime.broker.utc_now", lambda: now)
+    events, _ = market.collect(("TEST",), now)
+    assert market.stock.get_stock_latest_quote.call_args.args[0].feed.value == "iex"
+    history = market.stock.get_stock_bars.call_args.args[0]
+    assert history.feed.value == "sip"
+    assert history.end.replace(tzinfo=timezone.utc) == now - timedelta(seconds=902)
+    assert events[0].feed == "iex" and events[0].quality_class == "genuine"
+    market.start_stream.assert_called_once_with(("TEST",))
+
+
+def test_default_delayed_profile_does_not_silently_select_iex():
+    now = datetime(2026, 9, 28, 15, tzinfo=timezone.utc)
+    market = operational_market(feed="sip")
+    assert market.collect_quotes(("TEST",), now) == []
+    market.stock.get_stock_latest_quote.assert_not_called()
+    market = operational_market(feed="sip", profile="SUBSCRIBED_REALTIME")
+    market.stock.get_stock_latest_quote.side_effect = RuntimeError("unentitled")
+    with pytest.raises(RuntimeError, match="unentitled"):
+        market.collect_quotes(("TEST",), now)
+    assert market.stock.get_stock_latest_quote.call_count == 1
+    assert market.stock.get_stock_latest_quote.call_args.args[0].feed.value == "sip"
+    assert market.health["execution_quotes"] == "UNAVAILABLE"
+
+
+def test_iex_endpoint_probe_is_independent_of_historical_sip_entitlement():
+    now = datetime(2026, 9, 28, 15, tzinfo=timezone.utc)
+    market = operational_market()
+    market.stock.get_stock_latest_quote.side_effect = RuntimeError("endpoint denied")
+    results = market.probe("offline-account", now, ("TEST",))
+    assert [(r.endpoint, r.feed, r.outcome) for r in results] == [
+        ("stock_historical", "sip", "AVAILABLE"), ("stock_latest", "iex", "UNAVAILABLE")
+    ]
+    assert market.stock.get_stock_bars.call_args.args[0].feed.value == "sip"
+    assert market.stock.get_stock_latest_quote.call_args.args[0].feed.value == "iex"
+
+
+def test_iex_stream_subscribes_only_quotes_and_never_changes_historical_gap_state(monkeypatch):
+    import asyncio
+    from queue import Queue
+    now = datetime(2026, 9, 28, 15, tzinfo=timezone.utc)
+    market = operational_market()
+    stream = Mock()
+    factory = Mock(return_value=stream)
+    monkeypatch.setattr("alpaca.data.live.StockDataStream", factory)
+    monkeypatch.setattr("src.runtime.broker.threading.Thread", Mock())
+    monkeypatch.setattr("src.runtime.broker.utc_now", lambda: now)
+    market.start_stream(("TEST",))
+    market.start_stream(("TEST",))
+    assert factory.call_args.kwargs["feed"].value == "iex"
+    stream.subscribe_bars.assert_not_called()
+    assert stream.subscribe_quotes.call_count == 1
+    handler = stream.subscribe_quotes.call_args.args[0]
+    quote = SimpleNamespace(symbol="TEST", timestamp=now, bid_price=100, ask_price=101,
+                            bid_size=10, ask_size=10)
+    asyncio.run(handler(quote))
+    assert market.events.get_nowait().feed == "iex"
+    market.events = Queue(maxsize=1)
+    market.events.put_nowait("full")
+    asyncio.run(handler(quote))
+    assert market.health["execution_quotes"] == "QUEUE_OVERFLOW"
+    assert market.gaps == []
+
+
+def test_operational_iex_never_becomes_signal_evidence_even_when_aged(tmp_path):
+    from src.runtime.evidence import EvidenceService, SnapshotDataReader
+    from src.runtime.models import MarketEvent, RuntimeConfig
+    from src.runtime.store import Store, digest
+
+    now = datetime(2026, 9, 28, 15, tzinfo=timezone.utc)
+    config = RuntimeConfig(stock_execution_feed="iex", symbols=("TEST",))
+    store = Store(tmp_path / "evidence.sqlite3")
+    try:
+        evidence = EvidenceService(store, config, "paper:offline")
+        old = now - timedelta(minutes=20)
+        quote = MarketEvent(symbol="TEST", source="alpaca", source_version="same-version",
+                            event_type="quote", effective_event_time=old, received_at=old,
+                            available_at=old, feed="sip", quality_class="genuine", bid=100, ask=101)
+        sip_id = evidence.ingest_market(quote)
+        iex_old_id = evidence.ingest_market(quote.model_copy(update={"feed": "iex"}))
+        iex_new_id = evidence.ingest_market(quote.model_copy(update={
+            "feed": "iex", "effective_event_time": now, "available_at": now, "received_at": now,
+        }))
+        assert sip_id != iex_old_id
+        assert len(store.list("market_events", "paper:offline")) == 3
+        assert [event.id for event in evidence.market(now)] == [sip_id]
+        assert evidence.current_quote("TEST", now, "iex").id == iex_new_id
+        assert evidence.current_quote("TEST", now, "sip") is None
+        snapshot = evidence.freeze("session", SimpleNamespace(id="account-snapshot"), now)
+        assert snapshot.evidence_ids == (sip_id,)
+        assert SnapshotDataReader(store, snapshot).market()[0].feed == "sip"
+        tampered = snapshot.model_copy(update={"evidence_ids": (iex_old_id,)})
+        manifest = [tampered.evidence_ids, tampered.news_ids, tampered.account_profile_id,
+                    tampered.data_context.model_dump(mode="json"), tampered.strategy_approval_ids,
+                    tampered.signal_timeframe,
+                    [session.model_dump(mode="json") for session in tampered.trading_sessions]]
+        tampered = tampered.model_copy(update={"manifest_hash": digest(manifest)})
+        with pytest.raises(ValueError, match="ineligible"):
+            SnapshotDataReader(store, tampered)
+    finally:
+        store.close()

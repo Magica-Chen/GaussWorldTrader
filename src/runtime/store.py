@@ -37,6 +37,23 @@ def digest(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+def utc_json_time(field):
+    """An exact, sortable UTC microsecond key for normalized MarketEvent JSON.
+
+    Pydantic serializes UTC as either whole seconds or six fractional digits, with
+    a Z suffix. Older ledger writers also used +00:00. Pad the fractional part so
+    both encodings compare exactly; SQLite's date functions round to milliseconds.
+    """
+    if field not in {"effective_event_time", "available_at", "received_at"}:
+        raise ValueError("unsupported quote timestamp field")
+    value = f"json_extract(body, '$.{field}')"
+    clean = f"replace(replace({value}, 'Z', ''), '+00:00', '')"
+    return (
+        f"substr({clean} || CASE WHEN instr({clean}, '.')=0 "
+        "THEN '.000000' ELSE '000000' END, 1, 26)"
+    )
+
+
 class LeaseConflict(RuntimeError):
     """Another owner or an unexpired recovery lease prevents startup."""
 
@@ -90,6 +107,14 @@ class Store:
           symbol TEXT NOT NULL, state TEXT NOT NULL, first_fill INTEGER NOT NULL DEFAULT 0);
         CREATE INDEX IF NOT EXISTS reservations_scope ON reservations(scope,session_id,state);
         """)
+        # Additive index: existing ledgers gain bounded per-symbol quote reads;
+        # read-only connections never migrate or mutate their source database.
+        self.db.execute(
+            "CREATE INDEX IF NOT EXISTS records_quote_lookup ON records("
+            "scope, json_extract(body, '$.symbol'), json_extract(body, '$.feed'), "
+            f"{utc_json_time('effective_event_time')} DESC, sequence DESC) "
+            "WHERE kind='market_events' AND json_extract(body, '$.event_type')='quote'"
+        )
         existing = self.db.execute("SELECT max(version) FROM schema_migrations").fetchone()[0]
         if existing and existing > 1:
             raise RuntimeError("database schema is newer than this deployment")
